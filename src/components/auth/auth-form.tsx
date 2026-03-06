@@ -37,6 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { IGenLogo } from '@/components/igen-logo';
 import { useI18n } from '@/contexts/i18n-context';
+import { LanguageSwitcher } from '@/components/language-switcher';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -119,8 +120,11 @@ export function AuthForm() {
 
 
   return (
-    <Card className="w-full max-w-md bg-white/70 backdrop-blur-xl border-white/20 shadow-lg rounded-2xl">
-      <CardHeader className="text-center">
+    <Card className="w-full max-w-md bg-white/70 backdrop-blur-xl border-white/20 shadow-lg rounded-2xl relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
+      <CardHeader className="text-center pt-12">
         <CardTitle className="text-2xl font-bold tracking-tight">
           {t('auth.title')} <IGenLogo />
         </CardTitle>
