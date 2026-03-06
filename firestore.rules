@@ -1,0 +1,18 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Rule: User can only read/write their own document.
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Rule: User can only read/write files they own.
+    // This also allows for creating files where the ownerId matches the authenticated user.
+    match /files/{fileId} {
+      allow read, update, delete: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerId;
+    }
+  }
+}
