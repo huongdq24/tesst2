@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Stores user profile information, authentication-related flags, user role, and personal API keys for Bring-Your-Own-Key (BYOK) functionality. Passwords and other authentication system data are managed externally.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address.",
+          "format": "email"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's preferred display name or full name."
+        },
+        "photoUrl": {
+          "type": "string",
+          "description": "URL to the user's profile picture.",
+          "format": "uri"
+        },
+        "role": {
+          "type": "string",
+          "description": "The assigned role of the user (e.g., 'Admin', 'User')."
+        },
+        "hasClaimedCredit": {
+          "type": "boolean",
+          "description": "Indicates whether the user has claimed the $300 Google Cloud credit offer."
+        },
+        "geminiApiKey": {
+          "type": "string",
+          "description": "The user's personal API key for the Gemini AI service, enabling Bring-Your-Own-Key (BYOK) functionality."
+        },
+        "elevenLabsApiKey": {
+          "type": "string",
+          "description": "The user's personal API key for the ElevenLabs text-to-speech service, enabling BYOK functionality."
+        },
+        "heyGenApiKey": {
+          "type": "string",
+          "description": "The user's personal API key for the HeyGen video generation service, enabling BYOK functionality."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the user profile was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "role",
+        "hasClaimedCredit",
+        "createdAt"
+      ]
+    },
+    "File": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "File",
+      "type": "object",
+      "description": "Stores metadata for files uploaded by users for AI processing, including ownership, training data status, and an expiration timestamp for automatic deletion using Firestore TTL policies.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the File entity."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Reference to the User who uploaded and owns this file. (Relationship: User 1:N File)"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "The original name of the uploaded file."
+        },
+        "fileUrl": {
+          "type": "string",
+          "description": "The public URL where the file is stored (e.g., Firebase Storage).",
+          "format": "uri"
+        },
+        "fileType": {
+          "type": "string",
+          "description": "The MIME type of the uploaded file (e.g., 'image/jpeg', 'audio/mp3')."
+        },
+        "fileSize": {
+          "type": "number",
+          "description": "The size of the file in bytes."
+        },
+        "isTrainingData": {
+          "type": "boolean",
+          "description": "Flag indicating if this file is designated for permanent AI model training. If false, it's subject to TTL deletion."
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Timestamp indicating when the file metadata (and associated file in storage) should be considered for deletion by a TTL policy. Only set if 'isTrainingData' is false.",
+          "format": "date-time"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the file was uploaded.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "fileName",
+        "fileUrl",
+        "fileType",
+        "isTrainingData",
+        "createdAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores individual user profiles, authentication-related flags, user role (for application logic/UI display), and personal API keys. Access is strictly limited to the document owner. Includes denormalized 'id' field matching 'userId' for authorization independence.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier of the user, corresponding to Firebase Authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/files/{fileId}",
+        "definition": {
+          "entityName": "File",
+          "schema": {
+            "$ref": "#/backend/entities/File"
+          },
+          "description": "Stores metadata for user-uploaded files, including ownership and expiration data. Each document includes an 'ownerId' field explicitly denormalized for authorization independence. Files flagged as 'isTrainingData: false' will have 'expiresAt' set for Firestore TTL deletion.",
+          "params": [
+            {
+              "name": "fileId",
+              "description": "The unique identifier for the uploaded file."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{uid}",
+        "definition": {
+          "entityName": "adminRole",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "A collection used for global admin role authorization. The existence of a document at `/roles_admin/{uid}` signifies that the user with `uid` has administrator privileges, following the 'Existence over Content' pattern for DBAC. This enables atomic rule checks without `get()` dependencies.",
+          "params": [
+            {
+              "name": "uid",
+              "description": "The unique identifier of the user who holds the admin role."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed following the core principles of Authorization Independence, Structural Segregation, and consistent Access Modeling to ensure security, scalability, and debuggability. \n\n1.  **User Profiles (`/users/{userId}`)**: Each user's profile information, including their API keys and credit claim status, is stored in a document `userId` within the top-level `users` collection. The `userId` directly corresponds to `request.auth.uid`, making authorization for a user's *own* profile atomic and independent. Security rules can simply check `request.auth.uid == userId` without any `get()` operations, perfectly fulfilling Authorization Independence. This structure also supports QAPs as a user can only query their specific document, not list other users' profiles.\n\n2.  **User Files (`/files/{fileId}`)**: Files uploaded by users are stored in a top-level `files` collection. Each `File` document explicitly includes an `ownerId` field. This `ownerId` is a denormalized attribute that directly references the user who owns the file. This is crucial for Authorization Independence (Mandate A) because security rules can directly check `resource.data.ownerId == request.auth.uid` to grant read/write access. This eliminates the need for `get()` calls to a parent `User` document. This design also fully supports QAPs (Mandate QAPs) by allowing `list` operations on the `/files` collection where Firestore can efficiently filter documents based on the `ownerId` field, ensuring only files owned by the requesting user are returned.\n\n3.  **Admin Roles (`/roles_admin/{uid}`)**: For global administrator roles, a separate `roles_admin` collection is used. An admin user's UID will exist as a document ID in this collection. This adheres to the 'Existence over Content' principle for DBAC (Mandate C.4) and ensures Authorization Independence. Security rules for global admin access can use a simple `exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))` check, which is atomic and does not incur `get()` dependencies. The `role` field within the `/users/{userId}` document is retained as requested for application-level logic or UI display, but `roles_admin` will be the definitive source for security rule-based global admin authorization.\n\nThis structure ensures clear, explicit authorization intent, simplifies security rules by removing complex `get()` dependencies, and provides robust support for secure `list` operations (QAPs) through appropriate segregation and denormalization."
+  }
+}
