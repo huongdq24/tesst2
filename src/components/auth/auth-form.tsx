@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
   RecaptchaVerifier,
@@ -104,22 +105,40 @@ export function AuthForm() {
 
   const onEmailSubmit = async (values: z.infer<typeof emailFormSchema>) => {
     setLoading(true);
+    const { email, password } = values;
     try {
-      const { email, password } = values;
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      
+      // First, try to create a new user.
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       let role: 'Admin' | 'User' = 'User';
       if (email === 'igen-personal-brand@admin.com' && password === '123456') {
         role = 'Admin';
       }
-      
       await handleUserSetup(userCredential.user, role);
     } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Failed',
-        description: error.message,
-      });
+      // If the user already exists, try to sign them in.
+      if (error.code === 'auth/email-already-in-use') {
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          let role: 'Admin' | 'User' = 'User';
+          if (email === 'igen-personal-brand@admin.com' && password === '123456') {
+            role = 'Admin';
+          }
+          await handleUserSetup(userCredential.user, role);
+        } catch (signInError: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Authentication Failed',
+            description: signInError.message,
+          });
+        }
+      } else {
+        // Handle other errors during creation (e.g., weak password).
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Failed',
+          description: error.message,
+        });
+      }
     } finally {
       setLoading(false);
     }
