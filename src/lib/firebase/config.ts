@@ -1,3 +1,5 @@
+'use client';
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
@@ -13,7 +15,9 @@ const firebaseConfig = {
 };
 
 if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
-    throw new Error('Firebase configuration is missing or incomplete. Please check your environment variables (e.g., .env or .env.local) and ensure that NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID are set correctly.');
+  throw new Error(
+    'Firebase configuration is missing or incomplete. Please check your environment variables (e.g., .env or .env.local) and ensure that NEXT_PUBLIC_FIREBASE_API_KEY and NEXT_PUBLIC_FIREBASE_PROJECT_ID are set correctly.'
+  );
 }
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
