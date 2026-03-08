@@ -321,9 +321,9 @@ export function AuthForm() {
       </div>
       <CardHeader className="text-center pt-12">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          {t('auth.title')} <IGenLogo />
+          <IGenLogo />
+          <span>{t('app.title').replace('iGen', '')}</span>
         </CardTitle>
-        <CardDescription>{t('app.title')}</CardDescription>
       </CardHeader>
       <CardContent>
         {view === 'email' ? renderEmailView() : renderPhoneView()}
