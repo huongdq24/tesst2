@@ -5,3 +5,4 @@ import '@/ai/flows/ai-image-generation.ts';
 import '@/ai/flows/branded-image-generation-flow.ts';
 import '@/ai/flows/ai-video-generation-flow.ts';
 import '@/ai/flows/voice-cloning-flow.ts';
+import '@/ai/flows/video-script-generation-flow.ts';

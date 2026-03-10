@@ -4,9 +4,10 @@ import { useState, useRef, ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight } from 'lucide-react';
+import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
+import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
 import { useI18n, TranslationKey } from '@/contexts/i18n-context';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -52,6 +53,8 @@ const FrameInput: React.FC<FrameInputProps> = ({ frameType, imageDataUri, isProc
 
 export function VideoGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
+  const [scriptDescription, setScriptDescription] = useState('');
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isIngredients, setIsIngredients] = useState(false);
   const [isFrames, setIsFrames] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
@@ -164,6 +167,26 @@ export function VideoGenerationWorkspace() {
     setIsFrames(mode === 'frames' ? !wasOn : false);
   };
 
+  const handleGenerateScript = async () => {
+    if (!scriptDescription.trim()) {
+      return;
+    }
+    setIsGeneratingScript(true);
+    try {
+      const result = await videoScriptGeneration({ description: scriptDescription });
+      setPrompt(result.script);
+    } catch (error: any) {
+      console.error(error);
+      toast({
+        variant: 'destructive',
+        title: t('toast.video.scriptGenerationFailed.title'),
+        description: error.message || t('toast.image.unexpectedError'),
+      });
+    } finally {
+      setIsGeneratingScript(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
@@ -220,13 +243,41 @@ export function VideoGenerationWorkspace() {
       </div>
 
       <div className="mt-8">
+        <div className="space-y-2 mb-4">
+            <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
+            <div className="flex items-start gap-2">
+                <Textarea
+                    id="script-description"
+                    placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
+                    value={scriptDescription}
+                    onChange={(e) => setScriptDescription(e.target.value)}
+                    rows={2}
+                    disabled={isGeneratingScript}
+                    className="resize-none text-base p-4"
+                />
+                <Button 
+                  onClick={handleGenerateScript} 
+                  disabled={isGeneratingScript || !scriptDescription.trim()} 
+                  size="lg" 
+                  className="h-full"
+                  aria-label={t('workspace.video.generateScriptButton')}
+                >
+                    {isGeneratingScript ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                        <Wand2 className="h-5 w-5" />
+                    )}
+                </Button>
+            </div>
+        </div>
+
         <div className="relative">
           <Textarea
             id="prompt"
             placeholder={t('workspace.video.promptPlaceholder')}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            rows={2}
+            rows={3}
             disabled={isLoading || isProcessing}
             className="pr-12 resize-none text-base p-4"
           />
@@ -235,11 +286,11 @@ export function VideoGenerationWorkspace() {
         <div className="mt-2 flex flex-col sm:flex-row gap-2">
             <div className="flex-1 flex flex-col gap-2">
                 <div className='flex gap-2'>
-                    <Button variant={isIngredients ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('ingredients')}>
+                    <Button variant={isIngredients ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('ingredients')} disabled={isGeneratingScript}>
                         <ImageIcon className="mr-2 h-4 w-4" />
                         {t('feature.videoGeneration.fromImage')}
                     </Button>
-                    <Button variant={isFrames ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('frames')}>
+                    <Button variant={isFrames ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('frames')} disabled={isGeneratingScript}>
                         <Frame className="mr-2 h-4 w-4" />
                         {t('feature.videoGeneration.extend')}
                     </Button>
@@ -288,26 +339,26 @@ export function VideoGenerationWorkspace() {
                 )}
             </div>
             <div className="flex gap-4 p-2 border rounded-lg justify-center">
-                <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1">
-                    <ToggleGroupItem value="16:9" aria-label="Horizontal" className="p-2 h-auto flex-col gap-1">
+                <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isGeneratingScript}>
+                    <ToggleGroupItem value="16:9" aria-label={t('feature.videoGeneration.horizontal')} className="p-2 h-auto flex-col gap-1">
                         <RectangleHorizontal />
                         <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
                     </ToggleGroupItem>
-                    <ToggleGroupItem value="9:16" aria-label="Vertical" className="p-2 h-auto flex-col gap-1">
+                    <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1">
                         <RectangleVertical />
                         <span className="text-xs">{t('feature.videoGeneration.vertical')}</span>
                     </ToggleGroupItem>
                 </ToggleGroup>
                 <div className='flex flex-col gap-1'>
                     <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
-                    <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1">
+                    <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isGeneratingScript}>
                         {[1, 2, 3, 4].map(n => (
                             <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square">x{n}</ToggleGroupItem>
                         ))}
                     </ToggleGroup>
                 </div>
             </div>
-             <Button onClick={handleGenerate} disabled={isGenerateDisabled} size="lg" className="h-full">
+             <Button onClick={handleGenerate} disabled={isGenerateDisabled || isGeneratingScript} size="lg" className="h-full">
               {(isLoading || isProcessing) ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
               ) : (
