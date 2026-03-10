@@ -12,7 +12,7 @@ export default function HomePage() {
   useEffect(() => {
     if (!loading) {
       if (user) {
-        router.push('/home');
+        router.push('/igen-x-google');
       } else {
         router.push('/login');
       }

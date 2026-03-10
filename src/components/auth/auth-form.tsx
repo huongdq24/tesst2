@@ -102,7 +102,7 @@ export function AuthForm() {
         createdAt: new Date(),
       });
     }
-    router.push('/home');
+    router.push('/igen-x-google');
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -179,7 +179,7 @@ export function AuthForm() {
       <CardHeader className="text-center pt-12">
         <CardTitle className="text-2xl font-bold tracking-tight">
           <IGenLogo />
-          <span>{t('app.title').replace('iGen', '')}</span>
+          <span> - {t('app.title').replace('iGen - ', '')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
