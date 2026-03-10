@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -53,6 +53,12 @@ export default function IgenXGooglePage() {
     mode: 'onChange',
   });
 
+  useEffect(() => {
+    if (userData && userData.hasClaimedCredit) {
+      router.replace('/dashboard');
+    }
+  }, [userData, router]);
+
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user) return;
     setIsSaving(true);
@@ -78,16 +84,7 @@ export default function IgenXGooglePage() {
     }
   };
 
-  if (loading || !user) {
-    return (
-      <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (userData?.hasClaimedCredit) {
-    router.replace('/dashboard');
+  if (loading || !user || (userData && userData.hasClaimedCredit)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
