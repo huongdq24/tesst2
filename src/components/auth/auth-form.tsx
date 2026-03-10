@@ -177,7 +177,7 @@ export function AuthForm() {
         <LanguageSwitcher />
       </div>
       <CardHeader className="text-center pt-12">
-        <CardTitle className="text-2xl font-bold tracking-tight flex items-center justify-center gap-2">
+        <CardTitle className="text-2xl font-bold tracking-tight">
           <IGenLogo />
           <span>{t('app.title').replace('iGen', '')}</span>
         </CardTitle>
