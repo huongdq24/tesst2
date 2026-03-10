@@ -102,7 +102,7 @@ export function AuthForm() {
         createdAt: new Date(),
       });
     }
-    router.push('/dashboard');
+    router.push('/home');
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {

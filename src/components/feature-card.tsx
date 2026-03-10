@@ -13,7 +13,7 @@ interface FeatureCardProps {
 
 export function FeatureCard({ slug, title, icon, description }: FeatureCardProps) {
   return (
-    <Link href={`/dashboard/feature/${slug}`} className="group block">
+    <Link href={`/home/feature/${slug}`} className="group block">
       <Card className="h-full bg-card/80 backdrop-blur-lg border-border/20 shadow-sm transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-primary/30">
         <CardHeader className="flex flex-row items-center justify-between pb-2">
           <div className="flex items-center gap-4">

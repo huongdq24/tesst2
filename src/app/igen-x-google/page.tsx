@@ -55,7 +55,7 @@ export default function IgenXGooglePage() {
 
   useEffect(() => {
     if (userData && userData.hasClaimedCredit) {
-      router.replace('/dashboard');
+      router.replace('/home');
     }
   }, [userData, router]);
 
@@ -72,7 +72,7 @@ export default function IgenXGooglePage() {
         title: 'Thành công!',
         description: 'Khóa API đã được lưu và tín dụng đã được nhận.',
       });
-      router.push('/dashboard');
+      router.push('/home');
     } catch (error) {
       toast({
         variant: 'destructive',
