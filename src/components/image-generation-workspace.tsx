@@ -5,11 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, Paperclip, X } from 'lucide-react';
+import { Loader2, ImageIcon, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export function ImageGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
@@ -99,12 +105,21 @@ export function ImageGenerationWorkspace() {
                   className="pr-12 resize-none"
                 />
                 <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isLoading} />
-                <Button asChild variant="ghost" size="icon" className="absolute bottom-2 right-2 text-muted-foreground cursor-pointer h-8 w-8 hover:bg-accent hover:text-accent-foreground">
-                    <label htmlFor="image-upload-input">
-                        <Paperclip className="h-5 w-5" />
-                        <span className="sr-only">{t('workspace.image.inputLabel')}</span>
-                    </label>
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button asChild variant="ghost" size="icon" className="absolute bottom-2 right-2 text-muted-foreground cursor-pointer h-8 w-8 hover:bg-accent hover:text-accent-foreground">
+                          <label htmlFor="image-upload-input">
+                              <ImageIcon className="h-5 w-5" />
+                              <span className="sr-only">{t('workspace.image.inputLabel')}</span>
+                          </label>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t('workspace.image.uploadTooltip')}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
