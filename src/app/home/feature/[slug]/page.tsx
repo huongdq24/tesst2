@@ -1,6 +1,6 @@
 'use client';
 
-import { use } from 'react';
+import { useParams } from 'next/navigation';
 import { useI18n } from '@/contexts/i18n-context';
 import {
   Voicemail,
@@ -80,10 +80,10 @@ function GenericFeatureWorkspace() {
 }
 
 
-export default function FeatureWorkspacePage({ params }: { params: { slug: string } }) {
-  const resolvedParams = use(params);
+export default function FeatureWorkspacePage() {
+  const params = useParams();
   const { t } = useI18n();
-  const slug = (resolvedParams.slug as string) as FeatureSlug;
+  const slug = (params.slug as string) as FeatureSlug;
   const feature = featureConfig[slug] || featureConfig['image-generation'];
 
   const renderWorkspace = () => {
