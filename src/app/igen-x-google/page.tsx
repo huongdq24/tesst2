@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,7 +38,7 @@ const formSchema = z.object({
 
 export default function IgenXGooglePage() {
   const router = useRouter();
-  const { user, userData, loading } = useAuth();
+  const { user, loading } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const [isSaving, setIsSaving] = useState(false);
@@ -52,13 +52,6 @@ export default function IgenXGooglePage() {
     },
     mode: 'onChange',
   });
-
-  useEffect(() => {
-    // If auth is not loading and user data indicates onboarding is complete, redirect.
-    if (!loading && userData && userData.hasClaimedCredit) {
-      router.replace('/home');
-    }
-  }, [userData, loading, router]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user) return;
@@ -85,9 +78,8 @@ export default function IgenXGooglePage() {
     }
   };
 
-  // Show a loader if auth state is loading, or if the user is already onboarded
-  // and we are waiting for the redirect to /home to happen.
-  if (loading || (userData && userData.hasClaimedCredit)) {
+  // Show a loader if auth state is loading.
+  if (loading) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
