@@ -80,6 +80,7 @@ export function AuthForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [isSignUp, setIsSignUp] = useState(false);
   const { t } = useI18n();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -108,11 +109,7 @@ export function AuthForm() {
     setLoading(true);
     const { email, password } = values;
 
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      await handleUserSetup(userCredential.user);
-    } catch (signInError: any) {
-      if (signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/user-not-found') {
+    if (isSignUp) {
         try {
           const newUserCredential = await createUserWithEmailAndPassword(auth, email, password);
           let role: 'Admin' | 'User' = 'User';
@@ -123,20 +120,23 @@ export function AuthForm() {
         } catch (signUpError: any) {
           toast({
             variant: 'destructive',
-            title: 'Authentication Failed',
+            title: 'Sign Up Failed',
             description: signUpError.message,
           });
         }
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Authentication Failed',
-          description: signInError.message,
-        });
-      }
-    } finally {
-      setLoading(false);
+    } else {
+        try {
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            await handleUserSetup(userCredential.user);
+        } catch (signInError: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Authentication Failed',
+                description: signInError.message,
+            });
+        }
     }
+    setLoading(false);
   };
 
 
@@ -163,9 +163,9 @@ export function AuthForm() {
         <LanguageSwitcher />
       </div>
       <CardHeader className="text-center pt-12">
-        <CardTitle className="text-2xl font-bold tracking-tight">
+        <CardTitle className="text-2xl font-bold tracking-tight flex items-center justify-center gap-2">
           <IGenLogo />
-          <span>{t('app.title').replace('iGen', '')}</span>
+          <span> - {t('app.title').split('-')[1]}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -199,11 +199,14 @@ export function AuthForm() {
             />
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {t('auth.signInOrUp')}
+              {isSignUp ? t('auth.signUp') : t('auth.signIn')}
             </Button>
           </form>
         </Form>
-        <div className="relative my-6">
+        <Button variant="link" className="w-full mt-2" onClick={() => setIsSignUp(!isSignUp)}>
+            {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}
+        </Button>
+        <div className="relative my-4">
           <Separator />
           <div className="absolute inset-0 flex items-center">
             <span className="w-full border-t" />
