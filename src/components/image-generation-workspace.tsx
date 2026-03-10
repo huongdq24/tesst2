@@ -27,8 +27,8 @@ export function ImageGenerationWorkspace() {
       if (file.size > 4 * 1024 * 1024) { // 4MB limit for Gemini
         toast({
             variant: 'destructive',
-            title: 'File too large',
-            description: 'Please upload an image smaller than 4MB.',
+            title: t('toast.image.fileTooLarge.title'),
+            description: t('toast.image.fileTooLarge.description'),
         });
         return;
       }
@@ -45,8 +45,8 @@ export function ImageGenerationWorkspace() {
     if (!prompt.trim()) {
       toast({
         variant: 'destructive',
-        title: 'Prompt is required',
-        description: 'Please enter a description for the image you want to generate.',
+        title: t('toast.image.promptRequired.title'),
+        description: t('toast.image.promptRequired.description'),
       });
       return;
     }
@@ -65,8 +65,8 @@ export function ImageGenerationWorkspace() {
       console.error(error);
       toast({
         variant: 'destructive',
-        title: 'Generation Failed',
-        description: error.message || 'An unexpected error occurred.',
+        title: t('toast.image.generationFailed.title'),
+        description: error.message || t('toast.image.unexpectedError'),
       });
     } finally {
       setIsLoading(false);
@@ -79,10 +79,10 @@ export function ImageGenerationWorkspace() {
         <Card>
           <CardContent className="p-6 space-y-4">
             <div>
-              <Label htmlFor="prompt">Prompt</Label>
+              <Label htmlFor="prompt">{t('workspace.image.promptLabel')}</Label>
               <Textarea
                 id="prompt"
-                placeholder="A cinematic shot of a an old car driving down a deserted road at sunset."
+                placeholder={t('workspace.image.promptPlaceholder')}
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={5}
@@ -90,7 +90,7 @@ export function ImageGenerationWorkspace() {
               />
             </div>
             <div>
-              <Label htmlFor="dropzone-file">Input Image (Optional for image-to-image)</Label>
+              <Label htmlFor="dropzone-file">{t('workspace.image.inputLabel')}</Label>
               <label
                 htmlFor="dropzone-file"
                 className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
@@ -109,9 +109,9 @@ export function ImageGenerationWorkspace() {
               </label>
               {inputFile && (
                 <div className="mt-2 text-xs text-muted-foreground flex justify-between items-center">
-                  <span>Selected: {inputFile.name}</span>
+                  <span>{t('workspace.image.selectedFile')}{inputFile.name}</span>
                   <Button variant="link" size="sm" className="h-auto p-0" onClick={() => { setInputFile(null); setInputImageDataUri(null); }}>
-                    Remove
+                    {t('workspace.image.removeButton')}
                   </Button>
                 </div>
               )}
@@ -122,7 +122,7 @@ export function ImageGenerationWorkspace() {
               ) : (
                 <ImageIcon className="mr-2 h-4 w-4" />
               )}
-              Generate
+              {t('workspace.image.generateButton')}
             </Button>
           </CardContent>
         </Card>
@@ -131,8 +131,8 @@ export function ImageGenerationWorkspace() {
         {isLoading ? (
           <div className="flex flex-col items-center gap-4 text-muted-foreground">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            <p>Generating your image...</p>
-            <p className="text-sm">(This may take a moment)</p>
+            <p>{t('workspace.image.loadingMessage')}</p>
+            <p className="text-sm">{t('workspace.image.loadingSubMessage')}</p>
           </div>
         ) : generatedImageUrl ? (
           <div className="relative w-full h-full min-h-[400px] lg:min-h-[550px]">
@@ -141,7 +141,7 @@ export function ImageGenerationWorkspace() {
         ) : (
           <div className="text-center text-muted-foreground">
             <ImageIcon className="h-16 w-16 mx-auto mb-4" />
-            <p>Your generated image will appear here</p>
+            <p>{t('workspace.image.outputPlaceholder')}</p>
           </div>
         )}
       </div>
