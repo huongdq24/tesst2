@@ -16,6 +16,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
+import { VideoGenerationWorkspace } from '@/components/video-generation-workspace';
 
 const featureConfig = {
   'voice-cloning': {
@@ -83,6 +84,8 @@ export default function FeatureWorkspacePage({ params }: { params: { slug: strin
     switch(slug) {
         case 'image-generation':
             return <ImageGenerationWorkspace />;
+        case 'video-generation':
+            return <VideoGenerationWorkspace />;
         // Add cases for other features here
         // case 'voice-cloning':
         //   return <VoiceCloningWorkspace />;

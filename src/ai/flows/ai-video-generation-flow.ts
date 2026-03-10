@@ -11,8 +11,9 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
-import { Buffer } from 'buffer'; // Node.js Buffer for base64 encoding
-import fetch from 'node-fetch'; // For fetching the generated video from its URL
+import { Buffer } from 'buffer';
+import fetch from 'node-fetch';
+import { googleAI } from '@genkit-ai/google-genai';
 
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
@@ -21,14 +22,16 @@ const AiVideoGenerationInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Optional: A photo to use as reference, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "Optional: A photo to use as a reference for 'Ingredients' or 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
+  aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
+  numberOfVideos: z.number().min(1).max(4).optional().default(1),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
 // Define output schema for video generation
 const AiVideoGenerationOutputSchema = z.object({
-  videoDataUri: z.string().describe('The generated video as a data URI (data:video/mp4;base64,<encoded_data>).'),
+  videoDataUris: z.array(z.string()).describe('An array of generated videos as data URIs (data:video/mp4;base64,<encoded_data>).'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
@@ -75,12 +78,16 @@ const aiVideoGenerationFlow = ai.defineFlow(
       });
     }
 
-    // Initiate video generation using the latest Veo 3.0 model.
-    // Note: Veo 3.0 has a default duration of 8 seconds and aspect ratio of 16:9,
-    // which are not directly configurable via the 'config' object for this model version.
+    // Use Veo 2.0 as it supports configurable aspect ratio and number of videos.
+    // Veo 3.0 has fixed settings for these parameters.
     let { operation } = await ai.generate({
-      model: 'googleai/veo-3.0-generate-preview',
+      model: googleAI.model('veo-2.0-generate-001'),
       prompt: promptParts,
+      config: {
+        aspectRatio: input.aspectRatio,
+        numberOfVideos: input.numberOfVideos,
+        durationSeconds: 5, // A reasonable default duration
+      },
     });
 
     if (!operation) {
@@ -88,7 +95,6 @@ const aiVideoGenerationFlow = ai.defineFlow(
     }
 
     // Poll the operation status until video generation is complete.
-    // Video generation can take significant time (up to a minute or more).
     while (!operation.done) {
       operation = await ai.checkOperation(operation);
       // Wait for a few seconds before polling again to reduce API calls.
@@ -99,36 +105,45 @@ const aiVideoGenerationFlow = ai.defineFlow(
       throw new Error(`Failed to generate video: ${operation.error.message}`);
     }
 
-    // Extract the generated video media part from the operation output.
-    const videoMediaPart = operation.output?.message?.content.find((p) => !!p.media);
-    if (!videoMediaPart || !videoMediaPart.media?.url) {
-      throw new Error('Failed to find the generated video in the operation output.');
+    // Extract all generated video media parts from the operation output.
+    const videoMediaParts = operation.output?.message?.content.filter((p) => !!p.media) || [];
+    if (videoMediaParts.length === 0) {
+      throw new Error('Failed to find any generated video in the operation output.');
     }
 
-    // The media.url provided by Veo models often requires an API key for direct download.
-    // Ensure the GEMINI_API_KEY environment variable is set.
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not configured. It is required to download generated videos.');
     }
-    const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
 
-    // Fetch the video content from the URL.
-    const videoResponse = await fetch(videoDownloadUrl);
+    // Process all video parts in parallel.
+    const videoDataUris = await Promise.all(
+      videoMediaParts.map(async (videoPart) => {
+        if (!videoPart.media?.url) return '';
+        
+        const videoDownloadUrl = `${videoPart.media.url}&key=${geminiApiKey}`;
+        const videoResponse = await fetch(videoDownloadUrl);
 
-    if (!videoResponse.ok || !videoResponse.body) {
-      throw new Error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${videoResponse.status} - ${videoResponse.statusText}`);
+        if (!videoResponse.ok || !videoResponse.body) {
+          console.error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${videoResponse.status}`);
+          return '';
+        }
+        
+        const arrayBuffer = await videoResponse.arrayBuffer();
+        const base64Video = Buffer.from(arrayBuffer).toString('base64');
+        const contentType = videoPart.media.contentType || 'video/mp4';
+        return `data:${contentType};base64,${base64Video}`;
+      })
+    );
+
+    const successfulUris = videoDataUris.filter(uri => uri !== '');
+
+    if (successfulUris.length === 0) {
+      throw new Error('All video downloads failed.');
     }
 
-    // Convert the video stream to a Buffer and then to a base64 string.
-    const arrayBuffer = await videoResponse.arrayBuffer();
-    const base64Video = Buffer.from(arrayBuffer).toString('base64');
-    
-    // Default content type to video/mp4 if not explicitly provided by the media part.
-    const contentType = videoMediaPart.media.contentType || 'video/mp4';
-
     return {
-      videoDataUri: `data:${contentType};base64,${base64Video}`,
+      videoDataUris: successfulUris,
     };
   }
 );
