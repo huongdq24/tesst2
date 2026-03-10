@@ -305,8 +305,8 @@ export function VideoGenerationWorkspace() {
         </div>
 
 
-        <div className="mt-2 flex flex-col sm:flex-row gap-2">
-            <div className="flex-1 flex flex-col gap-2">
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 flex flex-col gap-2">
                 <div className='flex gap-2'>
                     <Button variant={isIngredients ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('ingredients')} disabled={isGeneratingScript}>
                         <ImageIcon className="mr-2 h-4 w-4" />
@@ -317,78 +317,82 @@ export function VideoGenerationWorkspace() {
                         {t('feature.videoGeneration.extend')}
                     </Button>
                 </div>
-                 {isIngredients && !isFrames && (
-                    <div className="flex items-center gap-2 p-2 border rounded-lg">
-                        <label htmlFor="start-file-upload" className="text-sm cursor-pointer text-muted-foreground hover:text-primary">
-                           {t('workspace.upload.labelImage')}
-                        </label>
-                        <input ref={startFileInputRef} id="start-file-upload" type="file" className="hidden" onChange={(e) => handleFileChange(e, 'start')} accept="image/*" disabled={isLoading || isProcessing} />
-                        
-                        {isProcessingStart ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : startImageDataUri && (
-                            <div className="relative w-10 h-10">
-                                <Image src={startImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md border" />
-                                <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-5 w-5 rounded-full z-10" onClick={() => handleRemoveImage('start')}>
-                                    <X className="h-3 w-3" />
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                )}
-                 {isFrames && (
-                     <div className="flex items-center justify-center gap-4 p-2 border rounded-lg">
-                        <FrameInput 
-                            frameType="start"
-                            imageDataUri={startImageDataUri}
-                            isProcessing={isProcessingStart}
-                            onFileChange={handleFileChange}
-                            onRemove={handleRemoveImage}
-                            isLoading={isLoading}
-                            fileInputRef={startFileInputRef}
-                        />
-                        <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
-                        <FrameInput 
-                            frameType="end"
-                            imageDataUri={endImageDataUri}
-                            isProcessing={isProcessingEnd}
-                            onFileChange={handleFileChange}
-                            onRemove={handleRemoveImage}
-                            isLoading={isLoading}
-                            fileInputRef={endFileInputRef}
-                        />
-                    </div>
-                )}
-            </div>
-            <div className="flex gap-4 p-2 border rounded-lg justify-center">
-                <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isGeneratingScript}>
-                    <ToggleGroupItem value="16:9" aria-label={t('feature.videoGeneration.horizontal')} className="p-2 h-auto flex-col gap-1">
-                        <RectangleHorizontal />
-                        <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
-                    </ToggleGroupItem>
-                    <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1">
-                        <RectangleVertical />
-                        <span className="text-xs">{t('feature.videoGeneration.vertical')}</span>
-                    </ToggleGroupItem>
-                </ToggleGroup>
-                <div className='flex flex-col gap-1'>
-                    <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
-                    <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isGeneratingScript}>
-                        {[1, 2, 3, 4].map(n => (
-                            <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square">x{n}</ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
+                {isIngredients && !isFrames && (
+                <div className="flex items-center gap-2 p-2 border rounded-lg">
+                    <label htmlFor="start-file-upload" className="text-sm cursor-pointer text-muted-foreground hover:text-primary">
+                        {t('workspace.upload.labelImage')}
+                    </label>
+                    <input ref={startFileInputRef} id="start-file-upload" type="file" className="hidden" onChange={(e) => handleFileChange(e, 'start')} accept="image/*" disabled={isLoading || isProcessing} />
+                    
+                    {isProcessingStart ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : startImageDataUri && (
+                        <div className="relative w-10 h-10">
+                            <Image src={startImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md border" />
+                            <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-5 w-5 rounded-full z-10" onClick={() => handleRemoveImage('start')}>
+                                <X className="h-3 w-3" />
+                            </Button>
+                        </div>
+                    )}
                 </div>
+                )}
+                {isFrames && (
+                    <div className="flex items-center justify-center gap-4 p-2 border rounded-lg">
+                    <FrameInput 
+                        frameType="start"
+                        imageDataUri={startImageDataUri}
+                        isProcessing={isProcessingStart}
+                        onFileChange={handleFileChange}
+                        onRemove={handleRemoveImage}
+                        isLoading={isLoading}
+                        fileInputRef={startFileInputRef}
+                    />
+                    <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
+                    <FrameInput 
+                        frameType="end"
+                        imageDataUri={endImageDataUri}
+                        isProcessing={isProcessingEnd}
+                        onFileChange={handleFileChange}
+                        onRemove={handleRemoveImage}
+                        isLoading={isLoading}
+                        fileInputRef={endFileInputRef}
+                    />
+                </div>
+                )}
             </div>
-             <Button onClick={handleGenerate} disabled={isGenerateDisabled || isGeneratingScript} size="lg" className="h-full">
-              {(isLoading || isProcessing) ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                 <Video className="h-5 w-5" />
-              )}
-              <span className="ml-2">{t('workspace.video.generateButton.label')}</span>
-            </Button>
+
+            <div className="lg:col-span-1 flex flex-col gap-2">
+                <div className="flex gap-4 p-2 border rounded-lg justify-center">
+                    <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isGeneratingScript}>
+                        <ToggleGroupItem value="16:9" aria-label={t('feature.videoGeneration.horizontal')} className="p-2 h-auto flex-col gap-1">
+                            <RectangleHorizontal />
+                            <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1">
+                            <RectangleVertical />
+                            <span className="text-xs">{t('feature.videoGeneration.vertical')}</span>
+                        </ToggleGroupItem>
+                    </ToggleGroup>
+                    <div className='flex flex-col gap-1'>
+                        <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
+                        <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isGeneratingScript}>
+                            {[1, 2, 3, 4].map(n => (
+                                <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square">x{n}</ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
+                    </div>
+                </div>
+                <Button onClick={handleGenerate} disabled={isGenerateDisabled || isGeneratingScript} size="lg" className="w-full">
+                {(isLoading || isProcessing) ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                    <Video className="h-5 w-5" />
+                )}
+                <span className="ml-2">{t('workspace.video.generateButton.label')}</span>
+                </Button>
+            </div>
         </div>
+
       </div>
     </div>
   );
