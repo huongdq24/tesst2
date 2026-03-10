@@ -131,7 +131,7 @@ export function VideoGenerationWorkspace() {
                 <div className='flex gap-2'>
                     <Button variant={isIngredients ? 'secondary' : 'outline'} size="sm" onClick={() => { setIsIngredients(!isIngredients); setIsFrames(false); }}>
                         <ImageIcon className="mr-2 h-4 w-4" />
-                        {t('feature.videoGeneration.ingredients')}
+                        {t('feature.videoGeneration.fromImage')}
                     </Button>
                     <Button variant={isFrames ? 'secondary' : 'outline'} size="sm" onClick={() => { setIsFrames(!isFrames); setIsIngredients(false); }}>
                         <Frame className="mr-2 h-4 w-4" />
