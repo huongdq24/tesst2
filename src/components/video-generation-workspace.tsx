@@ -260,13 +260,13 @@ export function VideoGenerationWorkspace() {
                   disabled={isGeneratingScript || !scriptDescription.trim()} 
                   size="lg" 
                   className="h-full"
-                  aria-label={t('workspace.video.generateScriptButton')}
                 >
                     {isGeneratingScript ? (
                         <Loader2 className="h-5 w-5 animate-spin" />
                     ) : (
                         <Wand2 className="h-5 w-5" />
                     )}
+                    {t('workspace.video.generateScriptButton')}
                 </Button>
             </div>
         </div>
@@ -277,7 +277,7 @@ export function VideoGenerationWorkspace() {
             placeholder={t('workspace.video.promptPlaceholder')}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
-            rows={3}
+            rows={2}
             disabled={isLoading || isProcessing}
             className="pr-12 resize-none text-base p-4"
           />
