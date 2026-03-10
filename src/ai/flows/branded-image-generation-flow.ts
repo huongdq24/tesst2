@@ -9,6 +9,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 
 // Define the input schema
 const BrandedImageGenerationInputSchema = z.object({
@@ -52,7 +53,7 @@ export async function brandedImageGeneration(
   return brandedImageGenerationFlow(input);
 }
 
-// Define the Genkit prompt
+// Define the Genkit prompt for multimodal input (used with Gemini)
 const brandedImageGenerationPrompt = ai.definePrompt({
   name: 'brandedImageGenerationPrompt',
   input: {schema: BrandedImageGenerationInputSchema},
@@ -72,7 +73,7 @@ Generate a new image that consistently reflects the personal brand identity, inc
 `,
 });
 
-// Define the Genkit flow
+// Define the Genkit flow with logic to switch models
 const brandedImageGenerationFlow = ai.defineFlow(
   {
     name: 'brandedImageGenerationFlow',
@@ -80,14 +81,28 @@ const brandedImageGenerationFlow = ai.defineFlow(
     outputSchema: BrandedImageGenerationOutputSchema,
   },
   async (input) => {
-    // Call ai.generate with the prompt output and specific model configuration for image generation.
-    const {media} = await ai.generate({
-      model: 'googleai/gemini-2.5-flash-image', // Using Gemini 2.5 Flash Image for multi-modal (image-to-image) capabilities
-      prompt: brandedImageGenerationPrompt(input), // Pass the rendered prompt with input to the model
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE for image generation
-      },
-    });
+    let media;
+
+    // Use a different model based on whether it's an image-to-image or text-to-image task
+    if (input.existingImageUri) {
+      // For image-to-image, Gemini Flash is required for its multi-modal capabilities.
+      const response = await ai.generate({
+        model: 'googleai/gemini-2.5-flash-image', // Using Gemini 2.5 Flash Image (aka "Nano Banana")
+        prompt: brandedImageGenerationPrompt(input), // Pass the rendered prompt with input to the model
+        config: {
+          responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE for image generation
+        },
+      });
+      media = response.media;
+    } else {
+      // For pure text-to-image, Imagen is a better choice.
+      const fullPrompt = `Style: ${input.stylePreferences}. Content: ${input.generationPrompt}`;
+      const response = await ai.generate({
+        model: googleAI.model('imagen-4.0-fast-generate-001'),
+        prompt: fullPrompt,
+      });
+      media = response.media;
+    }
 
     if (!media || !media.url) {
       throw new Error('Failed to generate image or media URL is missing.');
