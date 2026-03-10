@@ -33,9 +33,9 @@ interface ApiKeysModalProps {
 }
 
 const formSchema = z.object({
-  gemini: z.string().optional(),
-  elevenlabs: z.string().optional(),
-  heygen: z.string().optional(),
+  geminiApiKey: z.string().optional(),
+  elevenLabsApiKey: z.string().optional(),
+  heyGenApiKey: z.string().optional(),
 });
 
 export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
@@ -46,9 +46,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: {
-        gemini: userData?.apiKeys?.gemini || '',
-        elevenlabs: userData?.apiKeys?.elevenlabs || '',
-        heygen: userData?.apiKeys?.heygen || '',
+        geminiApiKey: userData?.geminiApiKey || '',
+        elevenLabsApiKey: userData?.elevenLabsApiKey || '',
+        heyGenApiKey: userData?.heyGenApiKey || '',
     }
   });
 
@@ -56,7 +56,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
     if (!user) return;
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
-      await updateDoc(userDocRef, { apiKeys: values });
+      await updateDoc(userDocRef, values);
       toast({
         title: 'Success!',
         description: t('apikeys.modal.success'),
@@ -87,7 +87,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4">
             <FormField
               control={form.control}
-              name="gemini"
+              name="geminiApiKey"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('apikeys.modal.gemini')}</FormLabel>
@@ -100,7 +100,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
             />
             <FormField
               control={form.control}
-              name="elevenlabs"
+              name="elevenLabsApiKey"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('apikeys.modal.elevenlabs')}</FormLabel>
@@ -113,7 +113,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
             />
             <FormField
               control={form.control}
-              name="heygen"
+              name="heyGenApiKey"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t('apikeys.modal.heygen')}</FormLabel>

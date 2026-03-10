@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -38,7 +38,7 @@ const formSchema = z.object({
 
 export default function IgenXGooglePage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, userData, loading } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const [isSaving, setIsSaving] = useState(false);
@@ -52,6 +52,17 @@ export default function IgenXGooglePage() {
     },
     mode: 'onChange',
   });
+
+  useEffect(() => {
+    if (userData) {
+      form.reset({
+        geminiApiKey: userData.geminiApiKey || '',
+        elevenLabsApiKey: userData.elevenLabsApiKey || '',
+        heyGenApiKey: userData.heyGenApiKey || '',
+      });
+    }
+  }, [userData, form]);
+
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user) return;
