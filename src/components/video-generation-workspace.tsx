@@ -95,7 +95,7 @@ export function VideoGenerationWorkspace() {
     <div className="flex flex-col h-full flex-1">
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
         {isLoading ? (
-          <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground">
+          <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
             <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
           </div>
@@ -106,7 +106,7 @@ export function VideoGenerationWorkspace() {
             </div>
           ))
         ) : (
-          <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center">
+          <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg">
             <Video className="h-16 w-16 mx-auto mb-4" />
             <p>{t('workspace.video.outputPlaceholder')}</p>
           </div>
