@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
 
 const featureConfig = {
   'voice-cloning': {
@@ -37,11 +38,58 @@ const featureConfig = {
 
 type FeatureSlug = keyof typeof featureConfig;
 
+// A generic component for features that are not yet implemented
+function GenericFeatureWorkspace() {
+    const { t } = useI18n();
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+            <div className="lg:col-span-1 flex flex-col gap-6">
+                <Card>
+                    <CardContent className="p-6">
+                        <div className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
+                            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                <UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />
+                                <p className="mb-2 text-sm text-muted-foreground text-center px-2">{t('workspace.upload.label')}</p>
+                            </div>
+                            <input id="dropzone-file" type="file" className="hidden" />
+                        </div>
+
+                        <div className="flex items-center space-x-2 mt-4">
+                            <Checkbox id="training-toggle" />
+                            <Label htmlFor="training-toggle" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+                                {t('workspace.upload.trainingToggle')}
+                            </Label>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{t('workspace.upload.info')}</p>
+                    </CardContent>
+                </Card>
+                {/* Additional controls can be added here */}
+            </div>
+            <div className="lg:col-span-2 bg-muted/50 rounded-lg flex items-center justify-center min-h-[400px]">
+                <p className="text-muted-foreground">Generation Output Area</p>
+            </div>
+        </div>
+    );
+}
+
+
 export default function FeatureWorkspacePage() {
   const params = useParams();
   const { t } = useI18n();
   const slug = (params.slug as string) as FeatureSlug;
   const feature = featureConfig[slug] || featureConfig['image-generation'];
+
+  const renderWorkspace = () => {
+    switch(slug) {
+        case 'image-generation':
+            return <ImageGenerationWorkspace />;
+        // Add cases for other features here
+        // case 'voice-cloning':
+        //   return <VoiceCloningWorkspace />;
+        default:
+            return <GenericFeatureWorkspace />;
+    }
+  }
 
   return (
     <div className="container py-8 h-full flex flex-col">
@@ -57,33 +105,7 @@ export default function FeatureWorkspacePage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
-        <div className="lg:col-span-1 flex flex-col gap-6">
-            <Card>
-                <CardContent className="p-6">
-                     <div className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted">
-                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            <UploadCloud className="w-10 h-10 mb-3 text-muted-foreground" />
-                            <p className="mb-2 text-sm text-muted-foreground text-center px-2">{t('workspace.upload.label')}</p>
-                        </div>
-                        <input id="dropzone-file" type="file" className="hidden" />
-                    </div>
-
-                    <div className="flex items-center space-x-2 mt-4">
-                        <Checkbox id="training-toggle" />
-                        <Label htmlFor="training-toggle" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
-                            {t('workspace.upload.trainingToggle')}
-                        </Label>
-                    </div>
-                     <p className="text-xs text-muted-foreground mt-1">{t('workspace.upload.info')}</p>
-                </CardContent>
-            </Card>
-            {/* Additional controls can be added here */}
-        </div>
-        <div className="lg:col-span-2 bg-muted/50 rounded-lg flex items-center justify-center min-h-[400px]">
-            <p className="text-muted-foreground">Generation Output Area</p>
-        </div>
-      </div>
+      {renderWorkspace()}
     </div>
   );
 }
