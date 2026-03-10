@@ -107,8 +107,10 @@ export function VideoGenerationWorkspace() {
           ))
         ) : (
           <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg">
-            <Video className="h-16 w-16 mx-auto mb-4" />
-            <p>{t('workspace.video.outputPlaceholder')}</p>
+            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4">
+              <Video className="h-16 w-16 mx-auto mb-4" />
+              <p>{t('workspace.video.outputPlaceholder')}</p>
+            </div>
           </div>
         )}
       </div>
@@ -181,6 +183,7 @@ export function VideoGenerationWorkspace() {
               ) : (
                  <Video className="h-5 w-5" />
               )}
+              {t('workspace.video.generateButton')}
             </Button>
         </div>
       </div>
