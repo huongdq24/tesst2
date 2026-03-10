@@ -102,7 +102,7 @@ export function AuthForm() {
         createdAt: new Date(),
       });
     }
-    router.push('/igen-x-google');
+    router.push('/');
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
