@@ -18,11 +18,17 @@ import { googleAI } from '@genkit-ai/google-genai';
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
   textPrompt: z.string().describe('The text prompt describing the video to generate.'),
-  imageDataUri: z
+  startImageDataUri: z
     .string()
     .optional()
     .describe(
-      "Optional: A photo to use as a reference for 'Ingredients' or 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+      "Optional: A starting photo or frame for 'Ingredients' or 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
+    ),
+  endImageDataUri: z
+    .string()
+    .optional()
+    .describe(
+      "Optional: An ending frame for interpolation in 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding."
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   numberOfVideos: z.number().min(1).max(4).optional().default(1),
@@ -61,22 +67,26 @@ const aiVideoGenerationFlow = ai.defineFlow(
     const promptParts: Array<{ text: string } | { media: { contentType: string; url: string } }> = [
       { text: input.textPrompt },
     ];
+    
+    const addMediaPart = (uri: string | undefined) => {
+        if (uri) {
+            const match = uri.match(/^data:(.*?);base64,/);
+            if (!match || !match[1]) {
+                throw new Error('Invalid imageDataUri format: Missing MIME type.');
+            }
+            const contentType = match[1];
+            promptParts.push({
+                media: {
+                    contentType: contentType,
+                    url: uri,
+                },
+            });
+        }
+    };
 
-    if (input.imageDataUri) {
-      // Extract content type from the data URI (e.g., 'image/jpeg', 'image/png')
-      const match = input.imageDataUri.match(/^data:(.*?);base64,/);
-      if (!match || !match[1]) {
-        throw new Error('Invalid imageDataUri format: Missing MIME type.');
-      }
-      const contentType = match[1];
+    addMediaPart(input.startImageDataUri);
+    addMediaPart(input.endImageDataUri);
 
-      promptParts.push({
-        media: {
-          contentType: contentType,
-          url: input.imageDataUri,
-        },
-      });
-    }
 
     // Use Veo 2.0 as it supports configurable aspect ratio and number of videos.
     // Veo 3.0 has fixed settings for these parameters.
