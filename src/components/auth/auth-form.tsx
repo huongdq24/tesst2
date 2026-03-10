@@ -13,7 +13,7 @@ import { auth, firestore } from '@/lib/firebase/config';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { Loader2, Chrome } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -41,6 +41,40 @@ const formSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
 });
+
+const GoogleIcon = () => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-5 w-5">
+      <path fill="#4285F4" d="M24 9.8c3.3 0 5.7 1.4 7 2.7l4.3-4.3C32.1 4.9 28.5 3 24 3 14.8 3 7.3 8.5 4.4 16.5l5.4 4.2C11.3 14.3 17.2 9.8 24 9.8z"/>
+      <path fill="#34A853" d="M46.2 25.1c0-1.6-.1-3.2-.4-4.7H24v8.9h12.4c-.5 2.9-2.2 5.4-4.8 7.1l5.4 4.2c3.1-2.9 4.9-7.1 4.9-12.1-.1-.8-.1-1.6-.3-2.4z"/>
+      <path fill="#FBBC05" d="M10.1 28.1c-.5-1.5-.8-3.1-.8-4.8s.3-3.3.8-4.8l-5.4-4.2C2.5 18.4 1 22.6 1 27.3s1.5 8.9 4.7 12.9l5.4-4.2z"/>
+      <path fill="#EA4335" d="M24 45c4.5 0 8.1-1.5 10.7-4.1l-5.4-4.2c-1.5 1-3.4 1.6-5.3 1.6-6.8 0-12.7-4.5-14.9-10.7l-5.4 4.2C7.3 40.5 14.8 45 24 45z"/>
+      <path fill="none" d="M0 0h48v48H0z"/>
+    </svg>
+);
+
+const GoogleButtonContent = () => {
+    const { t } = useI18n();
+    const text = t('auth.signInWithGoogle');
+    
+    const parts = text.split('Google');
+
+    const GoogleColoredText = () => (
+        <span className="font-bold">
+            <span style={{ color: '#4285F4' }}>G</span>
+            <span style={{ color: '#EA4335' }}>o</span>
+            <span style={{ color: '#FBBC05' }}>o</span>
+            <span style={{ color: '#4285F4' }}>g</span>
+            <span style={{ color: '#34A853' }}>l</span>
+            <span style={{ color: '#EA4335' }}>e</span>
+        </span>
+    );
+
+    if (parts.length === 2) {
+        return <>{parts[0]}<GoogleColoredText />{parts[1]}</>
+    }
+    
+    return <>{text}</>
+}
 
 export function AuthForm() {
   const router = useRouter();
@@ -190,8 +224,8 @@ export function AuthForm() {
         </div>
         <div className="space-y-3">
           <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={loading}>
-            <Chrome className="mr-2 h-4 w-4" />
-            {t('auth.signInWithGoogle')}
+            <GoogleIcon />
+            <GoogleButtonContent />
           </Button>
         </div>
       </CardContent>
