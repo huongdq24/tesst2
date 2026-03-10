@@ -108,6 +108,19 @@ export default function IgenXGooglePage() {
     );
   }
 
+  const ApiKeyLabel = ({ text }: { text: string }) => {
+    const words = text.split(' ');
+    return (
+      <span className="flex items-center">
+        {words.map((word, index) => {
+          if (word === 'iGen') {
+            return <IGenLogo key={index} />;
+          }
+          return <span key={index} className="ml-1">{word}</span>;
+        })}
+      </span>
+    );
+  };
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-gray-100 to-blue-100 p-4">
@@ -139,9 +152,9 @@ export default function IgenXGooglePage() {
                   name="geminiApiKey"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('apikeys.modal.gemini')}</FormLabel>
+                      <FormLabel><ApiKeyLabel text={t('apikeys.modal.gemini')} /></FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Nhập khóa Gemini của bạn" {...field} />
+                        <Input type="password" placeholder={t('apikeys.modal.gemini.placeholder')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -152,9 +165,9 @@ export default function IgenXGooglePage() {
                   name="elevenLabsApiKey"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('apikeys.modal.elevenlabs')}</FormLabel>
+                      <FormLabel><ApiKeyLabel text={t('apikeys.modal.elevenlabs')} /></FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Nhập khóa ElevenLabs của bạn" {...field} />
+                        <Input type="password" placeholder={t('apikeys.modal.elevenlabs.placeholder')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -165,9 +178,9 @@ export default function IgenXGooglePage() {
                   name="heyGenApiKey"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>{t('apikeys.modal.heygen')}</FormLabel>
+                      <FormLabel><ApiKeyLabel text={t('apikeys.modal.heygen')} /></FormLabel>
                       <FormControl>
-                        <Input type="password" placeholder="Nhập khóa HeyGen của bạn" {...field} />
+                        <Input type="password" placeholder={t('apikeys.modal.heygen.placeholder')} {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>

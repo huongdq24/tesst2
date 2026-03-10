@@ -26,6 +26,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { KeyRound } from 'lucide-react';
 import { useI18n } from '@/contexts/i18n-context';
+import { IGenLogo } from '../igen-logo';
 
 interface ApiKeysModalProps {
   open: boolean;
@@ -71,6 +72,20 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
     }
   };
 
+  const ApiKeyLabel = ({ text }: { text: string }) => {
+    const words = text.split(' ');
+    return (
+      <span className="flex items-center">
+        {words.map((word, index) => {
+          if (word === 'iGen') {
+            return <IGenLogo key={index} />;
+          }
+          return <span key={index} className="ml-1">{word}</span>;
+        })}
+      </span>
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md bg-white/70 backdrop-blur-xl border-white/20">
@@ -90,9 +105,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="geminiApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('apikeys.modal.gemini')}</FormLabel>
+                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.gemini')} /></FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Enter your Gemini key" {...field} />
+                    <Input type="password" placeholder={t('apikeys.modal.gemini.placeholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -103,9 +118,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="elevenLabsApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('apikeys.modal.elevenlabs')}</FormLabel>
+                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.elevenlabs')} /></FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Enter your ElevenLabs key" {...field} />
+                    <Input type="password" placeholder={t('apikeys.modal.elevenlabs.placeholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -116,9 +131,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="heyGenApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>{t('apikeys.modal.heygen')}</FormLabel>
+                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.heygen')} /></FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="Enter your HeyGen key" {...field} />
+                    <Input type="password" placeholder={t('apikeys.modal.heygen.placeholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

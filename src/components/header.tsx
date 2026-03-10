@@ -41,6 +41,20 @@ export function Header() {
     }
     return `••••••••${key.slice(-4)}`;
   };
+  
+  const ApiKeyLabel = ({ text }: { text: string }) => {
+    const words = text.split(' ');
+    return (
+      <span className="flex-1 text-sm flex items-center">
+        {words.map((word, index) => {
+          if (word === 'iGen') {
+            return <IGenLogo key={index} />;
+          }
+          return <span key={index} className="ml-1">{word}</span>;
+        })}
+      </span>
+    );
+  };
 
   return (
     <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-sm">
@@ -82,17 +96,17 @@ export function Header() {
                   </DropdownMenuLabel>
                    <DropdownMenuItem className="focus:bg-transparent cursor-default">
                     <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm">{t('apikeys.modal.gemini')}</span>
+                    <ApiKeyLabel text={t('apikeys.modal.gemini')} />
                     <span className="font-mono text-xs">{maskApiKey(userData?.geminiApiKey)}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="focus:bg-transparent cursor-default">
                     <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm">{t('apikeys.modal.elevenlabs')}</span>
+                    <ApiKeyLabel text={t('apikeys.modal.elevenlabs')} />
                     <span className="font-mono text-xs">{maskApiKey(userData?.elevenLabsApiKey)}</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem className="focus:bg-transparent cursor-default">
                     <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="flex-1 text-sm">{t('apikeys.modal.heygen')}</span>
+                    <ApiKeyLabel text={t('apikeys.modal.heygen')} />
                     <span className="font-mono text-xs">{maskApiKey(userData?.heyGenApiKey)}</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
