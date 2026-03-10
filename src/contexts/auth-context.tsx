@@ -38,38 +38,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let unsubscribeSnapshot: Unsubscribe | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      // First, cancel any existing Firestore listener
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      // First, always cancel any previous data listener
       if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
       }
 
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        setLoading(true); // Start loading user data
-        const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+      // If a user is logged in, begin the process of fetching their data.
+      if (currentUser) {
+        // Set loading to true immediately.
+        // Also, set the user object, but clear the previous user's data to prevent using stale data.
+        setLoading(true);
+        setUser(currentUser);
+        setUserData(null); // Explicitly clear old data
+
+        const userDocRef = doc(firestore, 'users', currentUser.uid);
         
+        // Listen for changes to the user's data document in Firestore.
         unsubscribeSnapshot = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
+            // If the document exists, set the user data.
             setUserData(doc.data() as UserData);
           } else {
-            setUserData(null); // User is authenticated, but no data document exists yet
+            // If the document does not exist, userData remains null.
+            setUserData(null);
           }
-          setLoading(false); // Finished loading user data
+          // Once data is fetched (or confirmed not to exist), loading is complete.
+          setLoading(false);
         }, (error) => {
           console.error("Error fetching user data:", error);
           setUserData(null);
           setLoading(false);
         });
       } else {
-        // No user is signed in
+        // If no user is logged in, clear all session state and stop loading.
         setUser(null);
         setUserData(null);
         setLoading(false);
       }
     });
 
-    // Cleanup function for the main auth listener
+    // Cleanup function runs when the component unmounts.
     return () => {
       unsubscribeAuth();
       if (unsubscribeSnapshot) {
@@ -78,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // While the initial authentication check or data fetching is in progress,
+  // show a global loader. This is critical to prevent rendering any part
+  // of the app with incomplete or stale information.
   if (loading) {
      return (
         <div className="flex h-screen w-screen items-center justify-center bg-background">
