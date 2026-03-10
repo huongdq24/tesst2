@@ -10,7 +10,6 @@ import {
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { auth, firestore } from '@/lib/firebase/config';
-import { Loader2 } from 'lucide-react';
 
 interface AuthContextType {
   user: User | null;
@@ -39,46 +38,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribeSnapshot: Unsubscribe | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      // First, always cancel any previous data listener
       if (unsubscribeSnapshot) {
         unsubscribeSnapshot();
       }
 
-      // If a user is logged in, begin the process of fetching their data.
       if (currentUser) {
-        // Set loading to true immediately.
-        // Also, set the user object, but clear the previous user's data to prevent using stale data.
-        setLoading(true);
         setUser(currentUser);
-        setUserData(null); // Explicitly clear old data
-
         const userDocRef = doc(firestore, 'users', currentUser.uid);
-        
-        // Listen for changes to the user's data document in Firestore.
-        unsubscribeSnapshot = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) {
-            // If the document exists, set the user data.
-            setUserData(doc.data() as UserData);
-          } else {
-            // If the document does not exist, userData remains null.
+        unsubscribeSnapshot = onSnapshot(
+          userDocRef,
+          (doc) => {
+            if (doc.exists()) {
+              setUserData(doc.data() as UserData);
+            } else {
+              setUserData(null);
+            }
+            setLoading(false); // Auth + data load is complete
+          },
+          (error) => {
+            console.error('Error fetching user data:', error);
             setUserData(null);
+            setLoading(false);
           }
-          // Once data is fetched (or confirmed not to exist), loading is complete.
-          setLoading(false);
-        }, (error) => {
-          console.error("Error fetching user data:", error);
-          setUserData(null);
-          setLoading(false);
-        });
+        );
       } else {
-        // If no user is logged in, clear all session state and stop loading.
+        // No user is logged in
         setUser(null);
         setUserData(null);
-        setLoading(false);
+        setLoading(false); // Auth load is complete
       }
     });
 
-    // Cleanup function runs when the component unmounts.
     return () => {
       unsubscribeAuth();
       if (unsubscribeSnapshot) {
@@ -86,17 +76,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     };
   }, []);
-
-  // While the initial authentication check or data fetching is in progress,
-  // show a global loader. This is critical to prevent rendering any part
-  // of the app with incomplete or stale information.
-  if (loading) {
-     return (
-        <div className="flex h-screen w-screen items-center justify-center bg-background">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        </div>
-        );
-  }
 
   return (
     <AuthContext.Provider value={{ user, userData, loading }}>
