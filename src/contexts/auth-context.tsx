@@ -23,11 +23,9 @@ export interface UserData {
   email: string | null;
   role: 'Admin' | 'User';
   hasClaimedCredit?: boolean;
-  apiKeys?: {
-    gemini?: string;
-    elevenlabs?: string;
-    heygen?: string;
-  };
+  geminiApiKey?: string;
+  elevenLabsApiKey?: string;
+  heyGenApiKey?: string;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

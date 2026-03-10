@@ -31,9 +31,9 @@ import { Gift, Loader2 } from 'lucide-react';
 import { IGenLogo } from '@/components/igen-logo';
 
 const formSchema = z.object({
-  gemini: z.string().min(1, 'Vui lòng nhập khóa API Gemini của bạn.'),
-  elevenlabs: z.string().min(1, 'Vui lòng nhập khóa API ElevenLabs của bạn.'),
-  heygen: z.string().min(1, 'Vui lòng nhập khóa API HeyGen của bạn.'),
+  geminiApiKey: z.string().min(1, 'Vui lòng nhập khóa API Gemini của bạn.'),
+  elevenLabsApiKey: z.string().min(1, 'Vui lòng nhập khóa API ElevenLabs của bạn.'),
+  heyGenApiKey: z.string().min(1, 'Vui lòng nhập khóa API HeyGen của bạn.'),
 });
 
 export default function IgenXGooglePage() {
@@ -46,9 +46,9 @@ export default function IgenXGooglePage() {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      gemini: '',
-      elevenlabs: '',
-      heygen: '',
+      geminiApiKey: '',
+      elevenLabsApiKey: '',
+      heyGenApiKey: '',
     },
     mode: 'onChange',
   });
@@ -65,7 +65,7 @@ export default function IgenXGooglePage() {
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
       await updateDoc(userDocRef, {
-        apiKeys: values,
+        ...values,
         hasClaimedCredit: true,
       });
       toast({
@@ -119,7 +119,7 @@ export default function IgenXGooglePage() {
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                 <FormField
                   control={form.control}
-                  name="gemini"
+                  name="geminiApiKey"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('apikeys.modal.gemini')}</FormLabel>
@@ -132,7 +132,7 @@ export default function IgenXGooglePage() {
                 />
                 <FormField
                   control={form.control}
-                  name="elevenlabs"
+                  name="elevenLabsApiKey"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('apikeys.modal.elevenlabs')}</FormLabel>
@@ -145,7 +145,7 @@ export default function IgenXGooglePage() {
                 />
                 <FormField
                   control={form.control}
-                  name="heygen"
+                  name="heyGenApiKey"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>{t('apikeys.modal.heygen')}</FormLabel>
