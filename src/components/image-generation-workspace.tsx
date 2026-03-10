@@ -5,25 +5,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X, Wand2 } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2, UploadCloud } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { Separator } from './ui/separator';
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [inputFile, setInputFile] = useState<File | null>(null);
   const [inputImageDataUri, setInputImageDataUri] = useState<string | null>(null);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,7 +35,6 @@ export function ImageGenerationWorkspace() {
         });
         return;
       }
-      setInputFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setInputImageDataUri(reader.result as string);
@@ -89,7 +81,6 @@ export function ImageGenerationWorkspace() {
       const result = await brandedImageGeneration({
         existingImageUri: inputImageDataUri || undefined,
         generationPrompt: prompt,
-        stylePreferences: prompt,
       });
       setGeneratedImageUrl(result.generatedImageUri);
     } catch (error: any) {
@@ -105,7 +96,6 @@ export function ImageGenerationWorkspace() {
   };
   
   const handleRemoveImage = () => {
-      setInputFile(null);
       setInputImageDataUri(null);
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -120,6 +110,32 @@ export function ImageGenerationWorkspace() {
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
 
+            {/* Reference Image Upload */}
+            <div className="space-y-2">
+              <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+              <div 
+                className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                {inputImageDataUri ? (
+                  <>
+                    <Image src={inputImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                    <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
+                        <X className="h-4 w-4" />
+                    </Button>
+                  </>
+                ) : (
+                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
+                      <UploadCloud className="w-8 h-8 mb-2" />
+                      <p className="text-sm text-center">{t('workspace.image.uploadTooltip')}</p>
+                  </div>
+                )}
+                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isBusy} />
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Simple prompt section */}
             <div className="space-y-2">
               <Label htmlFor="simple-prompt">{t('workspace.image.simplePromptLabel')}</Label>
@@ -128,7 +144,7 @@ export function ImageGenerationWorkspace() {
                 placeholder={t('workspace.image.simplePromptPlaceholder')}
                 value={simplePrompt}
                 onChange={(e) => setSimplePrompt(e.target.value)}
-                rows={3}
+                rows={2}
                 disabled={isBusy}
                 className="resize-none"
               />
@@ -141,48 +157,18 @@ export function ImageGenerationWorkspace() {
             <Separator />
 
             {/* Main prompt section */}
-            <div className="space-y-2">
+            <div className="space-y-2 flex-1 flex flex-col">
               <Label htmlFor="prompt">{t('workspace.image.promptLabel')}</Label>
-              <div className="relative">
-                <Textarea
-                  id="prompt"
-                  placeholder={t('workspace.image.promptPlaceholder')}
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  rows={8}
-                  disabled={isBusy}
-                  className="pr-12 resize-none"
-                />
-                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isBusy} />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button asChild variant="ghost" size="icon" className="absolute bottom-2 right-2 text-muted-foreground cursor-pointer h-8 w-8 hover:bg-accent hover:text-accent-foreground">
-                          <label htmlFor="image-upload-input">
-                              <ImageIcon className="h-5 w-5" />
-                              <span className="sr-only">{t('workspace.image.inputLabel')}</span>
-                          </label>
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>{t('workspace.image.uploadTooltip')}</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+              <Textarea
+                id="prompt"
+                placeholder={t('workspace.image.promptPlaceholder')}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                disabled={isBusy}
+                className="resize-none flex-1"
+              />
             </div>
-
-            {inputImageDataUri && (
-                <div className="relative w-24 h-24">
-                    <Image src={inputImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md border" />
-                    <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={handleRemoveImage}>
-                        <X className="h-4 w-4" />
-                    </Button>
-                </div>
-            )}
             
-            <div className="flex-1"></div> {/* Spacer to push button to bottom */}
-
             <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full">
               {isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

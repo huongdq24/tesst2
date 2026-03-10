@@ -1,8 +1,8 @@
 'use server';
 /**
- * @fileOverview A Genkit flow for generating branded images or avatars based on user-provided visual elements and style preferences.
+ * @fileOverview A Genkit flow for generating images, with optional support for a reference image (image-to-image).
  *
- * - brandedImageGeneration - A function that handles the branded image generation process.
+ * - brandedImageGeneration - A function that handles the image generation process.
  * - BrandedImageGenerationInput - The input type for the brandedImageGeneration function.
  * - BrandedImageGenerationOutput - The return type for the brandedImageGeneration function.
  */
@@ -17,12 +17,7 @@ const BrandedImageGenerationInputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "An optional existing image (e.g., logo, avatar) as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. This image will be used as a visual reference for brand consistency."
-    ),
-  stylePreferences: z
-    .string()
-    .describe(
-      'A detailed description of the desired visual style, including colors, mood, typography, and specific themes to reflect the personal brand identity.'
+      "An optional reference image as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. This image will be used as a visual reference."
     ),
   generationPrompt: z
     .string()
@@ -58,18 +53,17 @@ const brandedImageGenerationPrompt = ai.definePrompt({
   name: 'brandedImageGenerationPrompt',
   input: {schema: BrandedImageGenerationInputSchema},
   output: {schema: BrandedImageGenerationOutputSchema},
-  prompt: `{{#if existingImageUri}}
-You are provided with an existing image that represents a brand's visual identity. Use this image as a primary reference.
+  prompt: `You are an AI image generation assistant. Your task is to generate an image based on the user's prompt and an optional reference image.
+
+{{#if existingImageUri}}
+Use the following image as a reference or starting point for the generation.
 {{media url=existingImageUri}}
 {{/if}}
 
-Based on the following style preferences:
-Style Preferences: {{{stylePreferences}}}
+The user's request is:
+{{{generationPrompt}}}
 
-And the content request:
-Content Request: {{{generationPrompt}}}
-
-Generate a new image that consistently reflects the personal brand identity, incorporating the visual style and elements from the reference image (if provided) and adhering to the described style preferences and content request.
+Generate the image according to the user's request.
 `,
 });
 
