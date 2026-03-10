@@ -21,7 +21,7 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!loading) {
       if (!user) {
-        router.replace('/auth');
+        router.replace('/login');
       } else if (userData) {
         // Onboarding flow logic
         if (!userData.hasClaimedCredit) {
