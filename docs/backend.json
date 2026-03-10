@@ -160,24 +160,8 @@
             }
           ]
         }
-      },
-      {
-        "path": "/roles_admin/{uid}",
-        "definition": {
-          "entityName": "adminRole",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "A collection used for global admin role authorization. The existence of a document at `/roles_admin/{uid}` signifies that the user with `uid` has administrator privileges, following the 'Existence over Content' pattern for DBAC. This enables atomic rule checks without `get()` dependencies.",
-          "params": [
-            {
-              "name": "uid",
-              "description": "The unique identifier of the user who holds the admin role."
-            }
-          ]
-        }
       }
     ],
-    "reasoning": "The Firestore structure is designed following the core principles of Authorization Independence, Structural Segregation, and consistent Access Modeling to ensure security, scalability, and debuggability. \n\n1.  **User Profiles (`/users/{userId}`)**: Each user's profile information, including their API keys and credit claim status, is stored in a document `userId` within the top-level `users` collection. The `userId` directly corresponds to `request.auth.uid`, making authorization for a user's *own* profile atomic and independent. Security rules can simply check `request.auth.uid == userId` without any `get()` operations, perfectly fulfilling Authorization Independence. This structure also supports QAPs as a user can only query their specific document, not list other users' profiles.\n\n2.  **User Files (`/files/{fileId}`)**: Files uploaded by users are stored in a top-level `files` collection. Each `File` document explicitly includes an `ownerId` field. This `ownerId` is a denormalized attribute that directly references the user who owns the file. This is crucial for Authorization Independence (Mandate A) because security rules can directly check `resource.data.ownerId == request.auth.uid` to grant read/write access. This eliminates the need for `get()` calls to a parent `User` document. This design also fully supports QAPs (Mandate QAPs) by allowing `list` operations on the `/files` collection where Firestore can efficiently filter documents based on the `ownerId` field, ensuring only files owned by the requesting user are returned.\n\n3.  **Admin Roles (`/roles_admin/{uid}`)**: For global administrator roles, a separate `roles_admin` collection is used. An admin user's UID will exist as a document ID in this collection. This adheres to the 'Existence over Content' principle for DBAC (Mandate C.4) and ensures Authorization Independence. Security rules for global admin access can use a simple `exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid))` check, which is atomic and does not incur `get()` dependencies. The `role` field within the `/users/{userId}` document is retained as requested for application-level logic or UI display, but `roles_admin` will be the definitive source for security rule-based global admin authorization.\n\nThis structure ensures clear, explicit authorization intent, simplifies security rules by removing complex `get()` dependencies, and provides robust support for secure `list` operations (QAPs) through appropriate segregation and denormalization."
+    "reasoning": "The Firestore structure is designed following the core principles of Authorization Independence, Structural Segregation, and consistent Access Modeling to ensure security, scalability, and debuggability. \n\n1.  **User Profiles (`/users/{userId}`)**: Each user's profile information, including their API keys, credit claim status, and role, is stored in a document `userId` within the top-level `users` collection. The `userId` directly corresponds to `request.auth.uid`, and the `role` field within this document is the single source of truth for admin privileges. This makes authorization for a user's *own* profile atomic and independent. Security rules can check `request.auth.uid == userId` without any cross-document `get()` operations for ownership-based rules.\n\n2.  **User Files (`/files/{fileId}`)**: Files uploaded by users are stored in a top-level `files` collection. Each `File` document explicitly includes an `ownerId` field. This `ownerId` is a denormalized attribute that directly references the user who owns the file. This is crucial for Authorization Independence because security rules can directly check `resource.data.ownerId == request.auth.uid` to grant read/write access. This eliminates the need for `get()` calls to a parent `User` document and supports secure list queries."
   }
 }

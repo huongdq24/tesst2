@@ -93,7 +93,7 @@ export function AuthForm() {
     const userDoc = await getDoc(userDocRef);
     if (!userDoc.exists()) {
       await setDoc(userDocRef, {
-        uid: user.uid,
+        id: user.uid,
         email: user.email,
         displayName: user.displayName,
         photoURL: user.photoURL,

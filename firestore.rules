@@ -11,28 +11,24 @@
  * - /users/{userId}: Stores private user profiles, API keys, and app-specific flags.
  * - /files/{fileId}: Stores metadata for user-uploaded files, with each document containing a
  *   denormalized `ownerId` for direct authorization checks.
- * - /roles_admin/{uid}: An internal, client-inaccessible collection where the existence of a
- *   document signifies a user's global administrator status.
  *
  * Key Security Decisions:
  * - User Isolation: Users can only access their own data. Listing other users' profiles is explicitly forbidden.
  * - Ownership-Based Access: All user-generated content (like files) is secured via a mandatory `ownerId`
  *   field within the document itself, ensuring that only the creator can read or modify their data.
- * - Secure Admin Role Management: Global administrator privileges are determined by checking for the
- *   existence of a document in the `/roles_admin` collection. This collection is completely locked down
- *   from client access to prevent enumeration of admin users.
+ * - Secure Admin Role Management: Global administrator privileges are determined by the `role` field
+ *   within the user's own document (`/users/{userId}`). This makes the user document the single source
+ *   of truth for authorization.
  * - Flexible Schema: In this prototyping stage, rules enforce authorization but do not validate the
  *   specific shape or data types of documents, allowing for rapid iteration on the data model.
  *
  * Denormalization for Authorization:
- * To create simpler and more performant rules, ownership and role data is denormalized:
+ * To create simpler and more performant rules, ownership data is denormalized:
  * - The `ownerId` field is included on every `File` document. This allows a rule on `/files/{fileId}`
  *   to check ownership instantly without needing to `get()` a separate user document.
- * - Admin roles are managed by document existence in `/roles_admin/{uid}`. This enables a fast `exists()`
- *   check for admin status anywhere in the ruleset without reading document content.
  *
  * Structural Segregation:
- * Data is segregated into distinct top-level collections (`users`, `files`, `roles_admin`) based on its
+ * Data is segregated into distinct top-level collections (`users`, `files`) based on its
  * security context. This simplifies rules and makes access patterns clear and auditable.
  */
 rules_version = '2';
@@ -63,11 +59,11 @@ service cloud.firestore {
 
     /**
      * Returns true if the user is a global administrator.
-     * Checks for the existence of a document in the admin roles collection.
+     * Checks the 'role' field on the user's own profile document.
      * @param {object|null} auth - The request.auth object.
      */
     function isAdmin(auth) {
-      return isSignedIn(auth) && exists(/databases/$(database)/documents/roles_admin/$(auth.uid));
+      return isSignedIn(auth) && get(/databases/$(database)/documents/users/$(auth.uid)).data.role == 'Admin';
     }
 
     /**
@@ -150,25 +146,6 @@ service cloud.firestore {
       allow update: if isOwner(request.auth, resource.data.ownerId) && isOwnerIdUnchanged(request.resource.data, resource.data);
       // On delete, `resource` (the existing document) must be non-null.
       allow delete: if isOwner(request.auth, resource.data.ownerId) && resource != null;
-    }
-
-    //-------------------------------------------------------------------------
-    // Collection: roles_admin
-    //-------------------------------------------------------------------------
-
-    /**
-     * @description A private collection for managing global admin roles.
-     * @path /roles_admin/{uid}
-     * @allow (none) No client can read from or write to this collection directly.
-     * @deny (get) A user attempting to read `/roles_admin/some_other_uid`.
-     * @principle Secures role-management data by making it inaccessible to clients. Its sole purpose is for server-side `exists()` checks in other rules.
-     */
-    match /roles_admin/{uid} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
     }
   }
 }
