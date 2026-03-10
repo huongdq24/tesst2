@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { useRouter } from 'next/navigation';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, KeyRound } from 'lucide-react';
 
 import { useAuth } from '@/contexts/auth-context';
 import { IGenLogo } from '@/components/igen-logo';
@@ -23,13 +23,23 @@ import { useI18n } from '@/contexts/i18n-context';
 
 
 export function Header() {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const router = useRouter();
   const { t } = useI18n();
 
   const handleSignOut = async () => {
     await signOut(auth);
     router.push('/login');
+  };
+
+  const maskApiKey = (key?: string) => {
+    if (!key || key.length === 0) {
+      return <span className="text-muted-foreground/70 italic">Not set</span>;
+    }
+    if (key.length <= 4) {
+      return `••••${key}`;
+    }
+    return `••••••••${key.slice(-4)}`;
   };
 
   return (
@@ -55,7 +65,7 @@ export function Header() {
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
+                <DropdownMenuContent className="w-64" align="end" forceMount>
                   <DropdownMenuLabel className="font-normal">
                     <div className="flex flex-col space-y-1">
                       <p className="text-sm font-medium leading-none">
@@ -66,6 +76,25 @@ export function Header() {
                       </p>
                     </div>
                   </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                   <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    API Keys
+                  </DropdownMenuLabel>
+                   <DropdownMenuItem className="focus:bg-transparent cursor-default">
+                    <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm">{t('apikeys.modal.gemini')}</span>
+                    <span className="font-mono text-xs">{maskApiKey(userData?.geminiApiKey)}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="focus:bg-transparent cursor-default">
+                    <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm">{t('apikeys.modal.elevenlabs')}</span>
+                    <span className="font-mono text-xs">{maskApiKey(userData?.elevenLabsApiKey)}</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="focus:bg-transparent cursor-default">
+                    <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" />
+                    <span className="flex-1 text-sm">{t('apikeys.modal.heygen')}</span>
+                    <span className="font-mono text-xs">{maskApiKey(userData?.heyGenApiKey)}</span>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}>
                     <LogOut className="mr-2 h-4 w-4" />
