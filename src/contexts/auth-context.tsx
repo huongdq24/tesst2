@@ -52,9 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const unsubscribe = onSnapshot(userDocRef, (doc) => {
         if (doc.exists()) {
           setUserData(doc.data() as UserData);
+        } else {
+          // Explicitly set userData to null if the document does not exist.
+          // This prevents stale state from a previous user session.
+          setUserData(null);
         }
         setLoading(false);
       }, () => {
+        setUserData(null);
         setLoading(false);
       });
       return () => unsubscribe();
