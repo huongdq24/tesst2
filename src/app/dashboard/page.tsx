@@ -1,4 +1,4 @@
-// This page is deprecated and will be removed.
-export default function DeprecatedDashboardPage() {
+// This page has been removed to enforce a single slug per page.
+export default function RemovedPage() {
   return null;
 }
