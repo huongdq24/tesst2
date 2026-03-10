@@ -8,7 +8,7 @@ import {
   ReactNode,
 } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 import { auth, firestore } from '@/lib/firebase/config';
 import { Loader2 } from 'lucide-react';
 
@@ -36,38 +36,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      setUser(firebaseUser);
-      if (!firebaseUser) {
+    let unsubscribeSnapshot: Unsubscribe | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      // First, cancel any existing Firestore listener
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+
+      if (firebaseUser) {
+        setUser(firebaseUser);
+        setLoading(true); // Start loading user data
+        const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+        
+        unsubscribeSnapshot = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            setUserData(doc.data() as UserData);
+          } else {
+            setUserData(null); // User is authenticated, but no data document exists yet
+          }
+          setLoading(false); // Finished loading user data
+        }, (error) => {
+          console.error("Error fetching user data:", error);
+          setUserData(null);
+          setLoading(false);
+        });
+      } else {
+        // No user is signed in
+        setUser(null);
         setUserData(null);
         setLoading(false);
       }
     });
-    return () => unsubscribe();
-  }, []);
 
-  useEffect(() => {
-    if (user) {
-      const userDocRef = doc(firestore, 'users', user.uid);
-      const unsubscribe = onSnapshot(userDocRef, (doc) => {
-        if (doc.exists()) {
-          setUserData(doc.data() as UserData);
-        } else {
-          // Explicitly set userData to null if the document does not exist.
-          // This prevents stale state from a previous user session.
-          setUserData(null);
-        }
-        setLoading(false);
-      }, () => {
-        setUserData(null);
-        setLoading(false);
-      });
-      return () => unsubscribe();
-    } else {
-        setUserData(null);
-        setLoading(false);
-    }
-  }, [user]);
+    // Cleanup function for the main auth listener
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeSnapshot) {
+        unsubscribeSnapshot();
+      }
+    };
+  }, []);
 
   if (loading) {
      return (

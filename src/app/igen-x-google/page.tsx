@@ -54,10 +54,11 @@ export default function IgenXGooglePage() {
   });
 
   useEffect(() => {
-    if (userData && userData.hasClaimedCredit) {
+    // If auth is not loading and user data indicates onboarding is complete, redirect.
+    if (!loading && userData && userData.hasClaimedCredit) {
       router.replace('/home');
     }
-  }, [userData, router]);
+  }, [userData, loading, router]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user) return;
@@ -84,13 +85,26 @@ export default function IgenXGooglePage() {
     }
   };
 
-  if (loading || !user || (userData && userData.hasClaimedCredit)) {
+  // Show a loader if auth state is loading, or if the user is already onboarded
+  // and we are waiting for the redirect to /home to happen.
+  if (loading || (userData && userData.hasClaimedCredit)) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
   }
+  
+  // Also check for no user after loading, and redirect to login if they land here without being auth'd
+  if (!loading && !user) {
+    router.replace('/login');
+    return (
+       <div className="flex h-screen w-screen items-center justify-center bg-background">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-gray-100 to-blue-100 p-4">

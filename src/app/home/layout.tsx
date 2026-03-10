@@ -15,7 +15,7 @@ export default function HomeLayout({
   const { user, userData, loading } = useAuth();
 
   useEffect(() => {
-    // Wait until the loading is fully complete
+    // Wait until the loading is fully complete before making decisions
     if (loading) {
       return;
     }
@@ -28,18 +28,13 @@ export default function HomeLayout({
 
     // If loading is done, there is a user, but their data indicates
     // they haven't completed onboarding, redirect them.
-    // This covers both cases: `userData` is loaded and `hasClaimedCredit` is false,
-    // or `userData` is `null` (meaning doc doesn't exist), which also implies onboarding is not done.
     if (!userData?.hasClaimedCredit) {
       router.replace('/igen-x-google');
     }
   }, [user, userData, loading, router]);
 
-  // The loader should be displayed as long as we are in a transitional state.
-  // 1. `loading` is true (initial auth check).
-  // 2. No `user` object yet (will be redirected by useEffect, but show loader until then).
-  // 3. There is a `user` but `hasClaimedCredit` is false (will be redirected, show loader until then).
-  // We use `!userData?.hasClaimedCredit` which is true if `userData` is null or `hasClaimedCredit` is false.
+  // Show loader while the initial check is happening, or if the user
+  // doesn't meet the criteria to see the page yet (they will be redirected).
   const showLoader = loading || !user || !userData?.hasClaimedCredit;
 
   if (showLoader) {
