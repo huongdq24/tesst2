@@ -9,6 +9,7 @@ import {
   Video,
   ArrowLeft,
   UploadCloud,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
 import { VideoGenerationWorkspace } from '@/components/video-generation-workspace';
+import { ContentStudioWorkspace } from '@/components/content-studio-workspace';
 
 const featureConfig = {
   'voice-cloning': {
@@ -34,6 +36,10 @@ const featureConfig = {
   'video-generation': {
     icon: <Video className="h-6 w-6" />,
     i18nKey: 'feature.videoGeneration',
+  },
+  'content-studio': {
+    icon: <Sparkles className="h-6 w-6" />,
+    i18nKey: 'feature.contentStudio',
   },
 };
 
@@ -82,6 +88,8 @@ export default function FeatureWorkspacePage({ params }: { params: { slug: strin
 
   const renderWorkspace = () => {
     switch(slug) {
+        case 'content-studio':
+            return <ContentStudioWorkspace />;
         case 'image-generation':
             return <ImageGenerationWorkspace />;
         case 'video-generation':

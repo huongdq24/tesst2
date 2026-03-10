@@ -2,7 +2,7 @@
 
 import { FeatureCard } from '@/components/feature-card';
 import { useI18n } from '@/contexts/i18n-context';
-import { Voicemail, ScanFace, Image as ImageIcon, Video } from 'lucide-react';
+import { Voicemail, ScanFace, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   const { t } = useI18n();
@@ -21,16 +21,10 @@ export default function HomePage() {
       description: 'Create a consistent brand avatar from your image.',
     },
     {
-      slug: 'image-generation',
-      title: t('feature.imageGeneration'),
-      icon: <ImageIcon className="h-8 w-8 text-primary" />,
-      description: 'Generate stunning images from text descriptions.',
-    },
-    {
-      slug: 'video-generation',
-      title: t('feature.videoGeneration'),
-      icon: <Video className="h-8 w-8 text-primary" />,
-      description: 'Produce short, professional videos from prompts.',
+      slug: 'content-studio',
+      title: t('feature.contentStudio'),
+      icon: <Sparkles className="h-8 w-8 text-primary" />,
+      description: 'Create AI images and videos in one place.',
     },
   ];
 
