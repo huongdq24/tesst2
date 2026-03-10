@@ -117,12 +117,26 @@ export function AuthForm() {
             role = 'Admin';
           }
           await handleUserSetup(newUserCredential.user, role);
-        } catch (signUpError: any) {
-          toast({
-            variant: 'destructive',
-            title: 'Sign Up Failed',
-            description: signUpError.message,
-          });
+        } catch (error: any) {
+            try {
+                // If sign up fails because email exists, try to sign in.
+                if (error.code === 'auth/email-already-in-use') {
+                    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                    await handleUserSetup(userCredential.user);
+                } else {
+                    toast({
+                        variant: 'destructive',
+                        title: 'Sign Up Failed',
+                        description: error.message,
+                    });
+                }
+            } catch (signInError: any) {
+                toast({
+                    variant: 'destructive',
+                    title: 'Authentication Failed',
+                    description: signInError.message,
+                });
+            }
         }
     } else {
         try {
@@ -165,7 +179,7 @@ export function AuthForm() {
       <CardHeader className="text-center pt-12">
         <CardTitle className="text-2xl font-bold tracking-tight flex items-center justify-center gap-2">
           <IGenLogo />
-          <span> - {t('app.title').split('-')[1]}</span>
+          <span>{t('app.title').replace('iGen', '')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
