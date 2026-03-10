@@ -31,9 +31,9 @@ import { Gift, Loader2 } from 'lucide-react';
 import { IGenLogo } from '@/components/igen-logo';
 
 const formSchema = z.object({
-  geminiApiKey: z.string().min(1, 'Vui lòng nhập khóa API Gemini của bạn.'),
-  elevenLabsApiKey: z.string().min(1, 'Vui lòng nhập khóa API ElevenLabs của bạn.'),
-  heyGenApiKey: z.string().min(1, 'Vui lòng nhập khóa API HeyGen của bạn.'),
+  geminiApiKey: z.string().min(1, 'Vui lòng nhập iGen Code 1 của bạn.'),
+  elevenLabsApiKey: z.string().min(1, 'Vui lòng nhập iGen Code 2 của bạn.'),
+  heyGenApiKey: z.string().min(1, 'Vui lòng nhập iGen Code 3 của bạn.'),
 });
 
 export default function IgenXGooglePage() {
@@ -75,7 +75,7 @@ export default function IgenXGooglePage() {
       });
       toast({
         title: 'Thành công!',
-        description: 'Khóa API đã được lưu và tín dụng đã được nhận.',
+        description: t('onboarding.success'),
       });
       router.push('/home');
     } catch (error) {

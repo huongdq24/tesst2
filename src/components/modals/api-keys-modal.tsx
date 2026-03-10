@@ -67,7 +67,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Could not save API keys. Please try again.',
+        description: t('apikeys.modal.error'),
       });
     }
   };
