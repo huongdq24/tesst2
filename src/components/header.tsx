@@ -37,7 +37,7 @@ export function Header() {
       <div className="container flex h-16 items-center space-x-4 sm:justify-between sm:space-x-0">
         <Link href="/dashboard" className="flex items-center gap-2 text-xl font-bold">
           <IGenLogo />
-          <span className="hidden sm:inline">Assistant</span>
+          <span className="hidden sm:inline font-medium text-base text-foreground/90 whitespace-nowrap"> - {t('app.title').replace('iGen - ', '')}</span>
         </Link>
 
         <div className="flex flex-1 items-center justify-end space-x-4">
