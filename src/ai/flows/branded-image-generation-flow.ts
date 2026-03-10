@@ -81,28 +81,15 @@ const brandedImageGenerationFlow = ai.defineFlow(
     outputSchema: BrandedImageGenerationOutputSchema,
   },
   async (input) => {
-    let media;
-
-    // Use a different model based on whether it's an image-to-image or text-to-image task
-    if (input.existingImageUri) {
-      // For image-to-image, Gemini Flash is required for its multi-modal capabilities.
-      const response = await ai.generate({
-        model: 'googleai/gemini-2.5-flash-image', // Using Gemini 2.5 Flash Image (aka "Nano Banana")
-        prompt: brandedImageGenerationPrompt(input), // Pass the rendered prompt with input to the model
-        config: {
-          responseModalities: ['TEXT', 'IMAGE'], // MUST provide both TEXT and IMAGE for image generation
-        },
-      });
-      media = response.media;
-    } else {
-      // For pure text-to-image, Imagen is a better choice.
-      const fullPrompt = `Style: ${input.stylePreferences}. Content: ${input.generationPrompt}`;
-      const response = await ai.generate({
-        model: googleAI.model('imagen-4.0-fast-generate-001'),
-        prompt: fullPrompt,
-      });
-      media = response.media;
-    }
+    // The new model `gemini-3.1-flash-image-preview` is multi-modal and can handle both
+    // text-to-image and image-to-image generation through a single interface.
+    const { media } = await ai.generate({
+      model: 'googleai/gemini-3.1-flash-image-preview', // Use the requested Gemini 3.1 Flash Image model
+      prompt: brandedImageGenerationPrompt(input), // The prompt is designed to handle optional image URI
+      config: {
+        responseModalities: ['TEXT', 'IMAGE'], // Required for Gemini image generation
+      },
+    });
 
     if (!media || !media.url) {
       throw new Error('Failed to generate image or media URL is missing.');
