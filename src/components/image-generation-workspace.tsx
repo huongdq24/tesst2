@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase/config';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -27,20 +25,10 @@ export function ImageGenerationWorkspace() {
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { user } = useAuth();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    if (!user) {
-      toast({
-        variant: 'destructive',
-        title: t('toast.upload.authRequired.title'),
-        description: t('toast.upload.authRequired.description'),
-      });
-      return;
-    }
 
     if (file.size > 4 * 1024 * 1024) { // 4MB limit
       toast({
@@ -52,36 +40,30 @@ export function ImageGenerationWorkspace() {
     }
     
     setIsUploading(true);
-    const uniqueFileName = `${Date.now()}-${file.name}`;
-    const fileRef = storageRef(storage, `users/${user.uid}/uploads/${uniqueFileName}`);
-
     toast({
         title: t('toast.upload.inProgress.title'),
         description: t('toast.upload.inProgress.description'),
     });
 
-    uploadBytes(fileRef, file)
-      .then((snapshot) => {
-        return getDownloadURL(snapshot.ref);
-      })
-      .then((downloadURL) => {
-        setInputImageUrl(downloadURL);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+        setInputImageUrl(reader.result as string);
         toast({
           title: t('toast.upload.success.title'),
           description: t('toast.upload.success.description'),
         });
-      })
-      .catch((error) => {
-        console.error("Upload failed:", error);
+        setIsUploading(false);
+    };
+    reader.onerror = (error) => {
+        console.error("File reading failed:", error);
         toast({
           variant: 'destructive',
           title: t('toast.upload.error.title'),
           description: t('toast.upload.error.description'),
         });
-      })
-      .finally(() => {
         setIsUploading(false);
-      });
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleGenerateOptimalPrompt = async () => {
@@ -137,8 +119,6 @@ export function ImageGenerationWorkspace() {
   };
   
   const handleRemoveImage = () => {
-      // Note: This does not delete the file from Firebase Storage.
-      // For now, just clearing the UI state is sufficient.
       setInputImageUrl(null);
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
