@@ -13,6 +13,8 @@ import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-ge
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
 import { Separator } from './ui/separator';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase/config';
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
@@ -22,13 +24,23 @@ export function ImageGenerationWorkspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const { user } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: t('toast.upload.authRequired.title'),
+        description: t('toast.upload.authRequired.description'),
+      });
+      return;
+    }
 
     if (file.size > 4 * 1024 * 1024) { // 4MB limit
       toast({
@@ -40,30 +52,34 @@ export function ImageGenerationWorkspace() {
     }
     
     setIsUploading(true);
+    setInputImageUrl(null);
     toast({
         title: t('toast.upload.inProgress.title'),
         description: t('toast.upload.inProgress.description'),
     });
 
-    const reader = new FileReader();
-    reader.onloadend = () => {
-        setInputImageUrl(reader.result as string);
-        toast({
-          title: t('toast.upload.success.title'),
-          description: t('toast.upload.success.description'),
-        });
-        setIsUploading(false);
-    };
-    reader.onerror = (error) => {
-        console.error("File reading failed:", error);
+    try {
+      const uniqueFileName = `${Date.now()}-${file.name}`;
+      const fileRef = storageRef(storage, `users/${user.uid}/uploads/${uniqueFileName}`);
+      
+      const snapshot = await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+
+      setInputImageUrl(downloadURL);
+      toast({
+        title: t('toast.upload.success.title'),
+        description: t('toast.upload.success.description'),
+      });
+    } catch (error) {
+        console.error("Firebase Storage upload failed:", error);
         toast({
           variant: 'destructive',
           title: t('toast.upload.error.title'),
           description: t('toast.upload.error.description'),
         });
-        setIsUploading(false);
-    };
-    reader.readAsDataURL(file);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleGenerateOptimalPrompt = async () => {
@@ -140,7 +156,7 @@ export function ImageGenerationWorkspace() {
                 className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
                 onClick={() => fileInputRef.current?.click()}
               >
-                {inputImageUrl ? (
+                {inputImageUrl && !isUploading ? (
                   <>
                     <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                     <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
