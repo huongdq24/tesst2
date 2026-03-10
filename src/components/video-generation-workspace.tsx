@@ -4,7 +4,7 @@ import { useState, useRef, ChangeEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2 } from 'lucide-react';
+import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
@@ -186,6 +186,15 @@ export function VideoGenerationWorkspace() {
       setIsGeneratingScript(false);
     }
   };
+  
+  const handleCopy = () => {
+    if (!prompt) return;
+    navigator.clipboard.writeText(prompt);
+    toast({
+      title: t('toast.copy.success.title'),
+      description: t('toast.copy.success.description'),
+    });
+  };
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -243,45 +252,58 @@ export function VideoGenerationWorkspace() {
       </div>
 
       <div className="mt-8">
-        <div className="space-y-2 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div className="space-y-2 flex flex-col">
             <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
-            <div className="flex items-start gap-2">
-                <Textarea
-                    id="script-description"
-                    placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
-                    value={scriptDescription}
-                    onChange={(e) => setScriptDescription(e.target.value)}
-                    rows={2}
-                    disabled={isGeneratingScript}
-                    className="resize-none text-base p-4"
-                />
-                <Button 
-                  onClick={handleGenerateScript} 
-                  disabled={isGeneratingScript || !scriptDescription.trim()} 
-                  size="lg" 
-                  className="h-full"
-                >
-                    {isGeneratingScript ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                        <Wand2 className="h-5 w-5" />
-                    )}
-                    {t('workspace.video.generateScriptButton')}
-                </Button>
+            <Textarea
+              id="script-description"
+              placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
+              value={scriptDescription}
+              onChange={(e) => setScriptDescription(e.target.value)}
+              rows={5}
+              disabled={isGeneratingScript}
+              className="resize-none text-base p-4 flex-1"
+            />
+            <Button
+              onClick={handleGenerateScript}
+              disabled={isGeneratingScript || !scriptDescription.trim()}
+              size="lg"
+            >
+              {isGeneratingScript ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Wand2 className="h-5 w-5" />
+              )}
+              <span className="ml-2">{t('workspace.video.generateScriptButton')}</span>
+            </Button>
+          </div>
+
+          <div className="space-y-2 flex flex-col">
+            <Label htmlFor="prompt">{t('workspace.video.scriptOutputLabel')}</Label>
+            <div className="relative flex-1">
+              <Textarea
+                id="prompt"
+                placeholder={t('workspace.video.promptPlaceholder')}
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={5}
+                disabled={isLoading || isProcessing}
+                className="pr-12 resize-none text-base p-4 h-full"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:bg-accent/10 hover:text-foreground"
+                onClick={handleCopy}
+                disabled={!prompt}
+                aria-label="Copy script"
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
             </div>
+          </div>
         </div>
 
-        <div className="relative">
-          <Textarea
-            id="prompt"
-            placeholder={t('workspace.video.promptPlaceholder')}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            rows={2}
-            disabled={isLoading || isProcessing}
-            className="pr-12 resize-none text-base p-4"
-          />
-        </div>
 
         <div className="mt-2 flex flex-col sm:flex-row gap-2">
             <div className="flex-1 flex flex-col gap-2">

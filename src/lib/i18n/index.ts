@@ -93,6 +93,9 @@ export const translations = {
     'workspace.video.scriptDescriptionPlaceholder': 'Viết mô tả để AI tạo kịch bản cho video của bạn. Ví dụ: một video quảng cáo ngắn cho một loại nước hoa mới, gợi lên cảm giác sang trọng và bí ẩn.',
     'workspace.video.generateScriptButton': 'Tạo kịch bản',
     'toast.video.scriptGenerationFailed.title': 'Tạo kịch bản thất bại',
+    'workspace.video.scriptOutputLabel': 'Kịch bản video đầu ra',
+    'toast.copy.success.title': 'Đã sao chép!',
+    'toast.copy.success.description': 'Kịch bản video đã được sao chép vào bộ nhớ đệm.',
   },
   en: {
     'app.title': 'iGen - Personal Branding AI Assistant',
@@ -188,6 +191,9 @@ export const translations = {
     'workspace.video.scriptDescriptionPlaceholder': 'Write a description for the AI to generate a video script for you. E.g., a short ad for a new perfume, evoking luxury and mystery.',
     'workspace.video.generateScriptButton': 'Generate Script',
     'toast.video.scriptGenerationFailed.title': 'Script Generation Failed',
+    'workspace.video.scriptOutputLabel': 'Video Script Output',
+    'toast.copy.success.title': 'Copied!',
+    'toast.copy.success.description': 'The video script has been copied to your clipboard.',
   },
   zh: {
     'app.title': 'iGen - 个人品牌AI助手',
@@ -283,6 +289,9 @@ export const translations = {
     'workspace.video.scriptDescriptionPlaceholder': '为AI编写描述以生成视频脚本。例如：一个新香水的短广告，唤起奢华和神秘感。',
     'workspace.video.generateScriptButton': '生成脚本',
     'toast.video.scriptGenerationFailed.title': '脚本生成失败',
+    'workspace.video.scriptOutputLabel': '视频脚本输出',
+    'toast.copy.success.title': '已复制！',
+    'toast.copy.success.description': '视频脚本已复制到剪贴板。',
   },
 };
 
