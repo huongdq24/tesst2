@@ -9,6 +9,7 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { googleAI } from '@genkit-ai/google-genai';
 
 const VideoScriptGenerationInputSchema = z.object({
   description: z.string().describe('A description of the desired video content to generate a script for.'),
@@ -26,6 +27,7 @@ export async function videoScriptGeneration(input: VideoScriptGenerationInput): 
 
 const videoScriptGenerationPrompt = ai.definePrompt({
   name: 'videoScriptGenerationPrompt',
+  model: googleAI.model('gemini-3.1-pro-preview'),
   input: { schema: VideoScriptGenerationInputSchema },
   output: { schema: VideoScriptGenerationOutputSchema },
   prompt: `You are a professional screenwriter. Based on the following description, write a short, compelling video script. The script should be descriptive and suitable for a text-to-video AI model.
