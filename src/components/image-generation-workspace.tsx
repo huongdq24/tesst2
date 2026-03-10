@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
+import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
 import {
@@ -16,8 +17,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Separator } from './ui/separator';
 
 export function ImageGenerationWorkspace() {
+  const [simplePrompt, setSimplePrompt] = useState('');
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [inputFile, setInputFile] = useState<File | null>(null);
   const [inputImageDataUri, setInputImageDataUri] = useState<string | null>(null);
@@ -44,6 +48,27 @@ export function ImageGenerationWorkspace() {
         setInputImageDataUri(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  const handleGenerateOptimalPrompt = async () => {
+    if (!simplePrompt.trim()) return;
+
+    setIsGeneratingPrompt(true);
+    try {
+        const result = await optimalImagePromptGeneration({
+            description: simplePrompt,
+        });
+        setPrompt(result.optimalPrompt);
+    } catch (error: any) {
+        console.error(error);
+        toast({
+            variant: 'destructive',
+            title: t('toast.image.promptGenerationFailed.title'),
+            description: error.message || t('toast.image.unexpectedError'),
+        });
+    } finally {
+        setIsGeneratingPrompt(false);
     }
   };
 
@@ -87,11 +112,35 @@ export function ImageGenerationWorkspace() {
       }
   };
 
+  const isBusy = isLoading || isGeneratingPrompt;
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
+
+            {/* Simple prompt section */}
+            <div className="space-y-2">
+              <Label htmlFor="simple-prompt">{t('workspace.image.simplePromptLabel')}</Label>
+              <Textarea
+                id="simple-prompt"
+                placeholder={t('workspace.image.simplePromptPlaceholder')}
+                value={simplePrompt}
+                onChange={(e) => setSimplePrompt(e.target.value)}
+                rows={3}
+                disabled={isBusy}
+                className="resize-none"
+              />
+              <Button onClick={handleGenerateOptimalPrompt} disabled={isGeneratingPrompt || !simplePrompt.trim()} size="sm" className="w-full">
+                {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                {t('workspace.image.generatePromptButton')}
+              </Button>
+            </div>
+
+            <Separator />
+
+            {/* Main prompt section */}
             <div className="space-y-2">
               <Label htmlFor="prompt">{t('workspace.image.promptLabel')}</Label>
               <div className="relative">
@@ -101,10 +150,10 @@ export function ImageGenerationWorkspace() {
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
                   rows={8}
-                  disabled={isLoading}
+                  disabled={isBusy}
                   className="pr-12 resize-none"
                 />
-                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isLoading} />
+                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isBusy} />
                 <TooltipProvider>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -134,7 +183,7 @@ export function ImageGenerationWorkspace() {
             
             <div className="flex-1"></div> {/* Spacer to push button to bottom */}
 
-            <Button onClick={handleGenerate} disabled={isLoading || !prompt.trim()} className="w-full">
+            <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full">
               {isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
