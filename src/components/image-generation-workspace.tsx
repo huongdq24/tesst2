@@ -1,6 +1,9 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase/config';
+import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -17,30 +20,68 @@ export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [inputImageDataUri, setInputImageDataUri] = useState<string | null>(null);
+  const [inputImageUrl, setInputImageUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 4 * 1024 * 1024) { // 4MB limit
-        toast({
-            variant: 'destructive',
-            title: t('toast.image.fileTooLarge.title'),
-            description: t('toast.image.fileTooLarge.description'),
-        });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setInputImageDataUri(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    if (!user) {
+      toast({
+        variant: 'destructive',
+        title: t('toast.upload.authRequired.title'),
+        description: t('toast.upload.authRequired.description'),
+      });
+      return;
     }
+
+    if (file.size > 4 * 1024 * 1024) { // 4MB limit
+      toast({
+          variant: 'destructive',
+          title: t('toast.image.fileTooLarge.title'),
+          description: t('toast.image.fileTooLarge.description'),
+      });
+      return;
+    }
+    
+    setIsUploading(true);
+    const uniqueFileName = `${Date.now()}-${file.name}`;
+    const fileRef = storageRef(storage, `users/${user.uid}/uploads/${uniqueFileName}`);
+
+    toast({
+        title: t('toast.upload.inProgress.title'),
+        description: t('toast.upload.inProgress.description'),
+    });
+
+    uploadBytes(fileRef, file)
+      .then((snapshot) => {
+        return getDownloadURL(snapshot.ref);
+      })
+      .then((downloadURL) => {
+        setInputImageUrl(downloadURL);
+        toast({
+          title: t('toast.upload.success.title'),
+          description: t('toast.upload.success.description'),
+        });
+      })
+      .catch((error) => {
+        console.error("Upload failed:", error);
+        toast({
+          variant: 'destructive',
+          title: t('toast.upload.error.title'),
+          description: t('toast.upload.error.description'),
+        });
+      })
+      .finally(() => {
+        setIsUploading(false);
+      });
   };
 
   const handleGenerateOptimalPrompt = async () => {
@@ -79,7 +120,7 @@ export function ImageGenerationWorkspace() {
 
     try {
       const result = await brandedImageGeneration({
-        existingImageUri: inputImageDataUri || undefined,
+        existingImageUri: inputImageUrl || undefined,
         generationPrompt: prompt,
       });
       setGeneratedImageUrl(result.generatedImageUri);
@@ -96,13 +137,15 @@ export function ImageGenerationWorkspace() {
   };
   
   const handleRemoveImage = () => {
-      setInputImageDataUri(null);
+      // Note: This does not delete the file from Firebase Storage.
+      // For now, just clearing the UI state is sufficient.
+      setInputImageUrl(null);
       if (fileInputRef.current) {
           fileInputRef.current.value = '';
       }
   };
 
-  const isBusy = isLoading || isGeneratingPrompt;
+  const isBusy = isLoading || isGeneratingPrompt || isUploading;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
@@ -117,14 +160,19 @@ export function ImageGenerationWorkspace() {
                 className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
                 onClick={() => fileInputRef.current?.click()}
               >
-                {inputImageDataUri ? (
+                {inputImageUrl ? (
                   <>
-                    <Image src={inputImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
                     <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
                         <X className="h-4 w-4" />
                     </Button>
                   </>
-                ) : (
+                ) : isUploading ? (
+                    <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
+                    </div>
+                ): (
                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
                       <UploadCloud className="w-8 h-8 mb-2" />
                       <p className="text-sm text-center">{t('workspace.image.uploadTooltip')}</p>
