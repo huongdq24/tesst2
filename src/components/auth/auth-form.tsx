@@ -80,7 +80,6 @@ export function AuthForm() {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const { t } = useI18n();
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -109,34 +108,35 @@ export function AuthForm() {
     setLoading(true);
     const { email, password } = values;
 
-    if (isSignUp) {
-      try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        let role: 'Admin' | 'User' = 'User';
-        if (email === 'igen-personal-brand@admin.com' && password === '123456') {
-          role = 'Admin';
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await handleUserSetup(userCredential.user);
+    } catch (signInError: any) {
+      if (signInError.code === 'auth/invalid-credential' || signInError.code === 'auth/user-not-found') {
+        try {
+          const newUserCredential = await createUserWithEmailAndPassword(auth, email, password);
+          let role: 'Admin' | 'User' = 'User';
+          if (email === 'igen-personal-brand@admin.com' && password === '123456') {
+            role = 'Admin';
+          }
+          await handleUserSetup(newUserCredential.user, role);
+        } catch (signUpError: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Authentication Failed',
+            description: signUpError.message,
+          });
         }
-        await handleUserSetup(userCredential.user, role);
-      } catch (error: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Sign Up Failed',
-          description: error.message,
-        });
-      }
-    } else {
-      try {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        await handleUserSetup(userCredential.user);
-      } catch (error: any) {
+      } else {
         toast({
           variant: 'destructive',
           title: 'Authentication Failed',
-          description: error.message,
+          description: signInError.message,
         });
       }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
 
@@ -199,20 +199,10 @@ export function AuthForm() {
             />
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSignUp ? t('auth.signUp') : t('auth.signIn')}
+              {t('auth.signInOrUp')}
             </Button>
           </form>
         </Form>
-        <div className="mt-4 text-center text-sm">
-            {isSignUp ? t('auth.haveAccount') : t('auth.noAccount')}{' '}
-            <button
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="underline text-primary font-medium"
-                disabled={loading}
-            >
-                {isSignUp ? t('auth.signIn') : t('auth.signUp')}
-            </button>
-        </div>
         <div className="relative my-6">
           <Separator />
           <div className="absolute inset-0 flex items-center">
