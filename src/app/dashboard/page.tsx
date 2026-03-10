@@ -1,3 +1,5 @@
+'use client';
+
 import { FeatureCard } from '@/components/feature-card';
 import { useI18n } from '@/contexts/i18n-context';
 import { Voicemail, ScanFace, Image as ImageIcon, Video } from 'lucide-react';
