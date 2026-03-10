@@ -62,7 +62,7 @@ export const translations = {
     'form.validation.igenCode2': 'Vui lòng nhập iGen Code 2 của bạn.',
     'form.validation.igenCode3': 'Vui lòng nhập iGen Code 3 của bạn.',
     'feature.videoGeneration.fromImage': 'Tạo video từ ảnh',
-    'feature.videoGeneration.frames': 'Khung hình',
+    'feature.videoGeneration.frames': 'Mở rộng video',
     'feature.videoGeneration.horizontal': 'Ngang',
     'feature.videoGeneration.vertical': 'Dọc',
     'feature.videoGeneration.outputCount': 'Số lượng video',
@@ -72,7 +72,7 @@ export const translations = {
     'workspace.video.outputPlaceholder': 'Video được tạo sẽ xuất hiện ở đây',
     'toast.video.generationFailed.title': 'Tạo video thất bại',
     'toast.video.noPrompt': 'Vui lòng nhập mô tả cho video bạn muốn tạo.',
-    'toast.video.framesNotReady': 'Tính năng Khung hình đang được phát triển.',
+    'toast.video.framesNotReady': 'Tính năng Mở rộng video đang được phát triển.',
   },
   en: {
     'app.title': 'iGen - Personal Branding AI Assistant',
@@ -137,7 +137,7 @@ export const translations = {
     'form.validation.igenCode2': 'Please enter your iGen Code 2.',
     'form.validation.igenCode3': 'Please enter your iGen Code 3.',
     'feature.videoGeneration.fromImage': 'Video from Image',
-    'feature.videoGeneration.frames': 'Frames',
+    'feature.videoGeneration.frames': 'Extend Video',
     'feature.videoGeneration.horizontal': 'Horizontal',
     'feature.videoGeneration.vertical': 'Vertical',
     'feature.videoGeneration.outputCount': 'Number of videos',
@@ -147,7 +147,7 @@ export const translations = {
     'workspace.video.outputPlaceholder': 'Your generated video(s) will appear here',
     'toast.video.generationFailed.title': 'Video Generation Failed',
     'toast.video.noPrompt': 'Please enter a description for the video you want to generate.',
-    'toast.video.framesNotReady': 'Frames feature is currently under development.',
+    'toast.video.framesNotReady': 'The Extend Video feature is currently under development.',
   },
   zh: {
     'app.title': 'iGen - 个人品牌AI助手',
@@ -212,7 +212,7 @@ export const translations = {
     'form.validation.igenCode2': '请输入您的 iGen Code 2。',
     'form.validation.igenCode3': '请输入您的 iGen Code 3。',
     'feature.videoGeneration.fromImage': '从图像创建视频',
-    'feature.videoGeneration.frames': '画框',
+    'feature.videoGeneration.frames': '扩展视频',
     'feature.videoGeneration.horizontal': '横向',
     'feature.videoGeneration.vertical': '纵向',
     'feature.videoGeneration.outputCount': '视频数量',
@@ -222,7 +222,7 @@ export const translations = {
     'workspace.video.outputPlaceholder': '您生成的视频将显示在此处',
     'toast.video.generationFailed.title': '视频生成失败',
     'toast.video.noPrompt': '请输入您想生成的视频的描述。',
-    'toast.video.framesNotReady': '“画框”功能目前正在开发中。',
+    'toast.video.framesNotReady': '“扩展视频”功能目前正在开发中。',
   },
 };
 
