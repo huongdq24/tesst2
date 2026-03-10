@@ -223,7 +223,7 @@ export function AuthForm() {
           </div>
         </div>
         <div className="space-y-3">
-          <Button variant="outline" className="w-full" onClick={handleGoogleSignIn} disabled={loading}>
+          <Button variant="outline" className="w-full hover:bg-background hover:text-foreground" onClick={handleGoogleSignIn} disabled={loading}>
             <GoogleIcon />
             <GoogleButtonContent />
           </Button>
