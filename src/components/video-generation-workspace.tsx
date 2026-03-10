@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent } from 'react';
+import { useState, useRef, ChangeEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -74,6 +74,16 @@ export function VideoGenerationWorkspace() {
 
   const startFileInputRef = useRef<HTMLInputElement>(null);
   const endFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Veo 3.0 has limitations, reset to supported values if needed.
+    if (aspectRatio !== '16:9') {
+      setAspectRatio('16:9');
+    }
+    if (numberOfVideos > 1) {
+      setNumberOfVideos(1);
+    }
+  }, [aspectRatio, numberOfVideos]);
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>, frameType: 'start' | 'end') => {
     const file = event.target.files?.[0];
@@ -368,7 +378,7 @@ export function VideoGenerationWorkspace() {
                             <RectangleHorizontal />
                             <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
                         </ToggleGroupItem>
-                        <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1">
+                        <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1" disabled>
                             <RectangleVertical />
                             <span className="text-xs">{t('feature.videoGeneration.vertical')}</span>
                         </ToggleGroupItem>
@@ -377,7 +387,7 @@ export function VideoGenerationWorkspace() {
                         <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
                         <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isGeneratingScript}>
                             {[1, 2, 3, 4].map(n => (
-                                <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square">x{n}</ToggleGroupItem>
+                                <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square" disabled={n > 1}>x{n}</ToggleGroupItem>
                             ))}
                         </ToggleGroup>
                     </div>

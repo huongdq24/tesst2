@@ -88,15 +88,13 @@ const aiVideoGenerationFlow = ai.defineFlow(
     addMediaPart(input.endImageDataUri);
 
 
-    // Use Veo 2.0 as it supports configurable aspect ratio and number of videos.
-    // Veo 3.0 has fixed settings for these parameters.
+    // Use Veo 3.0 model. Note that this model may have limitations on aspect ratio and number of videos.
     let { operation } = await ai.generate({
-      model: googleAI.model('veo-2.0-generate-001'),
+      model: googleAI.model('veo-3.0-generate-preview'),
       prompt: promptParts,
       config: {
         aspectRatio: input.aspectRatio,
         numberOfVideos: input.numberOfVideos,
-        durationSeconds: 5, // A reasonable default duration
       },
     });
 
