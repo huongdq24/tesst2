@@ -1,96 +1,52 @@
 'use server';
-/**
- * @fileOverview A Genkit flow for generating images, with optional support for a reference image (image-to-image).
- *
- * - brandedImageGeneration - A function that handles the image generation process.
- * - BrandedImageGenerationInput - The input type for the brandedImageGeneration function.
- * - BrandedImageGenerationOutput - The return type for the brandedImageGeneration function.
- */
-
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-import { googleAI } from '@genkit-ai/google-genai';
-
-// Define the input schema
+import { z } from 'zod';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 const BrandedImageGenerationInputSchema = z.object({
-  existingImageUri: z
-    .string()
-    .optional()
-    .describe(
-      "An optional reference image as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'. This image will be used as a visual reference."
-    ),
-  generationPrompt: z
-    .string()
-    .describe(
-      'A specific text prompt describing the content of the image to be generated (e.g., "a professional headshot", "a minimalist logo for a tech startup").'
-    ),
+  existingImageUri: z.string().optional(),
+  generationPrompt: z.string(),
+  apiKey: z.string().describe('The user Gemini API key to use for generation.'),
 });
-export type BrandedImageGenerationInput = z.infer<
-  typeof BrandedImageGenerationInputSchema
->;
-
-// Define the output schema
+export type BrandedImageGenerationInput = z.infer<typeof BrandedImageGenerationInputSchema>;
 const BrandedImageGenerationOutputSchema = z.object({
-  generatedImageUri: z
-    .string()
-    .describe(
-      "The generated image as a data URI, including a MIME type and Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
+  generatedImageUri: z.string(),
 });
-export type BrandedImageGenerationOutput = z.infer<
-  typeof BrandedImageGenerationOutputSchema
->;
-
-// Wrapper function for the flow
+export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGenerationOutputSchema>;
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
-  return brandedImageGenerationFlow(input);
-}
-
-// Define the Genkit prompt for multimodal input (used with Gemini)
-const brandedImageGenerationPrompt = ai.definePrompt({
-  name: 'brandedImageGenerationPrompt',
-  input: {schema: BrandedImageGenerationInputSchema},
-  output: {schema: BrandedImageGenerationOutputSchema},
-  prompt: `You are an AI image generation assistant. Your task is to generate an image based on the user's prompt and an optional reference image.
-
-{{#if existingImageUri}}
-Use the following image as a reference or starting point for the generation.
-{{media url=existingImageUri}}
-{{/if}}
-
-The user's request is:
-{{{generationPrompt}}}
-
-Generate the image according to the user's request.
-`,
-});
-
-// Define the Genkit flow with logic to switch models
-const brandedImageGenerationFlow = ai.defineFlow(
-  {
-    name: 'brandedImageGenerationFlow',
-    inputSchema: BrandedImageGenerationInputSchema,
-    outputSchema: BrandedImageGenerationOutputSchema,
-  },
-  async (input) => {
-    // The new model `gemini-3.1-flash-image-preview` is multi-modal and can handle both
-    // text-to-image and image-to-image generation through a single interface.
-    const { media } = await ai.generate({
-      model: 'googleai/gemini-3.1-flash-image-preview', // Use the requested Gemini 3.1 Flash Image model
-      prompt: brandedImageGenerationPrompt(input), // The prompt is designed to handle optional image URI
-      config: {
-        responseModalities: ['TEXT', 'IMAGE'], // Required for Gemini image generation
-      },
-    });
-
-    if (!media || !media.url) {
-      throw new Error('Failed to generate image or media URL is missing.');
-    }
-
-    return {
-      generatedImageUri: media.url,
-    };
+  const { existingImageUri, generationPrompt, apiKey } = input;
+  if (!apiKey) {
+    throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
-);
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-preview-image-generation' });
+  const contents: any[] = [];
+  if (existingImageUri) {
+    // Parse data URI to extract base64 data and mimeType
+    const matches = existingImageUri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (matches) {
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      contents.push({
+        inlineData: { data: base64Data, mimeType },
+      });
+    }
+  }
+  contents.push({ text: generationPrompt });
+  const result = await model.generateContent({
+    contents: [{ role: 'user', parts: contents }],
+    generationConfig: {
+      responseModalities: ['IMAGE', 'TEXT'],
+    } as any,
+  });
+  const response = result.response;
+  const parts = response.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    if (part.inlineData && part.inlineData.data) {
+      const mimeType = part.inlineData.mimeType || 'image/png';
+      const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
+      return { generatedImageUri };
+    }
+  }
+  throw new Error('Image generation failed: No image was returned by the model.');
+}

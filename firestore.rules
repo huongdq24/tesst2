@@ -147,5 +147,20 @@ service cloud.firestore {
       // On delete, `resource` (the existing document) must be non-null.
       allow delete: if isOwner(request.auth, resource.data.ownerId) && resource != null;
     }
+
+    //-------------------------------------------------------------------------
+    // Collection: generatedImages
+    //-------------------------------------------------------------------------
+    match /generatedImages/{imageId} {
+      // Owners can read their images, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own images via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own images.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
   }
 }
