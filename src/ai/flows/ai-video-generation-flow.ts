@@ -102,6 +102,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
         prompt: promptParts,
         config: {
           aspectRatio: input.aspectRatio,
+          candidateCount: input.numberOfVideos,
         },
     });
 
@@ -119,32 +120,50 @@ const aiVideoGenerationFlow = ai.defineFlow(
         throw new Error(`Video generation failed. Error(s): ${operation.error.message}`);
     }
 
-    const videoMediaPart = operation.output?.message?.content.find((p) => !!p.media);
-    
-    if (!videoMediaPart) {
-        throw new Error('Video generation request failed and returned no media. This may be due to safety filters or an issue with the generation service.');
+    const candidates = operation.output?.candidates;
+    if (!candidates || candidates.length === 0) {
+      throw new Error('Video generation request failed and returned no media. This may be due to safety filters or an issue with the generation service.');
     }
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not configured. It is required to download generated videos.');
     }
-    
-    // Process single video part
-    const videoDownloadUrl = `${videoMediaPart.media!.url}&key=${geminiApiKey}`;
-    const videoResponse = await fetch(videoDownloadUrl);
 
-    if (!videoResponse.ok || !videoResponse.body) {
-      throw new Error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${videoResponse.status}`);
+    const downloadPromises = candidates.map(candidate => {
+      const videoMediaPart = candidate.message.content.find(p => !!p.media);
+      if (!videoMediaPart?.media?.url) {
+        console.warn('A candidate was returned without a video media part.');
+        return Promise.resolve(null);
+      }
+      
+      const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
+      return fetch(videoDownloadUrl)
+        .then(response => {
+          if (!response.ok || !response.body) {
+            console.error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${response.status}`);
+            return null;
+          }
+          return response.arrayBuffer();
+        })
+        .then(arrayBuffer => {
+          if (!arrayBuffer) return null;
+          const base64Video = Buffer.from(arrayBuffer).toString('base64');
+          const contentType = videoMediaPart.media!.contentType || 'video/mp4';
+          return `data:${contentType};base64,${base64Video}`;
+        })
+        .catch(err => {
+          console.error(`An error occurred during video download and processing: ${err}`);
+          return null;
+        });
+    });
+
+    const videoDataUris = (await Promise.all(downloadPromises)).filter((uri): uri is string => !!uri);
+
+    if (videoDataUris.length === 0) {
+      throw new Error('All video generation requests failed or returned no media.');
     }
-    
-    const arrayBuffer = await videoResponse.arrayBuffer();
-    const base64Video = Buffer.from(arrayBuffer).toString('base64');
-    const contentType = videoMediaPart.media!.contentType || 'video/mp4';
-    const videoDataUri = `data:${contentType};base64,${base64Video}`;
 
-    return {
-      videoDataUris: [videoDataUri],
-    };
+    return { videoDataUris };
   }
 );
