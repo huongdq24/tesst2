@@ -22,7 +22,7 @@ const AiVideoGenerationInputSchema = z.object({
       "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
-  // numberOfVideos is removed from the input, as the VEO 3.1 API via Genkit only supports 1.
+  numberOfVideos: z.number().min(1).max(4).optional().default(1),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
@@ -119,9 +119,19 @@ const aiVideoGenerationFlow = ai.defineFlow(
       throw new Error(`Video generation failed: ${operation.error.message}`);
     }
     
-    const videoMediaPart = operation.output?.message?.content.find(p => !!p.media);
+    const content = operation.output?.message?.content;
+    if (!content || content.length === 0) {
+      throw new Error('The video operation completed but returned an empty response.');
+    }
+
+    const videoMediaPart = content.find(p => !!p.media);
     if (!videoMediaPart?.media?.url) {
-        throw new Error('The operation completed but did not return a video. This may be due to safety filters or other content restrictions.');
+      const textPart = content.find(p => !!p.text);
+      let reason = 'This may be due to safety filters or other content restrictions.';
+      if (textPart?.text) {
+          reason += ` Model response: "${textPart.text}"`;
+      }
+      throw new Error(`The operation completed but did not return a video. ${reason}`);
     }
       
     const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
@@ -142,7 +152,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
     }
 
     if (!videoDataUri) {
-        throw new Error('All video generation requests failed or returned no media.');
+        throw new Error('Video generation failed to produce a downloadable video.');
     }
 
     return { videoDataUris: [videoDataUri] };
