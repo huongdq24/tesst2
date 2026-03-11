@@ -25,7 +25,7 @@ export function ImageGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [numberOfImages, setNumberOfImages] = useState(1);
-  const [inputImageUrl, setInputImageUrl] = useState<string | null>(null);
+  const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -36,40 +36,48 @@ export function ImageGenerationWorkspace() {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileUpload = async (file: File) => {
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: 'Vui lòng chỉ tải lên tệp ảnh.' });
-      return;
-    }
+  const handleFilesUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tải ảnh lên.' });
       return;
     }
-    if (file.size > 4 * 1024 * 1024) {
-      toast({ variant: 'destructive', title: 'File quá lớn', description: 'Vui lòng chọn ảnh nhỏ hơn 4MB.' });
-      return;
-    }
-    setIsUploading(true);
-    setInputImageUrl(null);
-    try {
-      // Upload file gốc lên Firebase Storage
-      const fileName = `input-${Date.now()}-${file.name}`;
-      const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
-      await uploadBytes(imageRef, file);
-      const downloadURL = await getDownloadURL(imageRef);
-      setInputImageUrl(downloadURL);
 
-      // Save metadata to Firestore `inputImages` collection
-      await addDoc(collection(firestore, 'inputImages'), {
-        ownerId: user.uid,
-        imageUrl: downloadURL,
-        createdAt: serverTimestamp(),
+    const filesToUpload = Array.from(files).filter(file => {
+      if (!file.type.startsWith('image/')) {
+        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${file.name}' không phải là một tệp ảnh.` });
+        return false;
+      }
+      if (file.size > 4 * 1024 * 1024) {
+        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${file.name}' lớn hơn 4MB.` });
+        return false;
+      }
+      return true;
+    });
+
+    if (filesToUpload.length === 0) return;
+
+    setIsUploading(true);
+    
+    try {
+      const uploadPromises = filesToUpload.map(async (file) => {
+        const fileName = `input-${Date.now()}-${file.name}`;
+        const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+        await uploadBytes(imageRef, file);
+        const downloadURL = await getDownloadURL(imageRef);
+        await addDoc(collection(firestore, 'inputImages'), {
+          ownerId: user.uid,
+          imageUrl: downloadURL,
+          createdAt: serverTimestamp(),
+        });
+        return downloadURL;
       });
+
+      const newUrls = await Promise.all(uploadPromises);
+      setInputImageUrls(prevUrls => [...prevUrls, ...newUrls]);
       
-      toast({ title: 'Tải ảnh thành công', description: 'Ảnh đầu vào đã sẵn sàng.' });
+      toast({ title: `Tải lên ${newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
     } catch (error) {
       console.error('Upload failed:', error);
       let errorMessage = 'Không thể tải ảnh lên.';
@@ -81,11 +89,11 @@ export function ImageGenerationWorkspace() {
       setIsUploading(false);
     }
   };
-
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      await handleFileUpload(file);
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    handleFilesUpload(event.target.files);
+    if(event.target) {
+      event.target.value = '';
     }
   };
 
@@ -99,13 +107,10 @@ export function ImageGenerationWorkspace() {
     setIsDragging(false);
   };
 
-  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(false);
-    const file = event.dataTransfer.files?.[0];
-    if (file) {
-      await handleFileUpload(file);
-    }
+    handleFilesUpload(event.dataTransfer.files);
   };
 
   const handleGenerateOptimalPrompt = async () => {
@@ -154,7 +159,7 @@ export function ImageGenerationWorkspace() {
     setGeneratedImageUrls([]);
     try {
       const result = await brandedImageGeneration({
-        existingImageUri: inputImageUrl || undefined,
+        existingImageUris: inputImageUrls,
         generationPrompt: prompt,
         aspectRatio: aspectRatio,
         numberOfImages: numberOfImages,
@@ -192,11 +197,8 @@ export function ImageGenerationWorkspace() {
     }
   };
 
-  const handleRemoveImage = () => {
-    setInputImageUrl(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const handleRemoveImage = (urlToRemove: string) => {
+    setInputImageUrls((prevUrls) => prevUrls.filter((url) => url !== urlToRemove));
   };
 
   const handleDownload = (imageUrl: string, index: number) => {
@@ -210,7 +212,9 @@ export function ImageGenerationWorkspace() {
   };
   
   const handleImageSelectFromLibrary = (imageUrl: string) => {
-    setInputImageUrl(imageUrl);
+    if (!inputImageUrls.includes(imageUrl)) {
+        setInputImageUrls((prevUrls) => [...prevUrls, imageUrl]);
+    }
   };
   
   const isBusy = isLoading || isGeneratingPrompt || isUploading;
@@ -242,33 +246,48 @@ export function ImageGenerationWorkspace() {
               </div>
               <div
                 className={cn(
-                  'relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
+                  'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
                   isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
                 )}
-                onClick={() => fileInputRef.current?.click()}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
               >
-                {inputImageUrl && !isUploading ? (
-                  <>
-                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1" />
-                    <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </>
-                ) : isUploading ? (
+                {isUploading ? (
                   <div className="flex flex-col items-center justify-center text-muted-foreground">
                     <Loader2 className="w-8 h-8 animate-spin" />
                     <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
                   </div>
+                ) : inputImageUrls.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 w-full">
+                    {inputImageUrls.map((url) => (
+                      <div key={url} className="relative aspect-square">
+                        <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
+                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                     <div 
+                      className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                     >
+                       <UploadCloud className="w-6 h-6" />
+                       <span className="text-xs text-center mt-1">Thêm</span>
+                     </div>
+                  </div>
                 ) : (
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
+                  <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
                     <UploadCloud className="w-8 h-8 mb-2" />
-                    <p className="text-sm text-center">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
+                    <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
                   </div>
                 )}
-                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isBusy} />
+                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
               </div>
             </div>
             <Separator />

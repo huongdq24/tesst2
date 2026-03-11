@@ -4,7 +4,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Buffer } from 'buffer';
 
 const BrandedImageGenerationInputSchema = z.object({
-  existingImageUri: z.string().optional(),
+  existingImageUris: z.array(z.string()).optional(),
   generationPrompt: z.string(),
   aspectRatio: z.string().optional(),
   numberOfImages: z.number().min(1).max(4).optional().default(1),
@@ -22,7 +22,7 @@ export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGeneration
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
-  const { existingImageUri, generationPrompt, aspectRatio, numberOfImages, apiKey } = input;
+  const { existingImageUris, generationPrompt, aspectRatio, numberOfImages, apiKey } = input;
   if (!apiKey) {
     throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
@@ -36,28 +36,39 @@ export async function brandedImageGeneration(
   
   const contents: any[] = [];
 
-  if (existingImageUri) {
-    if (existingImageUri.startsWith('https://')) {
-      // Fetch the image from the Storage URL on the server
-      const response = await fetch(existingImageUri);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch image from Storage: ${response.statusText}`);
+  if (existingImageUris && existingImageUris.length > 0) {
+    const imagePartsPromises = existingImageUris.map(async (uri) => {
+      try {
+        if (uri.startsWith('https://')) {
+          const response = await fetch(uri);
+          if (!response.ok) {
+            console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
+            return null;
+          }
+          const buffer = await response.arrayBuffer();
+          const base64Data = Buffer.from(buffer).toString('base64');
+          const mimeType = response.headers.get('content-type') || 'image/jpeg';
+          return { inlineData: { data: base64Data, mimeType } };
+        } else {
+          const matches = uri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches) {
+            return { inlineData: { data: matches[2], mimeType: matches[1] } };
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing image URI ${uri}:`, error);
+        return null;
       }
-      const buffer = await response.arrayBuffer();
-      const base64Data = Buffer.from(buffer).toString('base64');
-      const mimeType = response.headers.get('content-type') || 'image/jpeg';
-      contents.push({
-        inlineData: { data: base64Data, mimeType },
-      });
-    } else {
-      // Fallback for data URI
-      const matches = existingImageUri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-      if (matches) {
-        contents.push({
-          inlineData: { data: matches[2], mimeType: matches[1] },
-        });
+      return null;
+    });
+
+    const resolvedImageParts = await Promise.all(imagePartsPromises);
+    
+    resolvedImageParts.forEach(part => {
+      if (part) {
+        contents.push(part);
       }
-    }
+    });
   }
 
   contents.push({ text: fullPrompt });
