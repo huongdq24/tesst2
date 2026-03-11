@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
@@ -18,6 +18,7 @@ import { storage, firestore } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
@@ -31,6 +32,7 @@ export function ImageGenerationWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
@@ -226,6 +228,20 @@ export function ImageGenerationWorkspace() {
         onOpenChange={setIsLibraryOpen}
         onImageSelect={handleImageSelectFromLibrary}
       />
+      <Dialog open={!!previewImageUrl} onOpenChange={(isOpen) => !isOpen && setPreviewImageUrl(null)}>
+        <DialogContent className="max-w-4xl h-[80vh] bg-transparent border-none shadow-none">
+          {previewImageUrl && (
+            <div className="relative w-full h-full">
+              <Image 
+                src={previewImageUrl} 
+                alt="Preview"
+                fill
+                style={{ objectFit: 'contain' }} 
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
@@ -376,7 +392,10 @@ export function ImageGenerationWorkspace() {
               {generatedImageUrls.map((url, index) => (
                   <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10">
                       <Image src={url} alt={`Generated image ${index + 1}`} fill style={{ objectFit: 'contain' }} className="p-1" />
-                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="secondary" size="icon" onClick={() => setPreviewImageUrl(url)} title="Phóng to">
+                              <ZoomIn className="h-5 w-5" />
+                          </Button>
                           <Button variant="secondary" size="icon" onClick={() => handleDownload(url, index)} title="Tải ảnh xuống">
                               <Download className="h-5 w-5" />
                           </Button>
