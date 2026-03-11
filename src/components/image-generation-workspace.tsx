@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef } from 'react';
+import { useState, useRef, DragEvent } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -15,6 +15,7 @@ import { Separator } from './ui/separator';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, firestore } from '@/lib/firebase/config';
+import { cn } from '@/lib/utils';
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
@@ -24,14 +25,20 @@ export function ImageGenerationWorkspace() {
   const [isUploading, setIsUploading] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const handleFileUpload = async (file: File) => {
     if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: 'Vui lòng chỉ tải lên tệp ảnh.' });
+      return;
+    }
+
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tải ảnh lên.' });
       return;
@@ -59,6 +66,32 @@ export function ImageGenerationWorkspace() {
       toast({ variant: 'destructive', title: 'Lỗi tải ảnh', description: errorMessage });
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      await handleFileUpload(file);
+    }
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      await handleFileUpload(file);
     }
   };
 
@@ -174,8 +207,14 @@ export function ImageGenerationWorkspace() {
             <div className="space-y-2">
               <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
               <div
-                className="relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer hover:bg-muted"
+                className={cn(
+                  'relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
+                  isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
+                )}
                 onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
               >
                 {inputImageUrl && !isUploading ? (
                   <>
@@ -192,7 +231,7 @@ export function ImageGenerationWorkspace() {
                 ) : (
                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-muted-foreground">
                     <UploadCloud className="w-8 h-8 mb-2" />
-                    <p className="text-sm text-center">{t('workspace.image.uploadTooltip')}</p>
+                    <p className="text-sm text-center">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
                   </div>
                 )}
                 <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" onChange={handleFileChange} accept="image/*" disabled={isBusy} />
