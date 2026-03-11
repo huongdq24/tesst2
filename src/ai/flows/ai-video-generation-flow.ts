@@ -97,64 +97,76 @@ const aiVideoGenerationFlow = ai.defineFlow(
       });
     }
 
-    let { operation } = await ai.generate({
-        model: googleAI.model('veo-3.1-generate-preview'),
-        prompt: promptParts,
-        config: {
-          aspectRatio: input.aspectRatio,
-          candidateCount: input.numberOfVideos,
-        },
+    const videoGenerationPromises = Array.from({ length: input.numberOfVideos }).map(async () => {
+        let { operation } = await ai.generate({
+            model: googleAI.model('veo-3.1-generate-preview'),
+            prompt: promptParts,
+            config: {
+                aspectRatio: input.aspectRatio,
+            },
+        });
+
+        if (!operation) {
+            // This promise will reject and be caught by Promise.all
+            throw new Error('Expected the video generation model to return an operation.');
+        }
+
+        // Poll the operation until it's done
+        while (!operation.done) {
+            operation = await ai.checkOperation(operation);
+            await new Promise((resolve) => setTimeout(resolve, 5000));
+        }
+
+        if (operation.error) {
+            // This will also be caught by Promise.all
+            throw new Error(`Video generation failed. Error(s): ${operation.error.message}`);
+        }
+        
+        return operation; // Return the completed operation
     });
-
-    if (!operation) {
-      throw new Error('Expected the video generation model to return an operation.');
-    }
-
-    // Poll the single operation
-    while (!operation.done) {
-      operation = await ai.checkOperation(operation);
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-    }
-
-    if (operation.error) {
-        throw new Error(`Video generation failed. Error(s): ${operation.error.message}`);
-    }
-
-    const candidates = operation.output?.candidates;
-    if (!candidates || candidates.length === 0) {
-      throw new Error('Video generation request failed and returned no media. This may be due to safety filters or an issue with the generation service.');
-    }
+    
+    // Wait for all parallel generation jobs to complete
+    const completedOperations = await Promise.all(videoGenerationPromises);
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {
         throw new Error('GEMINI_API_KEY environment variable is not configured. It is required to download generated videos.');
     }
 
-    const downloadPromises = candidates.map(candidate => {
-      const videoMediaPart = candidate.message.content.find(p => !!p.media);
-      if (!videoMediaPart?.media?.url) {
-        console.warn('A candidate was returned without a video media part.');
-        return Promise.resolve(null);
-      }
-      
-      const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
-      return fetch(videoDownloadUrl)
-        .then(response => {
-          if (!response.ok || !response.body) {
-            console.error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${response.status}`);
-            return null;
-          }
-          return response.arrayBuffer();
-        })
-        .then(arrayBuffer => {
-          if (!arrayBuffer) return null;
-          const base64Video = Buffer.from(arrayBuffer).toString('base64');
-          const contentType = videoMediaPart.media!.contentType || 'video/mp4';
-          return `data:${contentType};base64,${base64Video}`;
-        })
-        .catch(err => {
-          console.error(`An error occurred during video download and processing: ${err}`);
-          return null;
+    // Now, process the results from all completed operations
+    const downloadPromises = completedOperations.flatMap(operation => {
+        const candidates = operation.output?.candidates;
+        if (!candidates || candidates.length === 0) {
+            console.warn('An operation completed without returning any candidates.');
+            return []; // Return an empty array to be flattened out
+        }
+
+        return candidates.map(candidate => {
+            const videoMediaPart = candidate.message.content.find(p => !!p.media);
+            if (!videoMediaPart?.media?.url) {
+                console.warn('A candidate was returned without a video media part.');
+                return Promise.resolve(null);
+            }
+            
+            const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
+            return fetch(videoDownloadUrl)
+              .then(response => {
+                if (!response.ok || !response.body) {
+                  console.error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${response.status}`);
+                  return null;
+                }
+                return response.arrayBuffer();
+              })
+              .then(arrayBuffer => {
+                if (!arrayBuffer) return null;
+                const base64Video = Buffer.from(arrayBuffer).toString('base64');
+                const contentType = videoMediaPart.media!.contentType || 'video/mp4';
+                return `data:${contentType};base64,${base64Video}`;
+              })
+              .catch(err => {
+                console.error(`An error occurred during video download and processing: ${err}`);
+                return null;
+              });
         });
     });
 
