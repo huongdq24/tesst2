@@ -12,7 +12,7 @@ export default function HomeLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
-  const { user, userData, loading } = useAuth();
+  const { user, loading } = useAuth();
 
   useEffect(() => {
     // Wait until the loading is fully complete before making decisions
@@ -25,17 +25,10 @@ export default function HomeLayout({
       router.replace('/login');
       return;
     }
+  }, [user, loading, router]);
 
-    // If loading is done, there is a user, but their data indicates
-    // they haven't completed onboarding, redirect them.
-    if (!userData?.hasClaimedCredit) {
-      router.replace('/igen-x-google');
-    }
-  }, [user, userData, loading, router]);
-
-  // Show loader while the initial check is happening, or if the user
-  // doesn't meet the criteria to see the page yet (they will be redirected).
-  const showLoader = loading || !user || !userData?.hasClaimedCredit;
+  // Show loader while the initial auth check is happening.
+  const showLoader = loading || !user;
 
   if (showLoader) {
     return (
@@ -45,7 +38,7 @@ export default function HomeLayout({
     );
   }
 
-  // If we reach here, user is logged in and has claimed credit.
+  // If we reach here, user is logged in.
   return (
     <div className="flex min-h-screen flex-col">
       <Header />

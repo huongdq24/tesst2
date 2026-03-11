@@ -54,6 +54,18 @@ export default function IgenXGooglePage() {
   });
 
   useEffect(() => {
+    if (loading) {
+      return; // Wait for auth state to be resolved
+    }
+    if (!user) {
+      router.replace('/login');
+      return;
+    }
+    // If user has claimed credit and is NOT an admin, redirect to home.
+    if (userData?.hasClaimedCredit && userData?.role !== 'Admin') {
+      router.replace('/home');
+      return;
+    }
     if (userData) {
       form.reset({
         geminiApiKey: userData.geminiApiKey || '',
@@ -61,7 +73,7 @@ export default function IgenXGooglePage() {
         heyGenApiKey: userData.heyGenApiKey || '',
       });
     }
-  }, [userData, form]);
+  }, [user, userData, loading, router, form]);
 
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -89,20 +101,10 @@ export default function IgenXGooglePage() {
     }
   };
 
-  // Show a loader if auth state is loading.
-  if (loading) {
+  // Show a loader if auth state is loading or redirecting
+  if (loading || !user || (userData?.hasClaimedCredit && userData?.role !== 'Admin')) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
-  }
-  
-  // Also check for no user after loading, and redirect to login if they land here without being auth'd
-  if (!loading && !user) {
-    router.replace('/login');
-    return (
-       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
       </div>
     );
