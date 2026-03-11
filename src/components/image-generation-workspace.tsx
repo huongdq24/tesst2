@@ -59,7 +59,7 @@ export function ImageGenerationWorkspace() {
     });
 
     try {
-      const uniqueFileName = `${Date.now()}-${file.name}`;
+      const uniqueFileName = `${user.uid}-${Date.now()}-${file.name}`;
       const fileRef = storageRef(storage, `users/${user.uid}/uploads/${uniqueFileName}`);
       
       const snapshot = await uploadBytes(fileRef, file);
