@@ -253,27 +253,7 @@ export function VideoGenerationWorkspace() {
 
   return (
     <div className="flex flex-col h-full flex-1">
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
-        {isLoading ? (
-            <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg p-4">
-                <Loader2 className="h-16 w-16 animate-spin text-primary" />
-                <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
-            </div>
-        ) : generatedVideos.length > 0 ? (
-          generatedVideos.map((videoUri, index) => (
-            <div key={index} className="bg-muted/50 rounded-lg flex items-center justify-center p-2 h-full">
-              <video src={videoUri} controls className="w-full h-full object-contain" />
-            </div>
-          ))
-        ) : (
-            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4">
-              <Video className="h-16 w-16 mx-auto mb-4" />
-              <p>{t('workspace.video.outputPlaceholder')}</p>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-8">
+      <div className="mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="space-y-2 flex flex-col">
             <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
@@ -421,6 +401,25 @@ export function VideoGenerationWorkspace() {
             </div>
         </div>
 
+      </div>
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+        {isLoading ? (
+            <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg p-4">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
+            </div>
+        ) : generatedVideos.length > 0 ? (
+          generatedVideos.map((videoUri, index) => (
+            <div key={index} className="bg-muted/50 rounded-lg flex items-center justify-center p-2 h-full">
+              <video src={videoUri} controls className="w-full h-full object-contain" />
+            </div>
+          ))
+        ) : (
+            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4">
+              <Video className="h-16 w-16 mx-auto mb-4" />
+              <p>{t('workspace.video.outputPlaceholder')}</p>
+          </div>
+        )}
       </div>
     </div>
   );
