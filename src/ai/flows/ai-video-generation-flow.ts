@@ -130,18 +130,28 @@ const aiVideoGenerationFlow = ai.defineFlow(
 
     const finalOperations = await Promise.all(pollPromises);
 
-    // Extract all generated video media parts from the successful operation outputs.
+    // Collect errors and successful media parts
+    const errors: string[] = [];
     const videoMediaParts = finalOperations.flatMap(op => {
         if (op.error) {
             console.error(`A video generation failed: ${op.error.message}`);
+            // Avoid adding duplicate error messages
+            if (!errors.includes(op.error.message)) {
+                errors.push(op.error.message);
+            }
             return []; // Skip failed operations
         }
         return op.output?.message?.content.filter((p) => !!p.media) || [];
     });
 
     if (videoMediaParts.length === 0) {
-      throw new Error('All video generation requests failed or returned no media.');
+        if (errors.length > 0) {
+            // Join unique errors for a cleaner message
+            throw new Error(`Video generation failed. Error(s): ${errors.join('; ')}`);
+        }
+        throw new Error('All video generation requests failed and returned no media. This may be due to safety filters or an issue with the generation service.');
     }
+
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
     if (!geminiApiKey) {

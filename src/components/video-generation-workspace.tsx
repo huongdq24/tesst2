@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, DragEvent } from 'react';
+import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -44,6 +44,14 @@ export function VideoGenerationWorkspace() {
   const { user } = useAuth();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // The 'veo-3.1-generate-preview' model only supports 16:9.
+    // Force aspect ratio to 16:9 if it's currently set to 9:16.
+    if (aspectRatio === '9:16') {
+      setAspectRatio('16:9');
+    }
+  }, [aspectRatio]);
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -339,13 +347,17 @@ export function VideoGenerationWorkspace() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
-                <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} disabled={isBusy}>
+                <Select 
+                    value={aspectRatio} 
+                    onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} 
+                    disabled={isBusy}
+                >
                   <SelectTrigger id="aspect-ratio" className="w-full">
                     <SelectValue placeholder="Chọn tỷ lệ" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
-                    <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                    <SelectItem value="9:16" disabled>9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -357,9 +369,9 @@ export function VideoGenerationWorkspace() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1 video</SelectItem>
-                    <SelectItem value="2">2 video</SelectItem>
-                    <SelectItem value="3">3 video</SelectItem>
-                    <SelectItem value="4">4 video</SelectItem>
+                    <SelectItem value="2" disabled>2 video</SelectItem>
+                    <SelectItem value="3" disabled>3 video</SelectItem>
+                    <SelectItem value="4" disabled>4 video</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
