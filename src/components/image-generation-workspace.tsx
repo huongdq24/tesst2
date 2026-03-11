@@ -218,7 +218,7 @@ export function ImageGenerationWorkspace() {
               >
                 {inputImageUrl && !isUploading ? (
                   <>
-                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md" />
+                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md" />
                     <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
                       <X className="h-4 w-4" />
                     </Button>
