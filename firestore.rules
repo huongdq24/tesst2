@@ -17,7 +17,7 @@
  * - Ownership-Based Access: All user-generated content (like files) is secured via a mandatory `ownerId`
  *   field within the document itself, ensuring that only the creator can read or modify their data.
  * - Secure Admin Role Management: Global administrator privileges are determined by the `role` field
- *   within the user's own document (`/users/{userId}`). This makes the user document the single source
+ *   within the user's own profile document (`/users/{userId}`). This makes the user document the single source
  *   of truth for authorization.
  * - Flexible Schema: In this prototyping stage, rules enforce authorization but do not validate the
  *   specific shape or data types of documents, allowing for rapid iteration on the data model.
