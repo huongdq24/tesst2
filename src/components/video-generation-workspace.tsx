@@ -215,6 +215,64 @@ export function VideoGenerationWorkspace() {
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
             
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+                <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
+                  <Images className="mr-2 h-4 w-4" />
+                  Library
+                </Button>
+              </div>
+              <div
+                className={cn(
+                  'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
+                  isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
+                )}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                {isUploading ? (
+                  <div className="flex flex-col items-center justify-center text-muted-foreground">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
+                  </div>
+                ) : inputImageUrls.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 w-full">
+                    {inputImageUrls.map((url) => (
+                      <div key={url} className="relative aspect-square">
+                        <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
+                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                     <div 
+                      className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                     >
+                       <UploadCloud className="w-6 h-6" />
+                       <span className="text-xs text-center mt-1">Thêm</span>
+                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <UploadCloud className="w-8 h-8 mb-2" />
+                    <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
+                  </div>
+                )}
+                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
+              </div>
+            </div>
+
+            <Separator />
+            
             {/* Script Description */}
             <div className="space-y-2">
               <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
@@ -277,64 +335,6 @@ export function VideoGenerationWorkspace() {
               </div>
             </div>
             
-            <Separator />
-            
-            {/* Image Upload */}
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
-                <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
-                  <Images className="mr-2 h-4 w-4" />
-                  Library
-                </Button>
-              </div>
-              <div
-                className={cn(
-                  'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
-                  isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
-                )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                {isUploading ? (
-                  <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <Loader2 className="w-8 h-8 animate-spin" />
-                    <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
-                  </div>
-                ) : inputImageUrls.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 w-full">
-                    {inputImageUrls.map((url) => (
-                      <div key={url} className="relative aspect-square">
-                        <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
-                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                     <div 
-                      className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
-                      onClick={() => fileInputRef.current?.click()}
-                     >
-                       <UploadCloud className="w-6 h-6" />
-                       <span className="text-xs text-center mt-1">Thêm</span>
-                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud className="w-8 h-8 mb-2" />
-                    <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
-                  </div>
-                )}
-                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
-              </div>
-            </div>
-
             {/* Settings */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -345,7 +345,7 @@ export function VideoGenerationWorkspace() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
-                    <SelectItem value="9:16" >9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                    <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
