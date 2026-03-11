@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/config';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Loader2, AlertTriangle } from 'lucide-react';
@@ -36,13 +36,22 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
         setIsLoading(true);
         setError(null);
         try {
+          // Query without 'orderBy' to prevent the composite index error.
+          // We will sort the results on the client.
           const q = query(
             collection(firestore, 'generatedImages'),
-            where('ownerId', '==', user.uid),
-            orderBy('createdAt', 'desc')
+            where('ownerId', '==', user.uid)
           );
           const querySnapshot = await getDocs(q);
           const imageList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
+
+          // Sort on the client side to maintain chronological order
+          imageList.sort((a, b) => {
+            const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+            const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+            return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
+          });
+
           setImages(imageList);
         } catch (e: any) {
           console.error("Failed to fetch image library:", e);
