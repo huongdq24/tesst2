@@ -22,22 +22,22 @@ const AiVideoGenerationInputSchema = z.object({
       "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
-  numberOfVideos: z.number().min(1).max(4).optional().default(1),
+  // numberOfVideos is removed from the input, as the VEO 3.1 API via Genkit only supports 1.
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
 // Define output schema for video generation
 const AiVideoGenerationOutputSchema = z.object({
-  videoDataUris: z.array(z.string()).describe('An array of generated videos as data URIs (data:video/mp4;base64,<encoded_data>).'),
+  videoDataUris: z.array(z.string()).describe('An array containing the single generated video as a data URI (data:video/mp4;base64,<encoded_data>).'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
 /**
- * Generates videos based on a text prompt and optional image references by sending parallel requests.
- * The function polls the video generation operations until completion and returns
- * the generated videos as base64 encoded data URIs.
- * @param input - The input containing the text prompt, optional image data URIs, and number of videos.
- * @returns A promise that resolves to an object containing an array of video data URIs.
+ * Generates a single video based on a text prompt and optional image references.
+ * The function polls the video generation operation until completion and returns
+ * the generated video as a base64 encoded data URI.
+ * @param input - The input containing the text prompt and optional image data URIs.
+ * @returns A promise that resolves to an object containing an array with one video data URI.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
@@ -89,29 +89,23 @@ const aiVideoGenerationFlow = ai.defineFlow(
       });
     }
 
-    // 1. Start all generation operations in parallel
-    const generationPromises = Array.from({ length: input.numberOfVideos || 1 }).map(() =>
-      ai.generate({
-        model: googleAI.model('veo-3.1-generate-preview'),
-        prompt: promptParts,
-        config: {
-          aspectRatio: input.aspectRatio,
-        },
-      })
-    );
-    const initialResults = await Promise.all(generationPromises);
-    let operations = initialResults.map(res => res.operation).filter((op): op is NonNullable<typeof op> => !!op);
-    if (operations.length === 0) {
-      throw new Error('Failed to start any video generation operations.');
+    // 1. Start the single generation operation.
+    let { operation } = await ai.generate({
+      model: googleAI.model('veo-3.1-generate-preview'),
+      prompt: promptParts,
+      config: {
+        aspectRatio: input.aspectRatio,
+      },
+    });
+
+    if (!operation) {
+      throw new Error('Failed to start the video generation operation.');
     }
 
-    // 2. Poll all operations until they are all done
-    let allDone = false;
-    while (!allDone) {
+    // 2. Poll the operation until it is done.
+    while (!operation.done) {
       await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5s
-      const checkPromises = operations.map(op => ai.checkOperation(op));
-      operations = await Promise.all(checkPromises);
-      allDone = operations.every(op => op.done);
+      operation = await ai.checkOperation(operation);
     }
     
     const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -119,52 +113,38 @@ const aiVideoGenerationFlow = ai.defineFlow(
         throw new Error('GEMINI_API_KEY environment variable is not configured. It is required to download generated videos.');
     }
 
-    // 3. Process results and download videos
-    const failedOperationErrors: string[] = [];
-    const downloadPromises = operations.map(op => {
-      if (op.error) {
-        failedOperationErrors.push(op.error.message);
-        console.error('A video generation operation failed:', op.error.message);
-        return Promise.resolve(null);
-      }
+    // 3. Process the result and download the video.
+    if (operation.error) {
+      console.error('The video generation operation failed:', operation.error.message);
+      throw new Error(`Video generation failed: ${operation.error.message}`);
+    }
+    
+    const videoMediaPart = operation.output?.message?.content.find(p => !!p.media);
+    if (!videoMediaPart?.media?.url) {
+        throw new Error('The operation completed but did not return a video. This may be due to safety filters or other content restrictions.');
+    }
       
-      const videoMediaPart = op.output?.message?.content.find(p => !!p.media);
-      if (!videoMediaPart?.media?.url) {
-        console.warn('An operation completed but did not contain a video media part.');
-        return Promise.resolve(null);
-      }
-        
-      const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
-      return fetch(videoDownloadUrl)
-        .then(response => {
-          if (!response.ok || !response.body) {
-            console.error(`Failed to fetch generated video from URL: ${videoDownloadUrl}. Status: ${response.status}`);
-            return null;
-          }
-          return response.arrayBuffer();
-        })
-        .then(arrayBuffer => {
-          if (!arrayBuffer) return null;
-          const base64Video = Buffer.from(arrayBuffer).toString('base64');
-          const contentType = videoMediaPart.media!.contentType || 'video/mp4';
-          return `data:${contentType};base64,${base64Video}`;
-        })
-        .catch(err => {
-          console.error(`An error occurred during video download and processing: ${err}`);
-          return null;
-        });
-    });
-
-    const videoDataUris = (await Promise.all(downloadPromises)).filter((uri): uri is string => !!uri);
-
-    if (videoDataUris.length === 0) {
-      let errorMessage = 'All video generation requests failed or returned no media.';
-      if (failedOperationErrors.length > 0) {
-        errorMessage += ` The following errors occurred: ${failedOperationErrors.join(', ')}`;
-      }
-      throw new Error(errorMessage);
+    const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
+    
+    let videoDataUri: string | null = null;
+    try {
+        const response = await fetch(videoDownloadUrl);
+        if (!response.ok || !response.body) {
+            throw new Error(`Failed to download video file. Status: ${response.statusText}`);
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const base64Video = Buffer.from(arrayBuffer).toString('base64');
+        const contentType = videoMediaPart.media!.contentType || 'video/mp4';
+        videoDataUri = `data:${contentType};base64,${base64Video}`;
+    } catch (err: any) {
+        console.error(`An error occurred during video download and processing: ${err.message}`);
+        throw new Error(`Failed to download or process generated video: ${err.message}`);
     }
 
-    return { videoDataUris };
+    if (!videoDataUri) {
+        throw new Error('All video generation requests failed or returned no media.');
+    }
+
+    return { videoDataUris: [videoDataUri] };
   }
 );
