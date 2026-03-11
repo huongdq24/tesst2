@@ -12,6 +12,7 @@
 import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 import { z } from 'genkit';
+import { Buffer } from 'buffer';
 
 // Input Schema: User's text and optional reference images
 const OptimalImagePromptGenerationInputSchema = z.object({
@@ -68,14 +69,40 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
     outputSchema: OptimalImagePromptGenerationOutputSchema,
   },
   async (input) => {
-    const promptParts = [];
+    const promptParts: any[] = [];
+
     if (input.imageUris && input.imageUris.length > 0) {
-        input.imageUris.forEach(uri => {
-            const match = uri.match(/^data:(.*?);base64,/);
-            const contentType = match ? match[1] : 'image/jpeg'; // Default content type if not a data URI
-            promptParts.push({ media: { url: uri, contentType } });
-        });
+      const dataUriPromises = input.imageUris.map(async (uri) => {
+        if (uri.startsWith('https://')) {
+          try {
+            const response = await fetch(uri);
+            if (!response.ok) {
+              console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
+              return null;
+            }
+            const buffer = await response.arrayBuffer();
+            const base64Data = Buffer.from(buffer).toString('base64');
+            const mimeType = response.headers.get('content-type') || 'image/jpeg';
+            return `data:${mimeType};base64,${base64Data}`;
+          } catch (error) {
+            console.error(`Error processing image URI ${uri}:`, error);
+            return null;
+          }
+        }
+        return uri;
+      });
+      
+      const resolvedUris = await Promise.all(dataUriPromises);
+
+      resolvedUris.forEach(uri => {
+        if (uri) {
+          const match = uri.match(/^data:(.*?);base64,/);
+          const contentType = match ? match[1] : 'image/jpeg';
+          promptParts.push({ media: { url: uri, contentType } });
+        }
+      });
     }
+
     promptParts.push({ text: input.description });
 
     const { output } = await ai.generate({

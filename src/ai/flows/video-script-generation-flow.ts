@@ -10,6 +10,7 @@
 import { ai } from '@/ai/genkit';
 import { googleAI } from '@genkit-ai/google-genai';
 import { z } from 'genkit';
+import { Buffer } from 'buffer';
 
 const VideoScriptGenerationInputSchema = z.object({
   description: z.string().describe('A description of the desired video content to generate a script for.'),
@@ -70,9 +71,28 @@ const videoScriptGenerationFlow = ai.defineFlow(
   async (input) => {
     const promptParts = [];
     if (input.imageUri) {
-        const match = input.imageUri.match(/^data:(.*?);base64,/);
-        const contentType = match ? match[1] : 'image/jpeg';
-        promptParts.push({ media: { url: input.imageUri, contentType } });
+        let uri = input.imageUri;
+        if (uri.startsWith('https://')) {
+            try {
+                const response = await fetch(uri);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch image: ${response.statusText}`);
+                }
+                const buffer = await response.arrayBuffer();
+                const base64Data = Buffer.from(buffer).toString('base64');
+                const mimeType = response.headers.get('content-type') || 'image/jpeg';
+                uri = `data:${mimeType};base64,${base64Data}`;
+            } catch (error) {
+                console.error(`Error converting image URL to data URI:`, error);
+                uri = ''; // Clear URI on failure
+            }
+        }
+        
+        if (uri) {
+            const match = uri.match(/^data:(.*?);base64,/);
+            const contentType = match ? match[1] : 'image/jpeg';
+            promptParts.push({ media: { url: uri, contentType } });
+        }
     }
     promptParts.push({ text: input.description });
 
