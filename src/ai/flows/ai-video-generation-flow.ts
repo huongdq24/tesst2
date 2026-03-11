@@ -103,7 +103,6 @@ const aiVideoGenerationFlow = ai.defineFlow(
       prompt: promptParts,
       config: {
         aspectRatio: input.aspectRatio,
-        numberOfVideos: input.numberOfVideos,
       },
     });
 
