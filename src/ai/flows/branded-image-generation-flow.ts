@@ -7,13 +7,14 @@ const BrandedImageGenerationInputSchema = z.object({
   existingImageUri: z.string().optional(),
   generationPrompt: z.string(),
   aspectRatio: z.string().optional(),
+  numberOfImages: z.number().min(1).max(4).optional().default(1),
   apiKey: z.string().describe('The user Gemini API key to use for generation.'),
 });
 
 export type BrandedImageGenerationInput = z.infer<typeof BrandedImageGenerationInputSchema>;
 
 const BrandedImageGenerationOutputSchema = z.object({
-  generatedImageUri: z.string(),
+  generatedImageUris: z.array(z.string()),
 });
 
 export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGenerationOutputSchema>;
@@ -21,7 +22,7 @@ export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGeneration
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
-  const { existingImageUri, generationPrompt, aspectRatio, apiKey } = input;
+  const { existingImageUri, generationPrompt, aspectRatio, numberOfImages, apiKey } = input;
   if (!apiKey) {
     throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
@@ -65,6 +66,7 @@ export async function brandedImageGeneration(
     contents: [{ role: 'user', parts: contents }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
+      candidateCount: numberOfImages,
     } as any,
   });
 
@@ -84,20 +86,27 @@ export async function brandedImageGeneration(
     throw new Error(blockMessage);
   }
 
-  const parts = response.candidates[0].content.parts;
-  for (const part of parts) {
-    if (part.inlineData?.data) {
-      const mimeType = part.inlineData.mimeType || 'image/png';
-      const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
-      return { generatedImageUri };
+  const generatedImageUris: string[] = [];
+  for (const candidate of response.candidates) {
+    const parts = candidate.content.parts;
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mimeType = part.inlineData.mimeType || 'image/png';
+        const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
+        generatedImageUris.push(generatedImageUri);
+      }
     }
   }
   
   // If we get here, candidates were returned, but none contained an image.
-  const textResponse = response.text();
-  let errorMessage = 'Image generation failed: No image was returned by the model.';
-  if (textResponse) {
-    errorMessage += ` The model responded with: "${textResponse}"`;
+  if (generatedImageUris.length === 0) {
+    const textResponse = response.text();
+    let errorMessage = 'Image generation failed: No image was returned by the model.';
+    if (textResponse) {
+      errorMessage += ` The model responded with: "${textResponse}"`;
+    }
+    throw new Error(errorMessage);
   }
-  throw new Error(errorMessage);
+  
+  return { generatedImageUris };
 }

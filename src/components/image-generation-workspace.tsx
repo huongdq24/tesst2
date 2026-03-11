@@ -24,9 +24,10 @@ export function ImageGenerationWorkspace() {
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
+  const [numberOfImages, setNumberOfImages] = useState(1);
   const [inputImageUrl, setInputImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
+  const [generatedImageUrls, setGeneratedImageUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -150,35 +151,38 @@ export function ImageGenerationWorkspace() {
       return;
     }
     setIsLoading(true);
-    setGeneratedImageUrl(null);
+    setGeneratedImageUrls([]);
     try {
       const result = await brandedImageGeneration({
         existingImageUri: inputImageUrl || undefined,
         generationPrompt: prompt,
         aspectRatio: aspectRatio,
+        numberOfImages: numberOfImages,
         apiKey: userData.geminiApiKey,
       });
-      const generatedDataUri = result.generatedImageUri;
-      setGeneratedImageUrl(generatedDataUri);
-      // Save generated image to Firebase Storage and Firestore
+      const generatedDataUris = result.generatedImageUris;
+      setGeneratedImageUrls(generatedDataUris);
+
+      // Save generated images to Firebase Storage and Firestore
       try {
-        const fileName = `generated-${Date.now()}.png`;
-        const imageRef = storageRef(storage, `users/${user.uid}/generated/${fileName}`);
-        // Upload the base64 data URI directly
-        await uploadString(imageRef, generatedDataUri, 'data_url');
-        const downloadURL = await getDownloadURL(imageRef);
-        // Save metadata to Firestore
-        await addDoc(collection(firestore, 'generatedImages'), {
-          ownerId: user.uid,
-          prompt: prompt,
-          imageUrl: downloadURL,
-          createdAt: serverTimestamp(),
-        });
-        toast({ title: 'Ảnh đã được lưu', description: 'Ảnh đã được lưu vào thư viện của bạn.' });
+        if (generatedDataUris.length > 0 && user) {
+            await Promise.all(generatedDataUris.map(async (uri) => {
+                const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+                const imageRef = storageRef(storage, `users/${user.uid}/generated/${fileName}`);
+                await uploadString(imageRef, uri, 'data_url');
+                const downloadURL = await getDownloadURL(imageRef);
+                await addDoc(collection(firestore, 'generatedImages'), {
+                    ownerId: user.uid,
+                    prompt: prompt,
+                    imageUrl: downloadURL,
+                    createdAt: serverTimestamp(),
+                });
+            }));
+            toast({ title: `Đã lưu ${generatedDataUris.length} ảnh`, description: 'Các ảnh đã được lưu vào thư viện của bạn.' });
+        }
       } catch (saveError) {
-        console.error('Failed to save image:', saveError);
-        // Don't fail the whole operation if save fails — image is still shown
-        toast({ title: 'Tạo ảnh thành công', description: 'Ảnh đã tạo nhưng không thể lưu vào thư viện.' });
+        console.error('Failed to save image(s):', saveError);
+        toast({ title: 'Tạo ảnh thành công', description: `Tạo ${generatedDataUris.length} ảnh thành công nhưng không thể lưu vào thư viện.` });
       }
     } catch (error: any) {
       console.error(error);
@@ -195,12 +199,14 @@ export function ImageGenerationWorkspace() {
     }
   };
 
-  const handleDownload = () => {
-    if (!generatedImageUrl) return;
+  const handleDownload = (imageUrl: string, index: number) => {
+    if (!imageUrl) return;
     const link = document.createElement('a');
-    link.href = generatedImageUrl;
-    link.download = `igen-image-${Date.now()}.png`;
+    link.href = imageUrl;
+    link.download = `igen-image-${Date.now()}-${index + 1}.png`;
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
   };
   
   const handleImageSelectFromLibrary = (imageUrl: string) => {
@@ -296,22 +302,38 @@ export function ImageGenerationWorkspace() {
                 className="resize-none flex-1"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
-              <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isBusy}>
-                <SelectTrigger id="aspect-ratio" className="w-full">
-                  <SelectValue placeholder="Chọn tỷ lệ" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1:1">1:1 (Vuông)</SelectItem>
-                  <SelectItem value="16:9">16:9 (Ngang rộng)</SelectItem>
-                  <SelectItem value="9:16">9:16 (Dọc)</SelectItem>
-                  <SelectItem value="4:3">4:3 (Tiêu chuẩn)</SelectItem>
-                  <SelectItem value="3:4">3:4 (Chân dung)</SelectItem>
-                  <SelectItem value="3:2">3:2 (Ngang)</SelectItem>
-                  <SelectItem value="2:3">2:3 (Chân dung cao)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
+                <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isBusy}>
+                  <SelectTrigger id="aspect-ratio" className="w-full">
+                    <SelectValue placeholder="Chọn tỷ lệ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1:1">1:1 (Vuông)</SelectItem>
+                    <SelectItem value="16:9">16:9 (Ngang rộng)</SelectItem>
+                    <SelectItem value="9:16">9:16 (Dọc)</SelectItem>
+                    <SelectItem value="4:3">4:3 (Tiêu chuẩn)</SelectItem>
+                    <SelectItem value="3:4">3:4 (Chân dung)</SelectItem>
+                    <SelectItem value="3:2">3:2 (Ngang)</SelectItem>
+                    <SelectItem value="2:3">2:3 (Chân dung cao)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="number-of-images">Số lượng ảnh</Label>
+                <Select value={String(numberOfImages)} onValueChange={(val) => setNumberOfImages(Number(val))} disabled={isBusy}>
+                    <SelectTrigger id="number-of-images" className="w-full">
+                        <SelectValue placeholder="Chọn số lượng" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="1">1 ảnh</SelectItem>
+                        <SelectItem value="2">2 ảnh</SelectItem>
+                        <SelectItem value="3">3 ảnh</SelectItem>
+                        <SelectItem value="4">4 ảnh</SelectItem>
+                    </SelectContent>
+                </Select>
+              </div>
             </div>
             <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full mt-2">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
@@ -327,15 +349,21 @@ export function ImageGenerationWorkspace() {
             <p>{t('workspace.image.loadingMessage')}</p>
             <p className="text-sm">{t('workspace.image.loadingSubMessage')}</p>
           </div>
-        ) : generatedImageUrl ? (
-          <div className="relative w-full h-full flex flex-col gap-3">
-            <div className="relative flex-1 min-h-[350px]">
-              <Image src={generatedImageUrl} alt="Generated image" fill style={{ objectFit: 'contain' }} />
-            </div>
-            <Button variant="outline" size="sm" onClick={handleDownload} className="self-center">
-              <Download className="mr-2 h-4 w-4" />
-              Tải ảnh xuống
-            </Button>
+        ) : generatedImageUrls.length > 0 ? (
+          <div className={cn(
+              "grid w-full h-full gap-4",
+              generatedImageUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
+          )}>
+              {generatedImageUrls.map((url, index) => (
+                  <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10">
+                      <Image src={url} alt={`Generated image ${index + 1}`} fill style={{ objectFit: 'contain' }} className="p-1" />
+                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="secondary" size="icon" onClick={() => handleDownload(url, index)} title="Tải ảnh xuống">
+                              <Download className="h-5 w-5" />
+                          </Button>
+                      </div>
+                  </div>
+              ))}
           </div>
         ) : (
           <div className="text-center text-muted-foreground">
