@@ -1,54 +1,22 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, useEffect } from 'react';
+import { useState, useRef, ChangeEvent, useEffect, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2, Copy } from 'lucide-react';
+import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2, Copy, Images } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
 import { useI18n, TranslationKey } from '@/contexts/i18n-context';
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-
-interface FrameInputProps {
-  frameType: 'start' | 'end';
-  imageDataUri: string | null;
-  isProcessing: boolean;
-  onFileChange: (event: ChangeEvent<HTMLInputElement>, frameType: 'start' | 'end') => void;
-  onRemove: (frameType: 'start' | 'end') => void;
-  isLoading: boolean;
-  fileInputRef: React.RefObject<HTMLInputElement>;
-}
-
-const FrameInput: React.FC<FrameInputProps> = ({ frameType, imageDataUri, isProcessing, onFileChange, onRemove, isLoading, fileInputRef }) => {
-  const { t } = useI18n();
-  const inputId = `${frameType}-file-upload`;
-  const labelText = frameType === 'start' ? t('workspace.video.startFrame') : t('workspace.video.endFrame');
-  
-  return (
-    <div className="flex flex-col items-center gap-2">
-      <Label htmlFor={inputId} className="font-semibold">{labelText}</Label>
-      <div className="relative w-28 h-28 border-2 border-dashed rounded-lg flex items-center justify-center text-muted-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer bg-muted/20">
-        <label htmlFor={inputId} className="absolute inset-0 cursor-pointer" />
-        {isProcessing ? (
-          <Loader2 className="h-8 w-8 animate-spin" />
-        ) : imageDataUri ? (
-          <>
-            <Image src={imageDataUri} alt={`${frameType} preview`} layout="fill" objectFit="cover" className="rounded-lg" />
-            <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); onRemove(frameType); }}>
-              <X className="h-4 w-4" />
-            </Button>
-          </>
-        ) : (
-          <UploadCloud className="h-8 w-8" />
-        )}
-      </div>
-      <input ref={fileInputRef} id={inputId} type="file" className="hidden" onChange={(e) => onFileChange(e, frameType)} accept="image/*,video/*" disabled={isLoading} />
-    </div>
-  );
-};
+import { useAuth } from '@/contexts/auth-context';
+import { storage, firestore } from '@/lib/firebase/config';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
+import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 
 
 export function VideoGenerationWorkspace() {
@@ -58,25 +26,22 @@ export function VideoGenerationWorkspace() {
   const [cameraMovement, setCameraMovement] = useState<string | null>(null);
 
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
-  const [isIngredients, setIsIngredients] = useState(false);
-  const [isFrames, setIsFrames] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [numberOfVideos, setNumberOfVideos] = useState<1 | 2 | 3 | 4>(1);
   
-  const [startImageDataUri, setStartImageDataUri] = useState<string | null>(null);
-  const [endImageDataUri, setEndImageDataUri] = useState<string | null>(null);
-
-  const [isProcessingStart, setIsProcessingStart] = useState(false);
-  const [isProcessingEnd, setIsProcessingEnd] = useState(false);
-
+  const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
+  
   const [generatedVideos, setGeneratedVideos] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   const { toast } = useToast();
   const { t } = useI18n();
-
-  const startFileInputRef = useRef<HTMLInputElement>(null);
-  const endFileInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Veo 3.0 has limitations, reset to supported values if needed.
@@ -88,98 +53,93 @@ export function VideoGenerationWorkspace() {
     }
   }, [aspectRatio, numberOfVideos]);
 
-  const handleFileChange = (event: ChangeEvent<HTMLInputElement>, frameType: 'start' | 'end') => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleFilesUpload = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
 
-    const inputType = file.type.startsWith('video/') ? 'video' : 'image';
-    const setImageDataUri = frameType === 'start' ? setStartImageDataUri : setEndImageDataUri;
-    const setIsProcessing = frameType === 'start' ? setIsProcessingStart : setIsProcessingEnd;
-
-    const sizeLimit = inputType === 'image' ? 10 * 1024 * 1024 : 50 * 1024 * 1024;
-    const toastTitleKey: TranslationKey = inputType === 'image' ? 'toast.image.fileTooLarge.title' : 'toast.video.videoTooLarge.title';
-    const toastDescKey: TranslationKey = inputType === 'image' ? 'toast.image.fileTooLarge.description' : 'toast.video.videoTooLarge.description';
-
-    if (file.size > sizeLimit) {
-        toast({ variant: 'destructive', title: t(toastTitleKey), description: t(toastDescKey, { maxSize: '10MB' }) });
-        return;
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tải ảnh lên.' });
+      return;
     }
 
-    if (inputType === 'image') {
-        const reader = new FileReader();
-        reader.onloadend = () => setImageDataUri(reader.result as string);
-        reader.readAsDataURL(file);
-    } else { // video
-        setIsProcessing(true);
-        toast({ title: t('toast.video.extracting.title'), description: t('toast.video.extracting.description') });
+    const filesToUpload = Array.from(files).filter(file => {
+      if (!file.type.startsWith('image/')) {
+        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${file.name}' không phải là một tệp ảnh.` });
+        return false;
+      }
+      if (file.size > 4 * 1024 * 1024) {
+        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${file.name}' lớn hơn 4MB.` });
+        return false;
+      }
+      return true;
+    });
 
-        const videoElement = document.createElement('video');
-        videoElement.preload = 'metadata';
-        videoElement.muted = true;
-        videoElement.playsInline = true;
+    if (filesToUpload.length === 0) return;
 
-        const cleanup = () => {
-            videoElement.removeEventListener('loadedmetadata', handleLoadedMetadata);
-            videoElement.removeEventListener('seeked', handleSeeked);
-            videoElement.removeEventListener('error', handleError);
-            URL.revokeObjectURL(videoElement.src);
-        };
-
-        const handleLoadedMetadata = () => {
-            videoElement.currentTime = frameType === 'start' ? 0.1 : videoElement.duration;
-        };
-
-        const handleSeeked = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = videoElement.videoWidth;
-            canvas.height = videoElement.videoHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
-                setImageDataUri(canvas.toDataURL('image/jpeg'));
-                const successDescKey = frameType === 'start' ? 'toast.video.extractStartSuccess.description' : 'toast.video.extractEndSuccess.description';
-                toast({ title: t('toast.video.extractSuccess.title'), description: t(successDescKey) });
-            } else {
-                toast({ variant: 'destructive', title: t('toast.video.extractError.title'), description: t('toast.video.extractError.description') });
-            }
-            setIsProcessing(false);
-            cleanup();
-        };
-
-        const handleError = () => {
-            toast({ variant: 'destructive', title: t('toast.video.loadError.title'), description: t('toast.video.loadError.description') });
-            setIsProcessing(false);
-            cleanup();
-        };
-        
-        videoElement.addEventListener('loadedmetadata', handleLoadedMetadata);
-        videoElement.addEventListener('seeked', handleSeeked);
-        videoElement.addEventListener('error', handleError);
-        videoElement.src = URL.createObjectURL(file);
-    }
-  };
-
-  const handleRemoveImage = (frameType: 'start' | 'end') => {
-    if (frameType === 'start') {
-        setStartImageDataUri(null);
-        if (startFileInputRef.current) startFileInputRef.current.value = '';
-    } else {
-        setEndImageDataUri(null);
-        if (endFileInputRef.current) endFileInputRef.current.value = '';
-    }
-  };
-
-  const handleModeToggle = (mode: 'ingredients' | 'frames') => {
-    const wasOn = mode === 'ingredients' ? isIngredients : isFrames;
-    setStartImageDataUri(null);
-    setEndImageDataUri(null);
-    if(startFileInputRef.current) startFileInputRef.current.value = '';
-    if(endFileInputRef.current) endFileInputRef.current.value = '';
+    setIsUploading(true);
     
-    setIsIngredients(mode === 'ingredients' ? !wasOn : false);
-    setIsFrames(mode === 'frames' ? !wasOn : false);
+    try {
+      const uploadPromises = filesToUpload.map(async (file) => {
+        const fileName = `input-${Date.now()}-${file.name}`;
+        const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+        await uploadBytes(imageRef, file);
+        const downloadURL = await getDownloadURL(imageRef);
+        await addDoc(collection(firestore, 'inputImages'), {
+          ownerId: user.uid,
+          imageUrl: downloadURL,
+          createdAt: serverTimestamp(),
+        });
+        return downloadURL;
+      });
+
+      const newUrls = await Promise.all(uploadPromises);
+      setInputImageUrls(prevUrls => [...prevUrls, ...newUrls]);
+      
+      toast({ title: `Tải lên ${newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
+    } catch (error) {
+      console.error('Upload failed:', error);
+      let errorMessage = 'Không thể tải ảnh lên.';
+      if (error instanceof Error && error.message.includes('storage/unauthorized')) {
+        errorMessage = 'Lỗi phân quyền. Vui lòng kiểm tra lại cấu hình CORS của Firebase Storage.';
+      }
+      toast({ variant: 'destructive', title: 'Lỗi tải ảnh', description: errorMessage });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    handleFilesUpload(event.dataTransfer.files);
+  };
+
+  const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    handleFilesUpload(event.target.files);
+    if(event.target) {
+      event.target.value = '';
+    }
+  };
+  
+  const handleRemoveImage = (urlToRemove: string) => {
+    setInputImageUrls((prevUrls) => prevUrls.filter((url) => url !== urlToRemove));
+  };
+
+  const handleImageSelectFromLibrary = (imageUrl: string) => {
+    if (!inputImageUrls.includes(imageUrl)) {
+        setInputImageUrls((prevUrls) => [...prevUrls, imageUrl]);
+    }
+  };
+  
   const handleGenerateScript = async () => {
     if (!scriptDescription.trim()) {
       return;
@@ -192,7 +152,7 @@ export function VideoGenerationWorkspace() {
     try {
       const result = await videoScriptGeneration({
         description: scriptDescription,
-        imageUri: startImageDataUri ?? undefined,
+        imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
       });
       setPrompt(result.optimized_english_prompt);
       setMotionAnalysis(result.motion_analysis);
@@ -230,8 +190,7 @@ export function VideoGenerationWorkspace() {
     try {
       const result = await aiVideoGeneration({
         textPrompt: prompt,
-        startImageDataUri: isIngredients || isFrames ? startImageDataUri ?? undefined : undefined,
-        endImageDataUri: isFrames ? endImageDataUri ?? undefined : undefined,
+        referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
         numberOfVideos: numberOfVideos,
       });
@@ -248,11 +207,16 @@ export function VideoGenerationWorkspace() {
     }
   };
   
-  const isProcessing = isProcessingStart || isProcessingEnd;
-  const isGenerateDisabled = isLoading || isProcessing || !prompt.trim();
+  const isBusy = isLoading || isGeneratingScript || isUploading;
+  const isGenerateDisabled = isBusy || !prompt.trim();
 
   return (
     <div className="flex flex-col h-full flex-1">
+      <ImageLibraryModal
+        open={isLibraryOpen}
+        onOpenChange={setIsLibraryOpen}
+        onImageSelect={handleImageSelectFromLibrary}
+      />
       <div className="mb-8">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div className="space-y-2 flex flex-col">
@@ -289,7 +253,7 @@ export function VideoGenerationWorkspace() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={5}
-                disabled={isLoading || isProcessing}
+                disabled={isBusy}
                 className="pr-12 resize-none text-base p-4 flex-1"
               />
               <Button
@@ -315,63 +279,65 @@ export function VideoGenerationWorkspace() {
 
         <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2 flex flex-col gap-2">
-                <div className='flex gap-2'>
-                    <Button variant={isIngredients ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('ingredients')} disabled={isGeneratingScript}>
-                        <ImageIcon className="mr-2 h-4 w-4" />
-                        {t('feature.videoGeneration.fromImage')}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+                    <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
+                      <Images className="mr-2 h-4 w-4" />
+                      Library
                     </Button>
-                    <Button variant={isFrames ? 'secondary' : 'outline'} size="sm" onClick={() => handleModeToggle('frames')} disabled={isGeneratingScript}>
-                        <Frame className="mr-2 h-4 w-4" />
-                        {t('feature.videoGeneration.extend')}
-                    </Button>
-                </div>
-                {isIngredients && !isFrames && (
-                <div className="flex items-center gap-2 p-2 border rounded-lg">
-                    <label htmlFor="start-file-upload" className="text-sm cursor-pointer text-muted-foreground hover:text-primary">
-                        {t('workspace.upload.labelImage')}
-                    </label>
-                    <input ref={startFileInputRef} id="start-file-upload" type="file" className="hidden" onChange={(e) => handleFileChange(e, 'start')} accept="image/*" disabled={isLoading || isProcessing} />
-                    
-                    {isProcessingStart ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : startImageDataUri && (
-                        <div className="relative w-10 h-10">
-                            <Image src={startImageDataUri} alt="Input preview" fill style={{ objectFit: 'cover' }} className="rounded-md border" />
-                            <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-5 w-5 rounded-full z-10" onClick={() => handleRemoveImage('start')}>
-                                <X className="h-3 w-3" />
-                            </Button>
-                        </div>
+                  </div>
+                  <div
+                    className={cn(
+                      'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
+                      isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
                     )}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    {isUploading ? (
+                      <div className="flex flex-col items-center justify-center text-muted-foreground">
+                        <Loader2 className="w-8 h-8 animate-spin" />
+                        <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
+                      </div>
+                    ) : inputImageUrls.length > 0 ? (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 w-full">
+                        {inputImageUrls.map((url) => (
+                          <div key={url} className="relative aspect-square">
+                            <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
+                              onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                         <div 
+                          className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
+                          onClick={() => fileInputRef.current?.click()}
+                         >
+                           <UploadCloud className="w-6 h-6" />
+                           <span className="text-xs text-center mt-1">Thêm</span>
+                         </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                        <UploadCloud className="w-8 h-8 mb-2" />
+                        <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
+                      </div>
+                    )}
+                    <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
+                  </div>
                 </div>
-                )}
-                {isFrames && (
-                    <div className="flex items-center justify-center gap-4 p-2 border rounded-lg">
-                    <FrameInput 
-                        frameType="start"
-                        imageDataUri={startImageDataUri}
-                        isProcessing={isProcessingStart}
-                        onFileChange={handleFileChange}
-                        onRemove={handleRemoveImage}
-                        isLoading={isLoading}
-                        fileInputRef={startFileInputRef}
-                    />
-                    <ArrowRight className="h-6 w-6 text-muted-foreground flex-shrink-0" />
-                    <FrameInput 
-                        frameType="end"
-                        imageDataUri={endImageDataUri}
-                        isProcessing={isProcessingEnd}
-                        onFileChange={handleFileChange}
-                        onRemove={handleRemoveImage}
-                        isLoading={isLoading}
-                        fileInputRef={endFileInputRef}
-                    />
-                </div>
-                )}
             </div>
 
             <div className="lg:col-span-1 flex flex-col gap-2">
                 <div className="flex gap-4 p-2 border rounded-lg justify-center">
-                    <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isGeneratingScript}>
+                    <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isBusy}>
                         <ToggleGroupItem value="16:9" aria-label={t('feature.videoGeneration.horizontal')} className="p-2 h-auto flex-col gap-1">
                             <RectangleHorizontal />
                             <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
@@ -383,15 +349,15 @@ export function VideoGenerationWorkspace() {
                     </ToggleGroup>
                     <div className='flex flex-col gap-1'>
                         <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
-                        <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isGeneratingScript}>
+                        <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isBusy}>
                             {[1, 2, 3, 4].map(n => (
                                 <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square" disabled={n > 1}>x{n}</ToggleGroupItem>
                             ))}
                         </ToggleGroup>
                     </div>
                 </div>
-                <Button onClick={handleGenerate} disabled={isGenerateDisabled || isGeneratingScript} size="lg" className="w-full">
-                {(isLoading || isProcessing) ? (
+                <Button onClick={handleGenerate} disabled={isGenerateDisabled} size="lg" className="w-full">
+                {isBusy ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
                 ) : (
                     <Video className="h-5 w-5" />

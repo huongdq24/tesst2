@@ -14,8 +14,8 @@ import { Buffer } from 'buffer';
 
 const VideoScriptGenerationInputSchema = z.object({
   description: z.string().describe('A description of the desired video content to generate a script for.'),
-  imageUri: z.string().optional().describe(
-      "Optional reference image as a data URI or public URL. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
+  imageUris: z.array(z.string()).optional().describe(
+      "Optional reference images as a data URI or public URL. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
 });
 export type VideoScriptGenerationInput = z.infer<typeof VideoScriptGenerationInputSchema>;
@@ -69,9 +69,9 @@ const videoScriptGenerationFlow = ai.defineFlow(
     outputSchema: VideoScriptGenerationOutputSchema,
   },
   async (input) => {
-    const promptParts = [];
-    if (input.imageUri) {
-        let uri = input.imageUri;
+    const promptParts: any[] = [];
+    if (input.imageUris && input.imageUris.length > 0) {
+      const dataUriPromises = input.imageUris.map(async (uri) => {
         if (uri.startsWith('https://')) {
             try {
                 const response = await fetch(uri);
@@ -81,18 +81,24 @@ const videoScriptGenerationFlow = ai.defineFlow(
                 const buffer = await response.arrayBuffer();
                 const base64Data = Buffer.from(buffer).toString('base64');
                 const mimeType = response.headers.get('content-type') || 'image/jpeg';
-                uri = `data:${mimeType};base64,${base64Data}`;
+                return `data:${mimeType};base64,${base64Data}`;
             } catch (error) {
                 console.error(`Error converting image URL to data URI:`, error);
-                uri = ''; // Clear URI on failure
+                return null;
             }
         }
-        
+        return uri;
+      });
+
+      const resolvedUris = await Promise.all(dataUriPromises);
+      
+      resolvedUris.forEach(uri => {
         if (uri) {
             const match = uri.match(/^data:(.*?);base64,/);
             const contentType = match ? match[1] : 'image/jpeg';
             promptParts.push({ media: { url: uri, contentType } });
         }
+      });
     }
     promptParts.push({ text: input.description });
 

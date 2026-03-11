@@ -18,17 +18,8 @@ import { googleAI } from '@genkit-ai/google-genai';
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
   textPrompt: z.string().describe('The text prompt describing the video to generate.'),
-  startImageDataUri: z
-    .string()
-    .optional()
-    .describe(
-      "Optional: A starting photo or frame for 'Ingredients' or 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
-    ),
-  endImageDataUri: z
-    .string()
-    .optional()
-    .describe(
-      "Optional: An ending frame for interpolation in 'Frames' mode, as a data URI that must include a MIME type and use Base64 encoding."
+  referenceImageUris: z.array(z.string()).optional().describe(
+      "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   numberOfVideos: z.number().min(1).max(4).optional().default(1),
@@ -68,25 +59,43 @@ const aiVideoGenerationFlow = ai.defineFlow(
       { text: input.textPrompt },
     ];
     
-    const addMediaPart = (uri: string | undefined) => {
-        if (uri) {
-            const match = uri.match(/^data:(.*?);base64,/);
-            if (!match || !match[1]) {
-                throw new Error('Invalid imageDataUri format: Missing MIME type.');
+    if (input.referenceImageUris) {
+      const dataUriPromises = input.referenceImageUris.map(async (uri) => {
+        if (uri.startsWith('https://')) {
+          try {
+            const response = await fetch(uri);
+            if (!response.ok) {
+              console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
+              return null;
             }
-            const contentType = match[1];
-            promptParts.push({
-                media: {
-                    contentType: contentType,
-                    url: uri,
-                },
-            });
+            const buffer = await response.arrayBuffer();
+            const base64Data = Buffer.from(buffer).toString('base64');
+            const mimeType = response.headers.get('content-type') || 'image/jpeg';
+            return `data:${mimeType};base64,${base64Data}`;
+          } catch (error) {
+            console.error(`Error processing image URI ${uri}:`, error);
+            return null;
+          }
         }
-    };
+        return uri;
+      });
 
-    addMediaPart(input.startImageDataUri);
-    addMediaPart(input.endImageDataUri);
+      const resolvedUris = await Promise.all(dataUriPromises);
 
+      resolvedUris.forEach(uri => {
+          if (uri) {
+              const match = uri.match(/^data:(.*?);base64,/);
+              if (match && match[1]) {
+                  promptParts.push({
+                      media: {
+                          contentType: match[1],
+                          url: uri,
+                      },
+                  });
+              }
+          }
+      });
+    }
 
     // Use Veo 3.0 model. Note that this model may have limitations on aspect ratio and number of videos.
     let { operation } = await ai.generate({
