@@ -45,14 +45,6 @@ export function VideoGenerationWorkspace() {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    // The 'veo-3.1-generate-preview' model only supports 16:9.
-    // Force aspect ratio to 16:9 if it's currently set to 9:16.
-    if (aspectRatio === '9:16') {
-      setAspectRatio('16:9');
-    }
-  }, [aspectRatio]);
-
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
@@ -290,7 +282,7 @@ export function VideoGenerationWorkspace() {
                 value={scriptDescription}
                 onChange={(e) => setScriptDescription(e.target.value)}
                 rows={3}
-                disabled={isGeneratingScript}
+                disabled={isBusy}
                 className="resize-none"
               />
               <Button
@@ -357,13 +349,13 @@ export function VideoGenerationWorkspace() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
-                    <SelectItem value="9:16" disabled>9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                    <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
-                <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={isBusy}>
+                <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={true}>
                   <SelectTrigger id="number-of-videos" className="w-full">
                     <SelectValue placeholder="Chọn số lượng" />
                   </SelectTrigger>
@@ -379,7 +371,7 @@ export function VideoGenerationWorkspace() {
             
             {/* Generate Button */}
             <Button onClick={handleGenerate} disabled={isGenerateDisabled} className="w-full mt-2">
-              {isBusy ? (
+              {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                   <Video className="mr-2 h-4 w-4" />
