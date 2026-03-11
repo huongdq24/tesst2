@@ -66,14 +66,35 @@ export async function brandedImageGeneration(
   });
 
   const response = result.response;
-  const parts = response.candidates?.[0]?.content?.parts || [];
+
+  // Check for safety blocks or other reasons for no candidates
+  if (!response.candidates || response.candidates.length === 0) {
+    let blockMessage = 'Image generation failed. The request was likely blocked by safety filters or another issue.';
+    if (response.promptFeedback?.blockReason) {
+      blockMessage += ` Reason: ${response.promptFeedback.blockReason}.`;
+    }
+    // The `text()` helper will get any text response, which might contain more info
+    const textResponse = response.text();
+    if(textResponse) {
+        blockMessage += ` Model response: "${textResponse}"`;
+    }
+    throw new Error(blockMessage);
+  }
+
+  const parts = response.candidates[0].content.parts;
   for (const part of parts) {
-    if (part.inlineData && part.inlineData.data) {
+    if (part.inlineData?.data) {
       const mimeType = part.inlineData.mimeType || 'image/png';
       const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
       return { generatedImageUri };
     }
   }
   
-  throw new Error('Image generation failed: No image was returned by the model.');
+  // If we get here, candidates were returned, but none contained an image.
+  const textResponse = response.text();
+  let errorMessage = 'Image generation failed: No image was returned by the model.';
+  if (textResponse) {
+    errorMessage += ` The model responded with: "${textResponse}"`;
+  }
+  throw new Error(errorMessage);
 }
