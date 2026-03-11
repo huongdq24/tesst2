@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, useEffect, DragEvent } from 'react';
+import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -42,16 +42,6 @@ export function VideoGenerationWorkspace() {
   const { user } = useAuth();
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    // Veo 3.0 has limitations, reset to supported values if needed.
-    if (aspectRatio !== '16:9') {
-      setAspectRatio('16:9');
-    }
-    if (numberOfVideos > 1) {
-      setNumberOfVideos(1);
-    }
-  }, [aspectRatio, numberOfVideos]);
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -345,7 +335,7 @@ export function VideoGenerationWorkspace() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
-                                <SelectItem value="9:16" disabled>9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                                <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -398,5 +388,3 @@ export function VideoGenerationWorkspace() {
     </div>
   );
 }
-
-    
