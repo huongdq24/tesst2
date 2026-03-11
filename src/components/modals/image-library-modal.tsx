@@ -13,7 +13,7 @@ import { useI18n } from '@/contexts/i18n-context';
 interface ImageRecord {
   id: string;
   imageUrl: string;
-  prompt: string;
+  prompt?: string; // Prompt is optional for input images
   createdAt: any;
 }
 
@@ -36,26 +36,44 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
         setIsLoading(true);
         setError(null);
         try {
-          // Query without 'orderBy' to prevent the composite index error.
-          // We will sort the results on the client.
-          const q = query(
+          // 1. Query for generated images
+          const generatedImagesQuery = query(
             collection(firestore, 'generatedImages'),
             where('ownerId', '==', user.uid)
           );
-          const querySnapshot = await getDocs(q);
-          const imageList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
+          
+          // 2. Query for input images
+          const inputImagesQuery = query(
+            collection(firestore, 'inputImages'),
+            where('ownerId', '==', user.uid)
+          );
 
-          // Sort on the client side to maintain chronological order
-          imageList.sort((a, b) => {
+          // 3. Execute both queries in parallel
+          const [generatedSnapshot, inputSnapshot] = await Promise.all([
+              getDocs(generatedImagesQuery),
+              getDocs(inputImagesQuery)
+          ]);
+
+          // 4. Map results
+          const generatedList = generatedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
+          const inputList = inputSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
+          
+          // 5. Combine and sort
+          const combinedList = [...generatedList, ...inputList];
+          combinedList.sort((a, b) => {
             const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
             const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
             return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
           });
 
-          setImages(imageList);
+          setImages(combinedList);
         } catch (e: any) {
           console.error("Failed to fetch image library:", e);
-          setError(t('library.loadError'));
+           if (e.message.includes("requires an index")) {
+               setError("Lỗi cơ sở dữ liệu: Cần tạo chỉ mục Firestore. Vui lòng liên hệ quản trị viên.");
+          } else {
+             setError(t('library.loadError'));
+          }
         } finally {
           setIsLoading(false);
         }
@@ -105,7 +123,7 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
                   >
                     <Image
                       src={image.imageUrl}
-                      alt={image.prompt}
+                      alt={image.prompt || 'Input Image'}
                       fill
                       sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
                       className="object-cover transition-transform duration-300 group-hover:scale-105"

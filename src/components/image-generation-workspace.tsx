@@ -52,12 +52,20 @@ export function ImageGenerationWorkspace() {
     setIsUploading(true);
     setInputImageUrl(null);
     try {
-      // Upload file gốc lên Firebase Storage (không qua Server Action)
+      // Upload file gốc lên Firebase Storage
       const fileName = `input-${Date.now()}-${file.name}`;
       const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
       await uploadBytes(imageRef, file);
       const downloadURL = await getDownloadURL(imageRef);
       setInputImageUrl(downloadURL);
+
+      // Save metadata to Firestore `inputImages` collection
+      await addDoc(collection(firestore, 'inputImages'), {
+        ownerId: user.uid,
+        imageUrl: downloadURL,
+        createdAt: serverTimestamp(),
+      });
+      
       toast({ title: 'Tải ảnh thành công', description: 'Ảnh đầu vào đã sẵn sàng.' });
     } catch (error) {
       console.error('Upload failed:', error);
@@ -235,7 +243,7 @@ export function ImageGenerationWorkspace() {
               >
                 {inputImageUrl && !isUploading ? (
                   <>
-                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md" />
+                    <Image src={inputImageUrl} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1" />
                     <Button variant="destructive" size="icon" className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}>
                       <X className="h-4 w-4" />
                     </Button>
