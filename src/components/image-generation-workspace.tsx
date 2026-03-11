@@ -18,7 +18,7 @@ import { storage, firestore } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
@@ -231,6 +231,10 @@ export function ImageGenerationWorkspace() {
       />
       <Dialog open={!!previewImageUrl} onOpenChange={(isOpen) => !isOpen && setPreviewImageUrl(null)}>
         <DialogContent className="max-w-4xl h-[80vh] bg-transparent border-none shadow-none">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Image Preview</DialogTitle>
+            <DialogDescription>A larger view of the generated image.</DialogDescription>
+          </DialogHeader>
           {previewImageUrl && (
             <div className="relative w-full h-full">
               <Image 
