@@ -17,6 +17,8 @@ import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
+import { Card, CardContent } from './ui/card';
+import { Separator } from './ui/separator';
 
 
 export function VideoGenerationWorkspace() {
@@ -201,185 +203,202 @@ export function VideoGenerationWorkspace() {
   const isGenerateDisabled = isBusy || !prompt.trim();
 
   return (
-    <div className="flex flex-col h-full flex-1">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
       <ImageLibraryModal
         open={isLibraryOpen}
         onOpenChange={setIsLibraryOpen}
         onImageSelect={handleImageSelectFromLibrary}
       />
-      <div className="mb-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div className="space-y-2 flex flex-col">
-            <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
-            <Textarea
-              id="script-description"
-              placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
-              value={scriptDescription}
-              onChange={(e) => setScriptDescription(e.target.value)}
-              rows={5}
-              disabled={isGeneratingScript}
-              className="resize-none text-base p-4 flex-1"
-            />
-            <Button
-              onClick={handleGenerateScript}
-              disabled={isGeneratingScript || !scriptDescription.trim()}
-              size="lg"
-            >
-              {isGeneratingScript ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Wand2 className="h-5 w-5" />
-              )}
-              <span className="ml-2">{t('workspace.video.generateScriptButton')}</span>
-            </Button>
-          </div>
-
-          <div className="space-y-2 flex flex-col">
-            <Label htmlFor="prompt">{t('workspace.video.scriptOutputLabel')}</Label>
-            <div className="relative flex-1 flex flex-col">
+      
+      {/* Controls Column */}
+      <div className="lg:col-span-1 flex flex-col">
+        <Card className="flex-1 flex flex-col">
+          <CardContent className="p-6 flex flex-col flex-1 gap-4">
+            
+            {/* Script Description */}
+            <div className="space-y-2">
+              <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
               <Textarea
-                id="prompt"
-                placeholder={t('workspace.video.promptPlaceholder')}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={5}
-                disabled={isBusy}
-                className="pr-12 resize-none text-base p-4 flex-1"
+                id="script-description"
+                placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
+                value={scriptDescription}
+                onChange={(e) => setScriptDescription(e.target.value)}
+                rows={3}
+                disabled={isGeneratingScript}
+                className="resize-none"
               />
               <Button
-                variant="ghost"
-                size="icon"
-                className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:bg-accent/10 hover:text-foreground"
-                onClick={handleCopy}
-                disabled={!prompt}
-                aria-label="Copy script"
+                onClick={handleGenerateScript}
+                disabled={isGeneratingScript || !scriptDescription.trim()}
+                size="sm"
+                className="w-full"
               >
-                <Copy className="h-4 w-4" />
+                {isGeneratingScript ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="mr-2 h-4 w-4" />
+                )}
+                {t('workspace.video.generateScriptButton')}
               </Button>
-               {motionAnalysis && cameraMovement && (
-                <div className="text-xs p-3 mt-2 bg-muted/50 rounded-lg space-y-1.5 border">
-                  <p><strong className="font-semibold">Phân tích chuyển động:</strong> {motionAnalysis}</p>
-                  <p><strong className="font-semibold">Chuyển động Camera:</strong> <span className="text-primary font-medium">{cameraMovement}</span></p>
-                </div>
-              )}
             </div>
-          </div>
-        </div>
+            
+            {/* Motion Analysis */}
+            {motionAnalysis && cameraMovement && (
+              <div className="text-xs p-3 bg-muted/50 rounded-lg space-y-1.5 border">
+                <p><strong className="font-semibold">Phân tích chuyển động:</strong> {motionAnalysis}</p>
+                <p><strong className="font-semibold">Chuyển động Camera:</strong> <span className="text-primary font-medium">{cameraMovement}</span></p>
+              </div>
+            )}
+            
+            <Separator />
 
-
-        <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 flex flex-col gap-2">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
-                    <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
-                      <Images className="mr-2 h-4 w-4" />
-                      Library
-                    </Button>
-                  </div>
-                  <div
-                    className={cn(
-                      'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
-                      isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
-                    )}
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
+            {/* Prompt Output */}
+            <div className="space-y-2 flex-1 flex flex-col">
+              <Label htmlFor="prompt">{t('workspace.video.scriptOutputLabel')}</Label>
+              <div className="relative flex-1 flex flex-col">
+                  <Textarea
+                    id="prompt"
+                    placeholder={t('workspace.video.promptPlaceholder')}
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    disabled={isBusy}
+                    className="pr-12 resize-none flex-1"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-2 right-2 h-8 w-8 text-muted-foreground hover:bg-accent/10 hover:text-foreground"
+                    onClick={handleCopy}
+                    disabled={!prompt}
+                    aria-label="Copy script"
                   >
-                    {isUploading ? (
-                      <div className="flex flex-col items-center justify-center text-muted-foreground">
-                        <Loader2 className="w-8 h-8 animate-spin" />
-                        <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
-                      </div>
-                    ) : inputImageUrls.length > 0 ? (
-                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 w-full">
-                        {inputImageUrls.map((url) => (
-                          <div key={url} className="relative aspect-square">
-                            <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
-                            <Button
-                              variant="destructive"
-                              size="icon"
-                              className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
-                              onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
-                         <div 
-                          className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
-                          onClick={() => fileInputRef.current?.click()}
-                         >
-                           <UploadCloud className="w-6 h-6" />
-                           <span className="text-xs text-center mt-1">Thêm</span>
-                         </div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                        <UploadCloud className="w-8 h-8 mb-2" />
-                        <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
-                      </div>
-                    )}
-                    <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
-                  </div>
-                </div>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+              </div>
             </div>
-
-            <div className="lg:col-span-1 flex flex-col gap-4">
-                <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
-                        <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} disabled={isBusy}>
-                            <SelectTrigger id="aspect-ratio" className="w-full">
-                                <SelectValue placeholder="Chọn tỷ lệ" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
-                                <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
-                        <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={isBusy}>
-                            <SelectTrigger id="number-of-videos" className="w-full">
-                                <SelectValue placeholder="Chọn số lượng" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="1">1 video</SelectItem>
-                                <SelectItem value="2">2 video</SelectItem>
-                                <SelectItem value="3">3 video</SelectItem>
-                                <SelectItem value="4">4 video</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-                <Button onClick={handleGenerate} disabled={isGenerateDisabled} size="lg" className="w-full">
-                    {isBusy ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                    ) : (
-                        <Video className="h-5 w-5" />
-                    )}
-                    <span className="ml-2">{t('workspace.video.generateButton.label')}</span>
+            
+            <Separator />
+            
+            {/* Image Upload */}
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+                <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
+                  <Images className="mr-2 h-4 w-4" />
+                  Library
                 </Button>
+              </div>
+              <div
+                className={cn(
+                  'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
+                  isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
+                )}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                {isUploading ? (
+                  <div className="flex flex-col items-center justify-center text-muted-foreground">
+                    <Loader2 className="w-8 h-8 animate-spin" />
+                    <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
+                  </div>
+                ) : inputImageUrls.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 w-full">
+                    {inputImageUrls.map((url) => (
+                      <div key={url} className="relative aspect-square">
+                        <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
+                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                     <div 
+                      className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
+                      onClick={() => fileInputRef.current?.click()}
+                     >
+                       <UploadCloud className="w-6 h-6" />
+                       <span className="text-xs text-center mt-1">Thêm</span>
+                     </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                    <UploadCloud className="w-8 h-8 mb-2" />
+                    <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
+                  </div>
+                )}
+                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
+              </div>
             </div>
-        </div>
 
+            {/* Settings */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
+                <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} disabled={isBusy}>
+                  <SelectTrigger id="aspect-ratio" className="w-full">
+                    <SelectValue placeholder="Chọn tỷ lệ" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
+                    <SelectItem value="9:16" >9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
+                <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={isBusy}>
+                  <SelectTrigger id="number-of-videos" className="w-full">
+                    <SelectValue placeholder="Chọn số lượng" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 video</SelectItem>
+                    <SelectItem value="2">2 video</SelectItem>
+                    <SelectItem value="3">3 video</SelectItem>
+                    <SelectItem value="4">4 video</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            {/* Generate Button */}
+            <Button onClick={handleGenerate} disabled={isGenerateDisabled} className="w-full mt-2">
+              {isBusy ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                  <Video className="mr-2 h-4 w-4" />
+              )}
+              {t('workspace.video.generateButton.label')}
+            </Button>
+          
+          </CardContent>
+        </Card>
       </div>
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center mt-8">
+
+      {/* Output Column */}
+      <div className="lg:col-span-2 bg-muted/50 rounded-lg flex items-center justify-center min-h-[400px] lg:min-h-0 p-4">
         {isLoading ? (
-            <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg p-4 min-h-[300px]">
+            <div className="flex flex-col items-center gap-4 text-muted-foreground">
                 <Loader2 className="h-16 w-16 animate-spin text-primary" />
                 <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
             </div>
         ) : generatedVideos.length > 0 ? (
-          generatedVideos.map((videoUri, index) => (
-            <div key={index} className="bg-muted/50 rounded-lg flex items-center justify-center p-2 h-full aspect-video">
-              <video src={videoUri} controls className="w-full h-full object-contain" />
-            </div>
-          ))
+          <div className={cn(
+              "grid w-full h-full gap-4",
+              generatedVideos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
+          )}>
+            {generatedVideos.map((videoUri, index) => (
+              <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10 aspect-video">
+                <video src={videoUri} controls className="w-full h-full object-contain" />
+              </div>
+            ))}
+          </div>
         ) : (
-            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4 min-h-[300px]">
+            <div className="text-center text-muted-foreground">
               <Video className="h-16 w-16 mx-auto mb-4" />
               <p>{t('workspace.video.outputPlaceholder')}</p>
           </div>
