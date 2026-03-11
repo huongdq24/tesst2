@@ -97,34 +97,50 @@ const aiVideoGenerationFlow = ai.defineFlow(
       });
     }
 
-    // Use Veo 3.1 model. Note that this model may have limitations on aspect ratio and number of videos.
-    let { operation } = await ai.generate({
-      model: googleAI.model('veo-3.1-generate-preview'),
-      prompt: promptParts,
-      config: {
-        aspectRatio: input.aspectRatio,
-      },
+    const generationCount = input.numberOfVideos || 1;
+
+    const generationPromises = Array.from({ length: generationCount }).map(() =>
+      ai.generate({
+        model: googleAI.model('veo-3.1-generate-preview'),
+        prompt: promptParts,
+        config: {
+          aspectRatio: input.aspectRatio,
+        },
+      })
+    );
+    
+    const initialResults = await Promise.all(generationPromises);
+    
+    const operations = initialResults.map(res => res.operation).filter((op): op is NonNullable<typeof op> => !!op);
+
+    if (operations.length === 0) {
+      throw new Error('Expected the video generation model to return operations.');
+    }
+
+    // Poll all operations in parallel until they are all done.
+    const pollPromises = operations.map(async (op) => {
+      let currentOp = op;
+      while (!currentOp.done) {
+        currentOp = await ai.checkOperation(currentOp);
+        // Wait for a few seconds before polling again.
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+      }
+      return currentOp;
     });
 
-    if (!operation) {
-      throw new Error('Expected the video generation model to return an operation.');
-    }
+    const finalOperations = await Promise.all(pollPromises);
 
-    // Poll the operation status until video generation is complete.
-    while (!operation.done) {
-      operation = await ai.checkOperation(operation);
-      // Wait for a few seconds before polling again to reduce API calls.
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-    }
+    // Extract all generated video media parts from the successful operation outputs.
+    const videoMediaParts = finalOperations.flatMap(op => {
+        if (op.error) {
+            console.error(`A video generation failed: ${op.error.message}`);
+            return []; // Skip failed operations
+        }
+        return op.output?.message?.content.filter((p) => !!p.media) || [];
+    });
 
-    if (operation.error) {
-      throw new Error(`Failed to generate video: ${operation.error.message}`);
-    }
-
-    // Extract all generated video media parts from the operation output.
-    const videoMediaParts = operation.output?.message?.content.filter((p) => !!p.media) || [];
     if (videoMediaParts.length === 0) {
-      throw new Error('Failed to find any generated video in the operation output.');
+      throw new Error('All video generation requests failed or returned no media.');
     }
 
     const geminiApiKey = process.env.GEMINI_API_KEY;
@@ -155,7 +171,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
     const successfulUris = videoDataUris.filter(uri => uri !== '');
 
     if (successfulUris.length === 0) {
-      throw new Error('All video downloads failed.');
+      throw new Error('All video downloads failed, though generation may have succeeded.');
     }
 
     return {
