@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   serverActions: {
     bodySizeLimit: '100mb',
+    executionTimeout: 120,
   },
   devIndicators: {
     allowedDevOrigins: [
