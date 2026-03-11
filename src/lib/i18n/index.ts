@@ -111,6 +111,11 @@ export const translations = {
     'toast.upload.error.title': 'Tải lên thất bại',
     'toast.upload.error.description': 'Không thể tải lên hình ảnh. Vui lòng thử lại.',
     'workspace.image.uploading': 'Đang tải lên...',
+    'library.title': 'Thư viện ảnh',
+    'library.description': 'Chọn một ảnh đã tạo trước đó để làm ảnh tham chiếu.',
+    'library.loadError': 'Không thể tải thư viện ảnh của bạn. Vui lòng thử lại.',
+    'library.empty': 'Thư viện ảnh của bạn trống. Các ảnh đã tạo sẽ xuất hiện ở đây.',
+    'library.select': 'Chọn',
   },
   en: {
     'app.title': 'iGen - Personal Branding AI Assistant',
@@ -224,6 +229,11 @@ export const translations = {
     'toast.upload.error.title': 'Upload Failed',
     'toast.upload.error.description': 'Could not upload the image. Please try again.',
     'workspace.image.uploading': 'Uploading...',
+    'library.title': 'Image Library',
+    'library.description': 'Select a previously generated image to use as a reference.',
+    'library.loadError': 'Could not load your image library. Please try again.',
+    'library.empty': 'Your image library is empty. Generated images will appear here.',
+    'library.select': 'Select',
   },
   zh: {
     'app.title': 'iGen - 个人品牌AI助手',
@@ -337,6 +347,11 @@ export const translations = {
     'toast.upload.error.title': '上传失败',
     'toast.upload.error.description': '无法上传图片。请再试一次。',
     'workspace.image.uploading': '正在上传...',
+    'library.title': '图片库',
+    'library.description': '选择之前生成的图像用作参考。',
+    'library.loadError': '无法加载您的图片库。请再试一次。',
+    'library.empty': '您的图片库是空的。生成的图像将显示在此处。',
+    'library.select': '选择',
   },
 };
 

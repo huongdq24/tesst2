@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
@@ -16,6 +16,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'fi
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, firestore } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
+import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
@@ -26,6 +27,7 @@ export function ImageGenerationWorkspace() {
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
@@ -190,10 +192,19 @@ export function ImageGenerationWorkspace() {
     link.click();
   };
   
+  const handleImageSelectFromLibrary = (imageUrl: string) => {
+    setInputImageUrl(imageUrl);
+  };
+  
   const isBusy = isLoading || isGeneratingPrompt || isUploading;
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+       <ImageLibraryModal
+        open={isLibraryOpen}
+        onOpenChange={setIsLibraryOpen}
+        onImageSelect={handleImageSelectFromLibrary}
+      />
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
@@ -205,7 +216,13 @@ export function ImageGenerationWorkspace() {
             )}
             {/* Reference Image Upload */}
             <div className="space-y-2">
-              <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+               <div className="flex justify-between items-center">
+                <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
+                <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
+                  <Images className="mr-2 h-4 w-4" />
+                  Library
+                </Button>
+              </div>
               <div
                 className={cn(
                   'relative flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-lg cursor-pointer transition-colors',
