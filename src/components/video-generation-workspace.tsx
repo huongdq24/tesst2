@@ -355,15 +355,15 @@ export function VideoGenerationWorkspace() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
-                <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={true}>
+                <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={isBusy}>
                   <SelectTrigger id="number-of-videos" className="w-full">
                     <SelectValue placeholder="Chọn số lượng" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="1">1 video</SelectItem>
-                    <SelectItem value="2" disabled>2 video</SelectItem>
-                    <SelectItem value="3" disabled>3 video</SelectItem>
-                    <SelectItem value="4" disabled>4 video</SelectItem>
+                    <SelectItem value="2">2 video</SelectItem>
+                    <SelectItem value="3">3 video</SelectItem>
+                    <SelectItem value="4">4 video</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
