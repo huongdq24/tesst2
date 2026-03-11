@@ -347,9 +347,9 @@ export function VideoGenerationWorkspace() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="1">1 video</SelectItem>
-                                <SelectItem value="2" disabled>2 video</SelectItem>
-                                <SelectItem value="3" disabled>3 video</SelectItem>
-                                <SelectItem value="4" disabled>4 video</SelectItem>
+                                <SelectItem value="2">2 video</SelectItem>
+                                <SelectItem value="3">3 video</SelectItem>
+                                <SelectItem value="4">4 video</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
