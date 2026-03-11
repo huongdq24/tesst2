@@ -5,10 +5,11 @@ import { useAuth } from '@/contexts/auth-context';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/config';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { Loader2, AlertTriangle, Download } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/contexts/i18n-context';
+import { Button } from '@/components/ui/button';
 
 interface ImageRecord {
   id: string;
@@ -88,6 +89,16 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
     onOpenChange(false);
   };
 
+  const handleDownload = (e: React.MouseEvent, imageUrl: string, imageId: string) => {
+    e.stopPropagation();
+    const link = document.createElement('a');
+    link.href = imageUrl;
+    link.download = `igen-image-${imageId.substring(0, 8)}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl h-[80vh] flex flex-col">
@@ -128,9 +139,16 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
                       sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
                       className="object-cover transition-transform duration-300 group-hover:scale-105"
                     />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                        <p className="text-white text-center text-xs p-2">{t('library.select')}</p>
-                    </div>
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <Button
+                      variant="secondary"
+                      size="icon"
+                      title="Tải ảnh xuống"
+                      className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      onClick={(e) => handleDownload(e, image.imageUrl, image.id)}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
                   </div>
                 ))}
               </div>
