@@ -17,11 +17,13 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, firestore } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [aspectRatio, setAspectRatio] = useState('1:1');
   const [inputImageUrl, setInputImageUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
@@ -153,6 +155,7 @@ export function ImageGenerationWorkspace() {
       const result = await brandedImageGeneration({
         existingImageUri: inputImageUrl || undefined,
         generationPrompt: prompt,
+        aspectRatio: aspectRatio,
         apiKey: userData.geminiApiKey,
       });
       const generatedDataUri = result.generatedImageUri;
@@ -293,7 +296,24 @@ export function ImageGenerationWorkspace() {
                 className="resize-none flex-1"
               />
             </div>
-            <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full">
+            <div className="space-y-2">
+              <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
+              <Select value={aspectRatio} onValueChange={setAspectRatio} disabled={isBusy}>
+                <SelectTrigger id="aspect-ratio" className="w-full">
+                  <SelectValue placeholder="Chọn tỷ lệ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1:1">1:1 (Vuông)</SelectItem>
+                  <SelectItem value="16:9">16:9 (Ngang rộng)</SelectItem>
+                  <SelectItem value="9:16">9:16 (Dọc)</SelectItem>
+                  <SelectItem value="4:3">4:3 (Tiêu chuẩn)</SelectItem>
+                  <SelectItem value="3:4">3:4 (Chân dung)</SelectItem>
+                  <SelectItem value="3:2">3:2 (Ngang)</SelectItem>
+                  <SelectItem value="2:3">2:3 (Chân dung cao)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full mt-2">
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
               {t('workspace.image.generateButton')}
             </Button>

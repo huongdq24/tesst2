@@ -6,6 +6,7 @@ import { Buffer } from 'buffer';
 const BrandedImageGenerationInputSchema = z.object({
   existingImageUri: z.string().optional(),
   generationPrompt: z.string(),
+  aspectRatio: z.string().optional(),
   apiKey: z.string().describe('The user Gemini API key to use for generation.'),
 });
 
@@ -20,10 +21,14 @@ export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGeneration
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
-  const { existingImageUri, generationPrompt, apiKey } = input;
+  const { existingImageUri, generationPrompt, aspectRatio, apiKey } = input;
   if (!apiKey) {
     throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
+
+  const fullPrompt = aspectRatio
+    ? `${generationPrompt}, aspect ratio ${aspectRatio}`
+    : generationPrompt;
 
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
@@ -47,16 +52,14 @@ export async function brandedImageGeneration(
       // Fallback for data URI
       const matches = existingImageUri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       if (matches) {
-        const mimeType = matches[1];
-        const base64Data = matches[2];
         contents.push({
-          inlineData: { data: base64Data, mimeType },
+          inlineData: { data: matches[2], mimeType: matches[1] },
         });
       }
     }
   }
 
-  contents.push({ text: generationPrompt });
+  contents.push({ text: fullPrompt });
 
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: contents }],
