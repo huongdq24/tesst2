@@ -4,13 +4,13 @@ import { useState, useRef, ChangeEvent, useEffect, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, Image as ImageIcon, X, RectangleHorizontal, RectangleVertical, Frame, UploadCloud, ArrowRight, Wand2, Copy, Images } from 'lucide-react';
+import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
-import { useI18n, TranslationKey } from '@/contexts/i18n-context';
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { useI18n } from '@/contexts/i18n-context';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -335,53 +335,61 @@ export function VideoGenerationWorkspace() {
                 </div>
             </div>
 
-            <div className="lg:col-span-1 flex flex-col gap-2">
-                <div className="flex gap-4 p-2 border rounded-lg justify-center">
-                    <ToggleGroup type="single" value={aspectRatio} onValueChange={(value: '16:9' | '9:16') => value && setAspectRatio(value)} className="gap-1" disabled={isBusy}>
-                        <ToggleGroupItem value="16:9" aria-label={t('feature.videoGeneration.horizontal')} className="p-2 h-auto flex-col gap-1">
-                            <RectangleHorizontal />
-                            <span className="text-xs">{t('feature.videoGeneration.horizontal')}</span>
-                        </ToggleGroupItem>
-                        <ToggleGroupItem value="9:16" aria-label={t('feature.videoGeneration.vertical')} className="p-2 h-auto flex-col gap-1" disabled>
-                            <RectangleVertical />
-                            <span className="text-xs">{t('feature.videoGeneration.vertical')}</span>
-                        </ToggleGroupItem>
-                    </ToggleGroup>
-                    <div className='flex flex-col gap-1'>
-                        <span className="text-xs text-center text-muted-foreground">{t('feature.videoGeneration.outputCount')}</span>
-                        <ToggleGroup type="single" value={String(numberOfVideos)} onValueChange={(value) => value && setNumberOfVideos(Number(value) as 1 | 2 | 3 | 4)} className="gap-1" disabled={isBusy}>
-                            {[1, 2, 3, 4].map(n => (
-                                <ToggleGroupItem key={n} value={String(n)} className="p-2 h-auto aspect-square" disabled={n > 1}>x{n}</ToggleGroupItem>
-                            ))}
-                        </ToggleGroup>
+            <div className="lg:col-span-1 flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
+                        <Select value={aspectRatio} onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} disabled={isBusy}>
+                            <SelectTrigger id="aspect-ratio" className="w-full">
+                                <SelectValue placeholder="Chọn tỷ lệ" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
+                                <SelectItem value="9:16" disabled>9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
+                        <Select value={String(numberOfVideos)} onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} disabled={isBusy}>
+                            <SelectTrigger id="number-of-videos" className="w-full">
+                                <SelectValue placeholder="Chọn số lượng" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="1">1 video</SelectItem>
+                                <SelectItem value="2" disabled>2 video</SelectItem>
+                                <SelectItem value="3" disabled>3 video</SelectItem>
+                                <SelectItem value="4" disabled>4 video</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
                 <Button onClick={handleGenerate} disabled={isGenerateDisabled} size="lg" className="w-full">
-                {isBusy ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                    <Video className="h-5 w-5" />
-                )}
-                <span className="ml-2">{t('workspace.video.generateButton.label')}</span>
+                    {isBusy ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                    ) : (
+                        <Video className="h-5 w-5" />
+                    )}
+                    <span className="ml-2">{t('workspace.video.generateButton.label')}</span>
                 </Button>
             </div>
         </div>
 
       </div>
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 items-center mt-8">
         {isLoading ? (
-            <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg p-4">
+            <div className="col-span-full flex flex-col items-center justify-center h-full text-muted-foreground bg-muted/50 rounded-lg p-4 min-h-[300px]">
                 <Loader2 className="h-16 w-16 animate-spin text-primary" />
                 <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
             </div>
         ) : generatedVideos.length > 0 ? (
           generatedVideos.map((videoUri, index) => (
-            <div key={index} className="bg-muted/50 rounded-lg flex items-center justify-center p-2 h-full">
+            <div key={index} className="bg-muted/50 rounded-lg flex items-center justify-center p-2 h-full aspect-video">
               <video src={videoUri} controls className="w-full h-full object-contain" />
             </div>
           ))
         ) : (
-            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4">
+            <div className="col-span-full text-center text-muted-foreground h-full flex flex-col justify-center items-center bg-muted/50 rounded-lg p-4 min-h-[300px]">
               <Video className="h-16 w-16 mx-auto mb-4" />
               <p>{t('workspace.video.outputPlaceholder')}</p>
           </div>
@@ -390,3 +398,5 @@ export function VideoGenerationWorkspace() {
     </div>
   );
 }
+
+    
