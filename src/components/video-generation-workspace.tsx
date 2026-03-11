@@ -54,6 +54,9 @@ const FrameInput: React.FC<FrameInputProps> = ({ frameType, imageDataUri, isProc
 export function VideoGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
   const [scriptDescription, setScriptDescription] = useState('');
+  const [motionAnalysis, setMotionAnalysis] = useState<string | null>(null);
+  const [cameraMovement, setCameraMovement] = useState<string | null>(null);
+
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [isIngredients, setIsIngredients] = useState(false);
   const [isFrames, setIsFrames] = useState(false);
@@ -182,9 +185,18 @@ export function VideoGenerationWorkspace() {
       return;
     }
     setIsGeneratingScript(true);
+    setMotionAnalysis(null);
+    setCameraMovement(null);
+    setPrompt('');
+
     try {
-      const result = await videoScriptGeneration({ description: scriptDescription });
-      setPrompt(result.script);
+      const result = await videoScriptGeneration({
+        description: scriptDescription,
+        imageUri: startImageDataUri ?? undefined,
+      });
+      setPrompt(result.optimized_english_prompt);
+      setMotionAnalysis(result.motion_analysis);
+      setCameraMovement(result.camera_movement);
     } catch (error: any) {
       console.error(error);
       toast({
@@ -290,7 +302,7 @@ export function VideoGenerationWorkspace() {
 
           <div className="space-y-2 flex flex-col">
             <Label htmlFor="prompt">{t('workspace.video.scriptOutputLabel')}</Label>
-            <div className="relative flex-1">
+            <div className="relative flex-1 flex flex-col">
               <Textarea
                 id="prompt"
                 placeholder={t('workspace.video.promptPlaceholder')}
@@ -298,7 +310,7 @@ export function VideoGenerationWorkspace() {
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={5}
                 disabled={isLoading || isProcessing}
-                className="pr-12 resize-none text-base p-4 h-full"
+                className="pr-12 resize-none text-base p-4 flex-1"
               />
               <Button
                 variant="ghost"
@@ -310,6 +322,12 @@ export function VideoGenerationWorkspace() {
               >
                 <Copy className="h-4 w-4" />
               </Button>
+               {motionAnalysis && cameraMovement && (
+                <div className="text-xs p-3 mt-2 bg-muted/50 rounded-lg space-y-1.5 border">
+                  <p><strong className="font-semibold">Phân tích chuyển động:</strong> {motionAnalysis}</p>
+                  <p><strong className="font-semibold">Chuyển động Camera:</strong> <span className="text-primary font-medium">{cameraMovement}</span></p>
+                </div>
+              )}
             </div>
           </div>
         </div>

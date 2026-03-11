@@ -24,6 +24,8 @@ export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [artStyle, setArtStyle] = useState<string | null>(null);
+  const [intentAnalysis, setIntentAnalysis] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [numberOfImages, setNumberOfImages] = useState(1);
   const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
@@ -117,21 +119,20 @@ export function ImageGenerationWorkspace() {
 
   const handleGenerateOptimalPrompt = async () => {
     if (!simplePrompt.trim()) return;
-    if (!userData?.geminiApiKey) {
-      toast({
-        variant: 'destructive',
-        title: 'Thiếu API Key',
-        description: 'Vui lòng thêm Gemini API Key của bạn trong phần cài đặt tài khoản.',
-      });
-      return;
-    }
+    
     setIsGeneratingPrompt(true);
+    setArtStyle(null);
+    setIntentAnalysis(null);
+    setPrompt('');
+
     try {
       const result = await optimalImagePromptGeneration({
         description: simplePrompt,
-        apiKey: userData.geminiApiKey,
+        imageUris: inputImageUrls,
       });
-      setPrompt(result.optimalPrompt);
+      setPrompt(result.optimized_english_prompt);
+      setArtStyle(result.art_style_inferred);
+      setIntentAnalysis(result.original_intent_analysis);
     } catch (error: any) {
       console.error(error);
       toast({ variant: 'destructive', title: 'Lỗi tạo prompt', description: error.message });
@@ -324,6 +325,12 @@ export function ImageGenerationWorkspace() {
                 {t('workspace.image.generatePromptButton')}
               </Button>
             </div>
+            {intentAnalysis && artStyle && (
+              <div className="text-xs p-3 bg-muted/50 rounded-lg space-y-1.5 border">
+                <p><strong className="font-semibold">Phân tích:</strong> {intentAnalysis}</p>
+                <p><strong className="font-semibold">Phong cách:</strong> <span className="text-primary font-medium">{artStyle}</span></p>
+              </div>
+            )}
             <Separator />
             {/* Main prompt section */}
             <div className="space-y-2 flex-1 flex flex-col">
