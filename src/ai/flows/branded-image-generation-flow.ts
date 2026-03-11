@@ -1,6 +1,6 @@
 'use server';
 import { z } from 'zod';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, Part } from '@google/generative-ai';
 import { Buffer } from 'buffer';
 
 const BrandedImageGenerationInputSchema = z.object({
@@ -34,7 +34,7 @@ export async function brandedImageGeneration(
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
   
-  const contents: any[] = [];
+  const contents: Part[] = [];
 
   if (existingImageUris && existingImageUris.length > 0) {
     const imagePartsPromises = existingImageUris.map(async (uri) => {
@@ -73,48 +73,64 @@ export async function brandedImageGeneration(
 
   contents.push({ text: fullPrompt });
 
-  const result = await model.generateContent({
+  const contentRequest = {
     contents: [{ role: 'user', parts: contents }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
-      candidateCount: numberOfImages,
+      // The `gemini-3.1-flash-image-preview` model does not support multiple candidates,
+      // so we always set candidateCount to 1.
+      candidateCount: 1,
     } as any,
-  });
+  };
 
-  const response = result.response;
+  // To generate multiple images, we must make parallel requests.
+  const generationPromises = Array.from({ length: numberOfImages }).map(() =>
+    model.generateContent(contentRequest)
+  );
 
-  // Check for safety blocks or other reasons for no candidates
-  if (!response.candidates || response.candidates.length === 0) {
-    let blockMessage = 'Image generation failed. The request was likely blocked by safety filters or another issue.';
-    if (response.promptFeedback?.blockReason) {
-      blockMessage += ` Reason: ${response.promptFeedback.blockReason}.`;
-    }
-    // The `text()` helper will get any text response, which might contain more info
-    const textResponse = response.text();
-    if(textResponse) {
-        blockMessage += ` Model response: "${textResponse}"`;
-    }
-    throw new Error(blockMessage);
-  }
-
+  const results = await Promise.all(generationPromises);
+  
   const generatedImageUris: string[] = [];
-  for (const candidate of response.candidates) {
-    const parts = candidate.content.parts;
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        const mimeType = part.inlineData.mimeType || 'image/png';
-        const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
-        generatedImageUris.push(generatedImageUri);
+  let firstErrorText: string | null = null;
+  let hasBlockedRequest = false;
+
+  for (const result of results) {
+    const response = result.response;
+    
+    if (!response.candidates || response.candidates.length === 0) {
+        hasBlockedRequest = true;
+        if (response.promptFeedback?.blockReason && !firstErrorText) {
+            firstErrorText = `Reason: ${response.promptFeedback.blockReason}.`;
+        }
+        const textResponse = response.text();
+        if (textResponse && !firstErrorText) {
+            firstErrorText = `Model response: "${textResponse}"`;
+        }
+      continue; // Skip this result if it has no candidates
+    }
+
+    for (const candidate of response.candidates) {
+      const parts = candidate.content.parts;
+      for (const part of parts) {
+        if (part.inlineData?.data) {
+          const mimeType = part.inlineData.mimeType || 'image/png';
+          const generatedImageUri = `data:${mimeType};base64,${part.inlineData.data}`;
+          generatedImageUris.push(generatedImageUri);
+        }
       }
     }
   }
   
-  // If we get here, candidates were returned, but none contained an image.
+  // If we end up with no images at all, throw a detailed error.
   if (generatedImageUris.length === 0) {
-    const textResponse = response.text();
-    let errorMessage = 'Image generation failed: No image was returned by the model.';
-    if (textResponse) {
-      errorMessage += ` The model responded with: "${textResponse}"`;
+    let errorMessage = 'Image generation failed for all requests.';
+    if(hasBlockedRequest){
+        errorMessage += ' The request was likely blocked by safety filters.';
+        if(firstErrorText){
+            errorMessage += ` ${firstErrorText}`;
+        }
+    } else {
+        errorMessage += ' No images were returned by the model.';
     }
     throw new Error(errorMessage);
   }
