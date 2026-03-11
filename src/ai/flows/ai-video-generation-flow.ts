@@ -121,7 +121,8 @@ const aiVideoGenerationFlow = ai.defineFlow(
     
     const content = operation.output?.message?.content;
     if (!content || content.length === 0) {
-      throw new Error('The video operation completed but returned an empty response.');
+      const outputJson = JSON.stringify(operation.output, null, 2);
+      throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
     }
 
     const videoMediaPart = content.find(p => !!p.media);
