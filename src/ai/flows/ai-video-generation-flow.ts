@@ -97,9 +97,9 @@ const aiVideoGenerationFlow = ai.defineFlow(
       });
     }
 
-    // Use Veo 3.0 model. Note that this model may have limitations on aspect ratio and number of videos.
+    // Use Veo 3.1 model. Note that this model may have limitations on aspect ratio and number of videos.
     let { operation } = await ai.generate({
-      model: googleAI.model('veo-3.0-generate-preview'),
+      model: googleAI.model('veo-3.1-generate-preview'),
       prompt: promptParts,
       config: {
         aspectRatio: input.aspectRatio,
