@@ -15,6 +15,7 @@ import { Separator } from './ui/separator';
 import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { storage, firestore } from '@/lib/firebase/config';
+
 export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
@@ -27,6 +28,7 @@ export function ImageGenerationWorkspace() {
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -41,24 +43,25 @@ export function ImageGenerationWorkspace() {
     setIsUploading(true);
     setInputImageUrl(null);
     try {
-      // Convert file to base64 data URI for use with Gemini
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setInputImageUrl(reader.result as string);
-        setIsUploading(false);
-        toast({ title: 'Tải ảnh thành công', description: 'Ảnh đầu vào đã sẵn sàng.' });
-      };
-      reader.onerror = () => {
-        setIsUploading(false);
-        toast({ variant: 'destructive', title: 'Lỗi tải ảnh', description: 'Không thể đọc file.' });
-      };
-      reader.readAsDataURL(file);
+      // Upload file gốc lên Firebase Storage (không qua Server Action)
+      const fileName = `input-${Date.now()}-${file.name}`;
+      const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+      await uploadBytes(imageRef, file);
+      const downloadURL = await getDownloadURL(imageRef);
+      setInputImageUrl(downloadURL);
+      toast({ title: 'Tải ảnh thành công', description: 'Ảnh đầu vào đã sẵn sàng.' });
     } catch (error) {
       console.error('Upload failed:', error);
+      let errorMessage = 'Không thể tải ảnh lên.';
+      if (error instanceof Error && error.message.includes('storage/unauthorized')) {
+        errorMessage = 'Lỗi phân quyền. Vui lòng kiểm tra lại cấu hình CORS của Firebase Storage.';
+      }
+      toast({ variant: 'destructive', title: 'Lỗi tải ảnh', description: errorMessage });
+    } finally {
       setIsUploading(false);
-      toast({ variant: 'destructive', title: 'Lỗi tải ảnh', description: 'Không thể tải ảnh lên.' });
     }
   };
+
   const handleGenerateOptimalPrompt = async () => {
     if (!simplePrompt.trim()) return;
     if (!userData?.geminiApiKey) {
@@ -83,6 +86,7 @@ export function ImageGenerationWorkspace() {
       setIsGeneratingPrompt(false);
     }
   };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({ variant: 'destructive', title: 'Thiếu prompt', description: 'Vui lòng nhập mô tả cho ảnh.' });
@@ -137,12 +141,14 @@ export function ImageGenerationWorkspace() {
       setIsLoading(false);
     }
   };
+
   const handleRemoveImage = () => {
     setInputImageUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
+
   const handleDownload = () => {
     if (!generatedImageUrl) return;
     const link = document.createElement('a');
@@ -150,7 +156,9 @@ export function ImageGenerationWorkspace() {
     link.download = `igen-image-${Date.now()}.png`;
     link.click();
   };
+  
   const isBusy = isLoading || isGeneratingPrompt || isUploading;
+  
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
       <div className="lg:col-span-1 flex flex-col">

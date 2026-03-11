@@ -1,16 +1,22 @@
 'use server';
 import { z } from 'zod';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { Buffer } from 'buffer';
+
 const BrandedImageGenerationInputSchema = z.object({
   existingImageUri: z.string().optional(),
   generationPrompt: z.string(),
   apiKey: z.string().describe('The user Gemini API key to use for generation.'),
 });
+
 export type BrandedImageGenerationInput = z.infer<typeof BrandedImageGenerationInputSchema>;
+
 const BrandedImageGenerationOutputSchema = z.object({
   generatedImageUri: z.string(),
 });
+
 export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGenerationOutputSchema>;
+
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
@@ -18,27 +24,47 @@ export async function brandedImageGeneration(
   if (!apiKey) {
     throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
+
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-preview-image-generation' });
+  
   const contents: any[] = [];
+
   if (existingImageUri) {
-    // Parse data URI to extract base64 data and mimeType
-    const matches = existingImageUri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (matches) {
-      const mimeType = matches[1];
-      const base64Data = matches[2];
+    if (existingImageUri.startsWith('https://')) {
+      // Fetch the image from the Storage URL on the server
+      const response = await fetch(existingImageUri);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image from Storage: ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      const base64Data = Buffer.from(buffer).toString('base64');
+      const mimeType = response.headers.get('content-type') || 'image/jpeg';
       contents.push({
         inlineData: { data: base64Data, mimeType },
       });
+    } else {
+      // Fallback for data URI
+      const matches = existingImageUri.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches) {
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        contents.push({
+          inlineData: { data: base64Data, mimeType },
+        });
+      }
     }
   }
+
   contents.push({ text: generationPrompt });
+
   const result = await model.generateContent({
     contents: [{ role: 'user', parts: contents }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
     } as any,
   });
+
   const response = result.response;
   const parts = response.candidates?.[0]?.content?.parts || [];
   for (const part of parts) {
@@ -48,5 +74,6 @@ export async function brandedImageGeneration(
       return { generatedImageUri };
     }
   }
+  
   throw new Error('Image generation failed: No image was returned by the model.');
 }
