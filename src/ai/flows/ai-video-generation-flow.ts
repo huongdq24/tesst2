@@ -16,7 +16,7 @@ import { Buffer } from 'buffer';
 import { googleAI } from '@genkit-ai/google-genai';
 import { initializeApp, getApps, App as AdminApp } from 'firebase-admin/app';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
 
 // --- START: ROBUST FIREBASE ADMIN INITIALIZATION ---
 let adminApp: AdminApp | null = null;
@@ -116,10 +116,9 @@ const aiVideoGenerationFlow = ai.defineFlow(
 
     // 1. Start the single generation operation.
     let { operation } = await ai.generate({
-      model: googleAI.model('veo-2.0-generate-001'),
+      model: googleAI.model('veo-3.1-fast-generate-preview'),
       prompt: promptParts,
       config: {
-        durationSeconds: 5,
         aspectRatio: input.aspectRatio,
       },
     });
