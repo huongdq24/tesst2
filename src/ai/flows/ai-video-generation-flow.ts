@@ -1,5 +1,3 @@
-'use server';
-
 /**
  * @fileOverview This file implements a Genkit flow for generating videos using AI.
  * It allows users to combine text prompts with an optional image reference to create
@@ -117,10 +115,11 @@ const aiVideoGenerationFlow = ai.defineFlow(
 
     // 1. Start the single generation operation.
     let { operation } = await ai.generate({
-      model: googleAI.model('veo-3.1-fast-generate-preview'),
+      model: googleAI.model('veo-2.0-generate-001'),
       prompt: promptParts,
       config: {
         aspectRatio: input.aspectRatio,
+        durationSeconds: 5,
       },
     });
 

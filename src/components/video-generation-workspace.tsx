@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
+import { aiVideoGeneration } from '@/app/actions/video-generation';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
