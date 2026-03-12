@@ -56,11 +56,11 @@ export function VideoGenerationWorkspace() {
 
     const filesToUpload = Array.from(files).filter(file => {
       if (!file.type.startsWith('image/')) {
-        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${file.name}' không phải là một tệp ảnh.` });
+        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${'\'\''}file.name}' không phải là một tệp ảnh.` });
         return false;
       }
       if (file.size > 4 * 1024 * 1024) {
-        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${file.name}' lớn hơn 4MB.` });
+        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${'\'\''}file.name}' lớn hơn 4MB.` });
         return false;
       }
       return true;
@@ -72,8 +72,8 @@ export function VideoGenerationWorkspace() {
     
     try {
       const uploadPromises = filesToUpload.map(async (file) => {
-        const fileName = `input-${Date.now()}-${file.name}`;
-        const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+        const fileName = `input-${'\'\''}Date.now()}-${'\'\''}file.name}`;
+        const imageRef = storageRef(storage, `users/${'\'\''}user.uid}/inputs/${'\'\''}fileName}`);
         await uploadBytes(imageRef, file);
         const downloadURL = await getDownloadURL(imageRef);
         await addDoc(collection(firestore, 'inputImages'), {
@@ -87,7 +87,7 @@ export function VideoGenerationWorkspace() {
       const newUrls = await Promise.all(uploadPromises);
       setInputImageUrls(prevUrls => [...prevUrls, ...newUrls]);
       
-      toast({ title: `Tải lên ${newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
+      toast({ title: `Tải lên ${'\'\''}newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
     } catch (error) {
       console.error('Upload failed:', error);
       let errorMessage = 'Không thể tải ảnh lên.';
@@ -198,10 +198,14 @@ export function VideoGenerationWorkspace() {
       toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
     } catch (error: any) {
       console.error(error);
+      let description = error.message || t('toast.image.unexpectedError');
+      if (error.message && (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('429'))) {
+        description = 'Bạn đã gửi quá nhiều yêu cầu trong một khoảng thời gian ngắn. Vui lòng đợi một lát trước khi thử lại. (You have exceeded your request quota.)';
+      }
       toast({
         variant: 'destructive',
         title: t('toast.video.generationFailed.title'),
-        description: error.message || t('toast.image.unexpectedError'),
+        description: description,
       });
     } finally {
       setIsLoading(false);
@@ -412,7 +416,7 @@ export function VideoGenerationWorkspace() {
               <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10 aspect-video">
                 <video src={videoUrl} controls className="w-full h-full object-contain" />
                 <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <a href={videoUrl} download={`igen-video-${Date.now()}-${index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
+                  <a href={videoUrl} download={`igen-video-${'\'\''}Date.now()}-${'\'\''}index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
                     <Button variant="secondary" size="icon" title="Tải video xuống">
                       <Download className="h-5 w-5" />
                     </Button>
