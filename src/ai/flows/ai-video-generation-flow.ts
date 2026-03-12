@@ -24,7 +24,7 @@ function getFirebaseAdmin() {
     // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
     // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
     initializeApp({
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET || 'studio-5835932949-38ba9.firebasestorage.app',
+      storageBucket: 'studio-5835932949-38ba9.firebasestorage.app',
     });
   }
   return {
