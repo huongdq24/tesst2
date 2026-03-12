@@ -36,7 +36,7 @@ export function VideoGenerationWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { t } = useI18n();
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFilesUpload = async (files: FileList | null) => {
@@ -187,6 +187,14 @@ export function VideoGenerationWorkspace() {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
       return;
     }
+    if (!userData?.geminiApiKey) {
+      toast({
+        variant: 'destructive',
+        title: 'Thiếu API Key',
+        description: 'Vui lòng thêm Gemini API Key của bạn trong phần cài đặt tài khoản trước khi tạo video.',
+      });
+      return;
+    }
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tạo video.' });
       return;
@@ -198,6 +206,7 @@ export function VideoGenerationWorkspace() {
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
+        apiKey: userData.geminiApiKey,
       });
       setGeneratedVideoUrls([result.videoDataUri]);
       toast({ title: 'Tạo video thành công!', description: 'Đang lưu video vào thư viện của bạn...' });
@@ -233,6 +242,11 @@ export function VideoGenerationWorkspace() {
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
+            {!userData?.geminiApiKey && (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                ⚠️ Bạn chưa thêm Gemini API Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo video.
+              </div>
+            )}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
