@@ -14,22 +14,25 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Buffer } from 'buffer';
 import { googleAI } from '@genkit-ai/google-genai';
-import { initializeApp, getApps, getApp as getAdminApp } from 'firebase-admin/app';
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
 
 // Initialize Firebase Admin SDK (server-side only)
+let adminApp: App | undefined;
 function getFirebaseAdmin() {
   if (getApps().length === 0) {
     // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
     // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
-    initializeApp({
-      storageBucket: 'studio-5835932949-38ba9.firebasestorage.app',
+     adminApp = initializeApp({
+      storageBucket: 'studio-5835932949-38ba9.appspot.com',
     });
+  } else {
+    adminApp = getApps()[0];
   }
   return {
-    storage: getAdminStorage(),
-    firestore: getAdminFirestore(),
+    storage: getAdminStorage(adminApp),
+    firestore: getAdminFirestore(adminApp),
   };
 }
 
@@ -40,6 +43,7 @@ const AiVideoGenerationInputSchema = z.object({
       "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
+  numberOfVideos: z.number().min(1).max(4).optional().default(1),
   userId: z.string().describe('The UID of the authenticated user, for saving the video.'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
@@ -184,22 +188,22 @@ const aiVideoGenerationFlow = ai.defineFlow(
       },
     });
 
-    // Tạo signed URL hoặc public URL
-    const [downloadUrl] = await file.getSignedUrl({
-      action: 'read',
-      expires: '2030-01-01', // URL hết hạn xa
-    });
+    // Make the file public and construct the public URL.
+    await file.makePublic();
+
+    // The public URL is in the format: https://storage.googleapis.com/your-bucket-name/your-file-path
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
 
     // 6. Lưu metadata vào Firestore
     await firestore.collection('generatedVideos').add({
       ownerId: input.userId,
       prompt: input.textPrompt,
-      videoUrl: downloadUrl,
+      videoUrl: publicUrl,
       storagePath: filePath,
       aspectRatio: input.aspectRatio,
-      createdAt: new Date(),
+      createdAt: FieldValue.serverTimestamp(),
     });
 
-    return { videoUrls: [downloadUrl] };
+    return { videoUrls: [publicUrl] };
   }
 );

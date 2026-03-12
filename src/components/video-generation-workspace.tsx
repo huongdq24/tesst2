@@ -36,6 +36,7 @@ export function VideoGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   
+  // ĐÃ SỬA: Đổi từ data URI sang Firebase Storage URLs
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
@@ -185,12 +186,14 @@ export function VideoGenerationWorkspace() {
     setGeneratedVideoUrls([]);
 
     try {
+      // ĐÃ SỬA: Truyền userId để server lưu video vào Firebase Storage
       const result = await aiVideoGeneration({
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
         userId: user.uid,
       });
+      // ĐÃ SỬA: Nhận Firebase Storage URLs thay vì data URIs
       setGeneratedVideoUrls(result.videoUrls);
       toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
     } catch (error: any) {
