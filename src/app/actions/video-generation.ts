@@ -1,7 +1,5 @@
 'use server';
 
-export const maxDuration = 300; // Set timeout to 5 minutes
-
 import { 
   aiVideoGeneration as aiVideoGenerationFlow,
   type AiVideoGenerationInput,
@@ -10,7 +8,7 @@ import {
 
 /**
  * This is the server action that the client will call.
- * It wraps the actual Genkit flow and is configured with a longer timeout.
+ * It wraps the actual Genkit flow.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
