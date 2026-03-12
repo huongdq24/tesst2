@@ -208,7 +208,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
       videoUrl: publicUrl,
       storagePath: filePath,
       aspectRatio: input.aspectRatio,
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: new Date(),
     });
 
     return { videoUrls: [publicUrl] };
