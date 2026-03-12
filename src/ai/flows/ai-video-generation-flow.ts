@@ -14,27 +14,34 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Buffer } from 'buffer';
 import { googleAI } from '@genkit-ai/google-genai';
-import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { initializeApp, getApps, App as AdminApp } from 'firebase-admin/app';
 import { getStorage as getAdminStorage } from 'firebase-admin/storage';
 import { getFirestore as getAdminFirestore, FieldValue } from 'firebase-admin/firestore';
 
-// Initialize Firebase Admin SDK (server-side only)
-let adminApp: App | undefined;
+// --- START: ROBUST FIREBASE ADMIN INITIALIZATION ---
+let adminApp: AdminApp | null = null;
+const ADMIN_APP_NAME = 'igen-video-generation-admin-app';
+
 function getFirebaseAdmin() {
-  if (getApps().length === 0) {
-    // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
-    // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
-     adminApp = initializeApp({
-      storageBucket: 'studio-5835932949-38ba9.appspot.com',
-    });
-  } else {
-    adminApp = getApps()[0];
+  if (!adminApp) {
+    const existingApp = getApps().find(app => app.name === ADMIN_APP_NAME);
+    if (existingApp) {
+      adminApp = existingApp;
+    } else {
+      // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
+      // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
+      adminApp = initializeApp({
+        storageBucket: 'studio-5835932949-38ba9.appspot.com',
+      }, ADMIN_APP_NAME);
+    }
   }
   return {
     storage: getAdminStorage(adminApp),
     firestore: getAdminFirestore(adminApp),
   };
 }
+// --- END: ROBUST FIREBASE ADMIN INITIALIZATION ---
+
 
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
