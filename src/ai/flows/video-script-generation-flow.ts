@@ -97,9 +97,8 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    // SỬA: Dùng model hợp lệ – gemini-2.5-flash-preview hỗ trợ multimodal input
     const { output } = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash-preview'),
+      model: googleAI.model('gemini-3.1-pro-preview'),
       prompt: promptParts,
       system: systemPrompt,
       output: {
