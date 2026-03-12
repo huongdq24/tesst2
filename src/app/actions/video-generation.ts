@@ -9,6 +9,7 @@ import {
 /**
  * This is the server action that the client will call.
  * It wraps the actual Genkit flow.
+ * Note: The input type from the flow no longer contains userId.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput

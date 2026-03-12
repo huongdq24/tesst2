@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
+import { useState, useRef, ChangeEvent, DragEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -13,67 +13,57 @@ import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
 
-
 export function VideoGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
   const [scriptDescription, setScriptDescription] = useState('');
   const [motionAnalysis, setMotionAnalysis] = useState<string | null>(null);
   const [cameraMovement, setCameraMovement] = useState<string | null>(null);
-
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [numberOfVideos, setNumberOfVideos] = useState<1 | 2 | 3 | 4>(1);
-  
   const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
-  
-  // ĐÃ SỬA: Đổi từ data URI sang Firebase Storage URLs
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  
   const { toast } = useToast();
   const { t } = useI18n();
   const { user } = useAuth();
-  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tải ảnh lên.' });
       return;
     }
-
     const filesToUpload = Array.from(files).filter(file => {
       if (!file.type.startsWith('image/')) {
-        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${'\'\''}file.name}' không phải là một tệp ảnh.` });
+        toast({ variant: 'destructive', title: 'Tệp không hợp lệ', description: `'${file.name}' không phải là một tệp ảnh.` });
         return false;
       }
       if (file.size > 4 * 1024 * 1024) {
-        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${'\'\''}file.name}' lớn hơn 4MB.` });
+        toast({ variant: 'destructive', title: 'File quá lớn', description: `'${file.name}' lớn hơn 4MB.` });
         return false;
       }
       return true;
     });
 
     if (filesToUpload.length === 0) return;
-
     setIsUploading(true);
     
     try {
       const uploadPromises = filesToUpload.map(async (file) => {
-        const fileName = `input-${'\'\''}Date.now()}-${'\'\''}file.name}`;
-        const imageRef = storageRef(storage, `users/${'\'\''}user.uid}/inputs/${'\'\''}fileName}`);
+        const fileName = `input-${Date.now()}-${file.name}`;
+        const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
         await uploadBytes(imageRef, file);
         const downloadURL = await getDownloadURL(imageRef);
         await addDoc(collection(firestore, 'inputImages'), {
@@ -86,8 +76,7 @@ export function VideoGenerationWorkspace() {
 
       const newUrls = await Promise.all(uploadPromises);
       setInputImageUrls(prevUrls => [...prevUrls, ...newUrls]);
-      
-      toast({ title: `Tải lên ${'\'\''}newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
+      toast({ title: `Tải lên ${newUrls.length} ảnh thành công`, description: 'Ảnh của bạn đã sẵn sàng để sử dụng.' });
     } catch (error) {
       console.error('Upload failed:', error);
       let errorMessage = 'Không thể tải ảnh lên.';
@@ -171,41 +160,56 @@ export function VideoGenerationWorkspace() {
     });
   };
 
+  const saveVideoToLibrary = async (videoDataUri: string, videoPrompt: string) => {
+    if (!user) return;
+    try {
+      const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+      const videoStorageRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
+      const uploadResult = await uploadString(videoStorageRef, videoDataUri, 'data_url');
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+      await addDoc(collection(firestore, 'generatedVideos'), {
+        ownerId: user.uid,
+        prompt: videoPrompt,
+        videoUrl: downloadURL,
+        storagePath: uploadResult.ref.fullPath,
+        aspectRatio: aspectRatio,
+        createdAt: serverTimestamp(),
+      });
+      toast({ title: 'Đã lưu vào thư viện', description: 'Video của bạn đã được lưu thành công.' });
+    } catch (error) {
+      console.error("Failed to save video to library:", error);
+      toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: 'Không thể lưu video vào thư viện của bạn.' });
+    }
+  };
+
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
       return;
     }
-
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tạo video.' });
       return;
     }
-
     setIsLoading(true);
     setGeneratedVideoUrls([]);
-
     try {
-      // ĐÃ SỬA: Truyền userId để server lưu video vào Firebase Storage
       const result = await aiVideoGeneration({
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
-        userId: user.uid,
       });
-      // ĐÃ SỬA: Nhận Firebase Storage URLs thay vì data URIs
-      setGeneratedVideoUrls(result.videoUrls);
-      toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
+      setGeneratedVideoUrls([result.videoDataUri]);
+      toast({ title: 'Tạo video thành công!', description: 'Đang lưu video vào thư viện của bạn...' });
+      await saveVideoToLibrary(result.videoDataUri, prompt);
     } catch (error: any) {
       console.error('[VideoGeneration] Full error:', error);
       let description = error.message || 'Đã xảy ra lỗi không mong muốn.';
-      
       if (error.message && (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('429'))) {
         description = 'Bạn đã vượt quá giới hạn yêu cầu của API. Vui lòng đợi vài phút trước khi thử lại.';
       } else if (error.message && (error.message.includes('504') || error.message.includes('timeout') || error.message.includes('timed out'))) {
         description = 'Yêu cầu mất quá nhiều thời gian. Veo đang xử lý video — vui lòng kiểm tra thư viện của bạn sau vài phút.';
       }
-      
       toast({
         variant: 'destructive',
         title: t('toast.video.generationFailed.title'),
@@ -226,13 +230,9 @@ export function VideoGenerationWorkspace() {
         onOpenChange={setIsLibraryOpen}
         onImageSelect={handleImageSelectFromLibrary}
       />
-      
-      {/* Controls Column */}
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
-            
-            {/* Image Upload */}
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
@@ -287,10 +287,7 @@ export function VideoGenerationWorkspace() {
                 <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
               </div>
             </div>
-
             <Separator />
-            
-            {/* Script Description */}
             <div className="space-y-2">
               <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
               <Textarea
@@ -316,18 +313,13 @@ export function VideoGenerationWorkspace() {
                 {t('workspace.video.generateScriptButton')}
               </Button>
             </div>
-            
-            {/* Motion Analysis */}
             {motionAnalysis && cameraMovement && (
               <div className="text-xs p-3 bg-muted/50 rounded-lg space-y-1.5 border">
                 <p><strong className="font-semibold">Phân tích chuyển động:</strong> {motionAnalysis}</p>
                 <p><strong className="font-semibold">Chuyển động Camera:</strong> <span className="text-primary font-medium">{cameraMovement}</span></p>
               </div>
             )}
-            
             <Separator />
-
-            {/* Prompt Output */}
             <div className="space-y-2 flex-1 flex flex-col">
               <Label htmlFor="prompt">{t('workspace.video.scriptOutputLabel')}</Label>
               <div className="relative flex-1 flex flex-col">
@@ -351,8 +343,6 @@ export function VideoGenerationWorkspace() {
                   </Button>
               </div>
             </div>
-            
-            {/* Settings */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
@@ -389,8 +379,6 @@ export function VideoGenerationWorkspace() {
                 </Select>
               </div>
             </div>
-            
-            {/* Generate Button */}
             <Button onClick={handleGenerate} disabled={isGenerateDisabled} className="w-full mt-2">
               {isLoading ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -399,12 +387,9 @@ export function VideoGenerationWorkspace() {
               )}
               {t('workspace.video.generateButton.label')}
             </Button>
-          
           </CardContent>
         </Card>
       </div>
-
-      {/* Output Column */}
       <div className="lg:col-span-2 bg-muted/50 rounded-lg flex items-center justify-center min-h-[400px] lg:min-h-0 p-4">
         {isLoading ? (
             <div className="flex flex-col items-center gap-4 text-muted-foreground">
@@ -420,7 +405,7 @@ export function VideoGenerationWorkspace() {
               <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10 aspect-video">
                 <video src={videoUrl} controls className="w-full h-full object-contain" />
                 <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <a href={videoUrl} download={`igen-video-${'\'\''}Date.now()}-${'\'\''}index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
+                  <a href={videoUrl} download={`igen-video-${Date.now()}-${index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
                     <Button variant="secondary" size="icon" title="Tải video xuống">
                       <Download className="h-5 w-5" />
                     </Button>

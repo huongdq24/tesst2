@@ -1,8 +1,8 @@
+'use server';
 /**
  * @fileOverview This file implements a Genkit flow for generating videos using AI.
  * It allows users to combine text prompts with an optional image reference to create
- * short professional-looking videos. The generated video is uploaded to Firebase Storage
- * and the download URL is returned.
+ * short professional-looking videos. The generated video is returned as a data URI.
  *
  * - aiVideoGeneration - A function that handles the video generation process.
  * - AiVideoGenerationInput - The input type for the aiVideoGeneration function.
@@ -13,34 +13,6 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import { Buffer } from 'buffer';
 import { googleAI } from '@genkit-ai/google-genai';
-import { initializeApp, getApps, App as AdminApp } from 'firebase-admin/app';
-import { getStorage as getAdminStorage } from 'firebase-admin/storage';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
-
-// --- START: ROBUST FIREBASE ADMIN INITIALIZATION ---
-let adminApp: AdminApp | null = null;
-const ADMIN_APP_NAME = 'igen-video-generation-admin-app';
-
-function getFirebaseAdmin() {
-  if (!adminApp) {
-    const existingApp = getApps().find(app => app.name === ADMIN_APP_NAME);
-    if (existingApp) {
-      adminApp = existingApp;
-    } else {
-      // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
-      // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
-      adminApp = initializeApp({
-        storageBucket: 'studio-5835932949-38ba9.firebasestorage.app',
-      }, ADMIN_APP_NAME);
-    }
-  }
-  return {
-    storage: getAdminStorage(adminApp),
-    firestore: getAdminFirestore(adminApp),
-  };
-}
-// --- END: ROBUST FIREBASE ADMIN INITIALIZATION ---
-
 
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
@@ -49,19 +21,19 @@ const AiVideoGenerationInputSchema = z.object({
       "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
-  userId: z.string().describe('The UID of the authenticated user, for saving the video.'),
+  // userId is removed as saving is now handled on the client-side
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema for video generation
+// Define output schema for video generation - returning a data URI
 const AiVideoGenerationOutputSchema = z.object({
-  videoUrls: z.array(z.string()).describe('An array of Firebase Storage download URLs for the generated videos.'),
+  videoDataUri: z.string().describe('The generated video as a data URI.'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
 /**
  * Generates a single video based on a text prompt and optional image references.
- * The video is uploaded to Firebase Storage and the download URL is returned.
+ * The video is returned as a data URI for the client to handle.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
@@ -86,7 +58,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
       const dataUriPromises = input.referenceImageUris.map(async (uri) => {
         if (uri.startsWith('https://')) {
           try {
-            const response = await fetch(uri); // Dùng global fetch (Node.js built-in)
+            const response = await fetch(uri);
             if (!response.ok) {
               console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
               return null;
@@ -127,8 +99,8 @@ const aiVideoGenerationFlow = ai.defineFlow(
       throw new Error('Failed to start the video generation operation.');
     }
 
-    // 2. Poll the operation until it is done.
-    const MAX_POLLING_ATTEMPTS = 50; // tối đa ~4 phút 10 giây polling
+    // 2. Poll the operation until it is done, with a timeout.
+    const MAX_POLLING_ATTEMPTS = 50; // Max ~4 minutes 10 seconds polling
     let pollingAttempts = 0;
     while (!operation.done) {
       pollingAttempts++;
@@ -171,7 +143,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
       
     const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
     
-    // 4. Download video as binary buffer (KHÔNG chuyển thành base64 string)
+    // 4. Download video as binary buffer.
     let videoBuffer: Buffer;
     let contentType: string;
     try {
@@ -187,38 +159,9 @@ const aiVideoGenerationFlow = ai.defineFlow(
         throw new Error(`Failed to download or process generated video: ${err.message}`);
     }
 
-    // 5. Upload video lên Firebase Storage qua Admin SDK
-    const { storage, firestore } = getFirebaseAdmin();
-    const bucket = storage.bucket();
-    const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-    const filePath = `users/${input.userId}/generated-videos/${fileName}`;
-    const file = bucket.file(filePath);
-
-    await file.save(videoBuffer, {
-      metadata: {
-        contentType: contentType,
-        metadata: {
-          prompt: input.textPrompt.substring(0, 500), // Lưu 500 ký tự đầu
-        },
-      },
-    });
-
-    // Make the file public and construct the public URL.
-    await file.makePublic();
-
-    // The public URL is in the format: https://storage.googleapis.com/your-bucket-name/your-file-path
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
-
-    // 6. Lưu metadata vào Firestore
-    await firestore.collection('generatedVideos').add({
-      ownerId: input.userId,
-      prompt: input.textPrompt,
-      videoUrl: publicUrl,
-      storagePath: filePath,
-      aspectRatio: input.aspectRatio,
-      createdAt: new Date(),
-    });
-
-    return { videoUrls: [publicUrl] };
+    // 5. Convert to data URI and return to the client.
+    const videoDataUri = `data:${contentType};base64,${videoBuffer.toString('base64')}`;
+    
+    return { videoDataUri };
   }
 );
