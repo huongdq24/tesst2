@@ -31,7 +31,7 @@ function getFirebaseAdmin() {
       // In Firebase App Hosting / Cloud Run, credentials are auto-detected.
       // For local dev, set GOOGLE_APPLICATION_CREDENTIALS env var.
       adminApp = initializeApp({
-        storageBucket: 'studio-5835932949-38ba9.appspot.com',
+        storageBucket: 'studio-5835932949-38ba9.firebasestorage.app',
       }, ADMIN_APP_NAME);
     }
   }
@@ -96,9 +96,9 @@ const aiVideoGenerationFlow = ai.defineFlow(
             const buffer = await response.arrayBuffer();
             const base64Data = Buffer.from(buffer).toString('base64');
             const mimeType = response.headers.get('content-type') || 'image/jpeg';
-            return `data:${mimeType};base64,${base64Data}`;
+            return `data:${'\'\''}mimeType};base64,${'\'\''}base64Data}`;
           } catch (error) {
-            console.error(`Error processing image URI ${uri}:`, error);
+            console.error(`Error processing image URI ${'\'\''}uri}:`, error);
             return null;
           }
         }
@@ -142,13 +142,13 @@ const aiVideoGenerationFlow = ai.defineFlow(
     // 3. Process the result and download the video.
     if (operation.error) {
       console.error('The video generation operation failed:', operation.error.message);
-      throw new Error(`Video generation failed: ${operation.error.message}`);
+      throw new Error(`Video generation failed: ${'\'\''}operation.error.message}`);
     }
     
     const content = operation.output?.message?.content;
     if (!content || content.length === 0) {
       const outputJson = JSON.stringify(operation.output, null, 2);
-      throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
+      throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${'\'\''}outputJson}`);
     }
 
     const videoMediaPart = content.find(p => !!p.media);
@@ -156,12 +156,12 @@ const aiVideoGenerationFlow = ai.defineFlow(
       const textPart = content.find(p => !!p.text);
       let reason = 'This may be due to safety filters or other content restrictions.';
       if (textPart?.text) {
-          reason += ` Model response: "${textPart.text}"`;
+          reason += ` Model response: "${'\'\''}textPart.text}"`;
       }
-      throw new Error(`The operation completed but did not return a video. ${reason}`);
+      throw new Error(`The operation completed but did not return a video. ${'\'\''}reason}`);
     }
       
-    const videoDownloadUrl = `${videoMediaPart.media.url}&key=${geminiApiKey}`;
+    const videoDownloadUrl = `${'\'\''}videoMediaPart.media.url}&key=${'\'\''}geminiApiKey}`;
     
     // 4. Download video as binary buffer (KHÔNG chuyển thành base64 string)
     let videoBuffer: Buffer;
@@ -169,21 +169,21 @@ const aiVideoGenerationFlow = ai.defineFlow(
     try {
         const response = await fetch(videoDownloadUrl);
         if (!response.ok || !response.body) {
-            throw new Error(`Failed to download video file. Status: ${response.statusText}`);
+            throw new Error(`Failed to download video file. Status: ${'\'\''}response.statusText}`);
         }
         const arrayBuffer = await response.arrayBuffer();
         videoBuffer = Buffer.from(arrayBuffer);
         contentType = videoMediaPart.media!.contentType || 'video/mp4';
     } catch (err: any) {
-        console.error(`An error occurred during video download and processing: ${err.message}`);
-        throw new Error(`Failed to download or process generated video: ${err.message}`);
+        console.error(`An error occurred during video download and processing: ${'\'\''}err.message}`);
+        throw new Error(`Failed to download or process generated video: ${'\'\''}err.message}`);
     }
 
     // 5. Upload video lên Firebase Storage qua Admin SDK
     const { storage, firestore } = getFirebaseAdmin();
     const bucket = storage.bucket();
-    const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-    const filePath = `users/${input.userId}/generated-videos/${fileName}`;
+    const fileName = `generated-video-${'\'\''}Date.now()}-${'\'\''}Math.random().toString(36).substring(7)}.mp4`;
+    const filePath = `users/${'\'\''}input.userId}/generated-videos/${'\'\''}fileName}`;
     const file = bucket.file(filePath);
 
     await file.save(videoBuffer, {
@@ -199,7 +199,7 @@ const aiVideoGenerationFlow = ai.defineFlow(
     await file.makePublic();
 
     // The public URL is in the format: https://storage.googleapis.com/your-bucket-name/your-file-path
-    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${encodeURIComponent(filePath)}`;
+    const publicUrl = `https://storage.googleapis.com/${'\'\''}bucket.name}/${'\'\''}encodeURIComponent(filePath)}`;
 
     // 6. Lưu metadata vào Firestore
     await firestore.collection('generatedVideos').add({
