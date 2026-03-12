@@ -1,4 +1,7 @@
 'use server';
+
+export const maxDuration = 300; // Cho phép Server Action chạy tối đa 5 phút thay vì mặc định 60 giây
+
 /**
  * @fileOverview This file implements a Genkit flow for generating videos using AI.
  * It allows users to combine text prompts with an optional image reference to create
@@ -128,8 +131,17 @@ const aiVideoGenerationFlow = ai.defineFlow(
     }
 
     // 2. Poll the operation until it is done.
+    const MAX_POLLING_ATTEMPTS = 50; // tối đa ~4 phút 10 giây polling
+    let pollingAttempts = 0;
     while (!operation.done) {
-      await new Promise(resolve => setTimeout(resolve, 5000)); // wait 5s
+      pollingAttempts++;
+      if (pollingAttempts > MAX_POLLING_ATTEMPTS) {
+        throw new Error(
+          'Video generation timed out: Veo is still processing but the server limit was reached. ' +
+          'Please wait a few minutes and check your video library, then try again.'
+        );
+      }
+      await new Promise(resolve => setTimeout(resolve, 5000));
       operation = await ai.checkOperation(operation);
     }
     

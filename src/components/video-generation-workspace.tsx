@@ -197,11 +197,15 @@ export function VideoGenerationWorkspace() {
       setGeneratedVideoUrls(result.videoUrls);
       toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
     } catch (error: any) {
-      console.error(error);
-      let description = error.message || t('toast.image.unexpectedError');
+      console.error('[VideoGeneration] Full error:', error);
+      let description = error.message || 'Đã xảy ra lỗi không mong muốn.';
+      
       if (error.message && (error.message.includes('RESOURCE_EXHAUSTED') || error.message.includes('429'))) {
-        description = 'Bạn đã gửi quá nhiều yêu cầu trong một khoảng thời gian ngắn. Vui lòng đợi một lát trước khi thử lại. (You have exceeded your request quota.)';
+        description = 'Bạn đã vượt quá giới hạn yêu cầu của API. Vui lòng đợi vài phút trước khi thử lại.';
+      } else if (error.message && (error.message.includes('504') || error.message.includes('timeout') || error.message.includes('timed out'))) {
+        description = 'Yêu cầu mất quá nhiều thời gian. Veo đang xử lý video — vui lòng kiểm tra thư viện của bạn sau vài phút.';
       }
+      
       toast({
         variant: 'destructive',
         title: t('toast.video.generationFailed.title'),
