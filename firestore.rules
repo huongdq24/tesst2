@@ -176,5 +176,20 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if isOwner(request.auth, resource.data.ownerId);
     }
+
+    //-------------------------------------------------------------------------
+    // Collection: generatedVideos
+    //-------------------------------------------------------------------------
+    match /generatedVideos/{videoId} {
+      // Owners can read their videos, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own videos via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own videos.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
   }
 }

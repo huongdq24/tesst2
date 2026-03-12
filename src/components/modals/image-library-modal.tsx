@@ -5,16 +5,18 @@ import { useAuth } from '@/contexts/auth-context';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/config';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, AlertTriangle, Download } from 'lucide-react';
+import { Loader2, AlertTriangle, Download, Video } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/contexts/i18n-context';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-interface ImageRecord {
+interface MediaRecord {
   id: string;
-  imageUrl: string;
-  prompt?: string; // Prompt is optional for input images
+  url: string;
+  type: 'image' | 'video';
+  prompt?: string;
   createdAt: any;
 }
 
@@ -27,49 +29,53 @@ interface ImageLibraryModalProps {
 export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLibraryModalProps) {
   const { user } = useAuth();
   const { t } = useI18n();
-  const [images, setImages] = useState<ImageRecord[]>([]);
+  const [media, setMedia] = useState<MediaRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && user) {
-      const fetchImages = async () => {
+      const fetchMedia = async () => {
         setIsLoading(true);
         setError(null);
         try {
-          // 1. Query for generated images
+          // 1. Queries for all media types
           const generatedImagesQuery = query(
             collection(firestore, 'generatedImages'),
             where('ownerId', '==', user.uid)
           );
-          
-          // 2. Query for input images
           const inputImagesQuery = query(
             collection(firestore, 'inputImages'),
             where('ownerId', '==', user.uid)
           );
+          const generatedVideosQuery = query(
+            collection(firestore, 'generatedVideos'),
+            where('ownerId', '==', user.uid)
+          );
 
-          // 3. Execute both queries in parallel
-          const [generatedSnapshot, inputSnapshot] = await Promise.all([
+          // 2. Execute all queries in parallel
+          const [generatedImagesSnapshot, inputImagesSnapshot, generatedVideosSnapshot] = await Promise.all([
               getDocs(generatedImagesQuery),
-              getDocs(inputImagesQuery)
+              getDocs(inputImagesQuery),
+              getDocs(generatedVideosQuery)
           ]);
 
-          // 4. Map results
-          const generatedList = generatedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
-          const inputList = inputSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as ImageRecord));
-          
-          // 5. Combine and sort
-          const combinedList = [...generatedList, ...inputList];
+          // 3. Map results to a common format
+          const generatedImagesList: MediaRecord[] = generatedImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl, type: 'image' } as MediaRecord));
+          const inputImagesList: MediaRecord[] = inputImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl, type: 'image' } as MediaRecord));
+          const generatedVideosList: MediaRecord[] = generatedVideosSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().videoUrl, type: 'video' } as MediaRecord));
+
+          // 4. Combine and sort
+          const combinedList = [...generatedImagesList, ...inputImagesList, ...generatedVideosList];
           combinedList.sort((a, b) => {
             const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
             const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
             return dateB.getTime() - dateA.getTime(); // Descending order (newest first)
           });
 
-          setImages(combinedList);
+          setMedia(combinedList);
         } catch (e: any) {
-          console.error("Failed to fetch image library:", e);
+          console.error("Failed to fetch media library:", e);
            if (e.message.includes("requires an index")) {
                setError("Lỗi cơ sở dữ liệu: Cần tạo chỉ mục Firestore. Vui lòng liên hệ quản trị viên.");
           } else {
@@ -80,20 +86,23 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
         }
       };
 
-      fetchImages();
+      fetchMedia();
     }
   }, [open, user, t]);
 
-  const handleSelect = (imageUrl: string) => {
-    onImageSelect(imageUrl);
-    onOpenChange(false);
+  const handleSelect = (url: string, type: 'image' | 'video') => {
+    // Only allow selecting images as reference, as video references are not supported
+    if (type === 'image') {
+      onImageSelect(url);
+      onOpenChange(false);
+    }
   };
 
-  const handleDownload = (e: React.MouseEvent, imageUrl: string, imageId: string) => {
+  const handleDownload = (e: React.MouseEvent, url: string, id: string, type: 'image' | 'video') => {
     e.stopPropagation();
     const link = document.createElement('a');
-    link.href = imageUrl;
-    link.download = `igen-image-${imageId.substring(0, 8)}.png`;
+    link.href = url;
+    link.download = `igen-media-${id.substring(0, 8)}.${type === 'image' ? 'png' : 'mp4'}`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -119,33 +128,54 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
                     <p>{error}</p>
               </div>
             )}
-            {!isLoading && !error && images.length === 0 && (
+            {!isLoading && !error && media.length === 0 && (
                 <div className="flex items-center justify-center h-full text-muted-foreground">
                     <p>{t('library.empty')}</p>
               </div>
             )}
-            {!isLoading && !error && images.length > 0 && (
+            {!isLoading && !error && media.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                {images.map(image => (
+                {media.map(item => (
                   <div
-                    key={image.id}
-                    className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group"
-                    onClick={() => handleSelect(image.imageUrl)}
+                    key={item.id}
+                    className={cn(
+                        "relative aspect-square rounded-lg overflow-hidden group",
+                        item.type === 'image' && "cursor-pointer"
+                    )}
+                    onClick={() => handleSelect(item.url, item.type)}
                   >
-                    <Image
-                      src={image.imageUrl}
-                      alt={image.prompt || 'Input Image'}
-                      fill
-                      sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                      className="object-cover transition-transform duration-300 group-hover:scale-105"
-                    />
+                    {item.type === 'image' ? (
+                        <Image
+                        src={item.url}
+                        alt={item.prompt || 'Input Image'}
+                        fill
+                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                    ) : (
+                        <>
+                            <video
+                                src={item.url}
+                                className="object-cover w-full h-full bg-black"
+                                muted
+                                loop
+                                playsInline
+                                onMouseEnter={e => e.currentTarget.play().catch(() => {})}
+                                onMouseLeave={e => e.currentTarget.pause()}
+                            />
+                            <div className="absolute top-2 left-2 bg-black/50 text-white rounded-full p-1.5 backdrop-blur-sm">
+                                <Video className="h-3 w-3"/>
+                            </div>
+                        </>
+                    )}
+
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                     <Button
                       variant="secondary"
                       size="icon"
-                      title="Tải ảnh xuống"
+                      title="Tải xuống"
                       className="absolute top-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      onClick={(e) => handleDownload(e, image.imageUrl, image.id)}
+                      onClick={(e) => handleDownload(e, item.url, item.id, item.type)}
                     >
                       <Download className="h-4 w-4" />
                     </Button>

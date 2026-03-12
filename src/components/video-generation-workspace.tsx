@@ -13,7 +13,7 @@ import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
@@ -184,8 +184,33 @@ export function VideoGenerationWorkspace() {
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
+        numberOfVideos: 1, // Hardcoded to 1 as API does not support more yet
       });
-      setGeneratedVideos(result.videoDataUris);
+      const generatedDataUris = result.videoDataUris;
+      setGeneratedVideos(generatedDataUris);
+
+      // Save generated videos to Firebase Storage and Firestore
+      try {
+        if (generatedDataUris.length > 0 && user) {
+            await Promise.all(generatedDataUris.map(async (uri) => {
+                const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+                const videoRef = storageRef(storage, `users/${user.uid}/generatedVideos/${fileName}`);
+                await uploadString(videoRef, uri, 'data_url');
+                const downloadURL = await getDownloadURL(videoRef);
+                await addDoc(collection(firestore, 'generatedVideos'), {
+                    ownerId: user.uid,
+                    prompt: prompt,
+                    videoUrl: downloadURL,
+                    createdAt: serverTimestamp(),
+                });
+            }));
+            toast({ title: `Đã lưu ${generatedDataUris.length} video`, description: 'Các video đã được lưu vào thư viện của bạn.' });
+        }
+      } catch (saveError) {
+        console.error('Failed to save video(s):', saveError);
+        toast({ title: 'Tạo video thành công', description: `Tạo ${generatedDataUris.length} video thành công nhưng không thể lưu vào thư viện.` });
+      }
+
     } catch (error: any) {
       console.error(error);
       toast({
