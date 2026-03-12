@@ -23,7 +23,7 @@ const VideoScriptGenerationOutputSchema = z.object({
   optimized_english_prompt: z
     .string()
     .describe(
-      'Prompt tiếng Anh tối ưu cho Veo: [Camera Movement] + [Subject] + [Action] + [Environment/Lighting] + [Cinematic Style].'
+      'Prompt tiếng Anh tối ưu cho Veo: [Camera Movement] + [Subject] + [Action] + [Environment/Lighting] + [Cinematic Style/Quality].'
     ),
 });
 export type VideoScriptGenerationOutput = z.infer<typeof VideoScriptGenerationOutputSchema>;
@@ -97,9 +97,9 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    // SỬA: Dùng model hợp lệ – gemini-2.5-flash hỗ trợ multimodal input
+    // SỬA: Dùng model hợp lệ – gemini-2.5-flash-preview hỗ trợ multimodal input
     const { output } = await ai.generate({
-      model: googleAI.model('gemini-2.5-flash'),
+      model: googleAI.model('gemini-2.5-flash-preview'),
       prompt: promptParts,
       system: systemPrompt,
       output: {
