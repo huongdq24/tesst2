@@ -4,7 +4,7 @@ import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images } from 'lucide-react';
+import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
@@ -13,7 +13,7 @@ import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
@@ -36,7 +36,7 @@ export function VideoGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   
-  const [generatedVideos, setGeneratedVideos] = useState<string[]>([]);
+  const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   const { toast } = useToast();
@@ -176,41 +176,23 @@ export function VideoGenerationWorkspace() {
       return;
     }
 
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tạo video.' });
+      return;
+    }
+
     setIsLoading(true);
-    setGeneratedVideos([]);
+    setGeneratedVideoUrls([]);
 
     try {
       const result = await aiVideoGeneration({
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
-        numberOfVideos: 1, // Hardcoded to 1 as API does not support more yet
+        userId: user.uid,
       });
-      const generatedDataUris = result.videoDataUris;
-      setGeneratedVideos(generatedDataUris);
-
-      // Save generated videos to Firebase Storage and Firestore
-      try {
-        if (generatedDataUris.length > 0 && user) {
-            await Promise.all(generatedDataUris.map(async (uri) => {
-                const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-                const videoRef = storageRef(storage, `users/${user.uid}/generatedVideos/${fileName}`);
-                await uploadString(videoRef, uri, 'data_url');
-                const downloadURL = await getDownloadURL(videoRef);
-                await addDoc(collection(firestore, 'generatedVideos'), {
-                    ownerId: user.uid,
-                    prompt: prompt,
-                    videoUrl: downloadURL,
-                    createdAt: serverTimestamp(),
-                });
-            }));
-            toast({ title: `Đã lưu ${generatedDataUris.length} video`, description: 'Các video đã được lưu vào thư viện của bạn.' });
-        }
-      } catch (saveError) {
-        console.error('Failed to save video(s):', saveError);
-        toast({ title: 'Tạo video thành công', description: `Tạo ${generatedDataUris.length} video thành công nhưng không thể lưu vào thư viện.` });
-      }
-
+      setGeneratedVideoUrls(result.videoUrls);
+      toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
     } catch (error: any) {
       console.error(error);
       toast({
@@ -418,14 +400,21 @@ export function VideoGenerationWorkspace() {
                 <Loader2 className="h-16 w-16 animate-spin text-primary" />
                 <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
             </div>
-        ) : generatedVideos.length > 0 ? (
+        ) : generatedVideoUrls.length > 0 ? (
           <div className={cn(
               "grid w-full h-full gap-4",
-              generatedVideos.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
+              generatedVideoUrls.length > 1 ? 'grid-cols-2' : 'grid-cols-1'
           )}>
-            {generatedVideos.map((videoUri, index) => (
+            {generatedVideoUrls.map((videoUrl, index) => (
               <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10 aspect-video">
-                <video src={videoUri} controls className="w-full h-full object-contain" />
+                <video src={videoUrl} controls className="w-full h-full object-contain" />
+                <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <a href={videoUrl} download={`igen-video-${Date.now()}-${index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
+                    <Button variant="secondary" size="icon" title="Tải video xuống">
+                      <Download className="h-5 w-5" />
+                    </Button>
+                  </a>
+                </div>
               </div>
             ))}
           </div>
