@@ -3,6 +3,7 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   serverActions: {
     bodySizeLimit: '50mb', // 50MB đủ để truyền ảnh tham chiếu (không cần 100mb vì video không trả về nữa)
+    executionTimeout: 300,
   },
   devIndicators: {
     allowedDevOrigins: [

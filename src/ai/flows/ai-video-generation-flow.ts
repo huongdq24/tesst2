@@ -1,7 +1,5 @@
 'use server';
 
-export const maxDuration = 300; // Cho phép Server Action chạy tối đa 5 phút thay vì mặc định 60 giây
-
 /**
  * @fileOverview This file implements a Genkit flow for generating videos using AI.
  * It allows users to combine text prompts with an optional image reference to create
