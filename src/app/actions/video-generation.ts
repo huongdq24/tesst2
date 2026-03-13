@@ -1,5 +1,7 @@
 'use server';
 
+export const maxDuration = 600; // Tăng timeout lên 10 phút (300 giây) đối với Vercel Pro/Firebase hoặc cao hơn tùy Server
+
 import { 
   aiVideoGeneration as aiVideoGenerationFlow,
   type AiVideoGenerationInput,

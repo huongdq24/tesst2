@@ -31,7 +31,7 @@ export async function brandedImageGeneration(
     ? `${generationPrompt}, aspect ratio ${aspectRatio}`
     : generationPrompt;
 
-  const genAI = new GoogleGenAI(apiKey);
+  const genAI = new GoogleGenAI({ apiKey });
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
   
   const contents: Part[] = [];
@@ -95,7 +95,7 @@ export async function brandedImageGeneration(
   let hasBlockedRequest = false;
 
   for (const result of results) {
-    const response = result.response;
+    const response = result;
     
     if (!response.candidates || response.candidates.length === 0) {
         hasBlockedRequest = true;

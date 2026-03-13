@@ -44,7 +44,7 @@ export async function aiVideoGeneration(
     throw new Error('Gemini API key is required to generate the video.');
   }
 
-  const ai = new GoogleGenAI(input.apiKey);
+  const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
@@ -94,7 +94,7 @@ export async function aiVideoGeneration(
         requestPayload.referenceImages = referenceImageParts.slice(1);
       }
   } else {
-      requestPayload.config!.personGeneration = 'allow_all';
+      requestPayload.config!.personGeneration = 'allow_adult';
   }
 
   // 3. Start the video generation operation
@@ -137,7 +137,7 @@ export async function aiVideoGeneration(
   // 6. Download video as binary buffer.
   let videoBuffer: Buffer;
   try {
-      const downloadUrlWithKey = `${videoDownloadUrl}&key=${input.apiKey}`;
+      const downloadUrlWithKey = `${videoDownloadUrl}?key=${input.apiKey}`;
       const response = await fetch(downloadUrlWithKey);
       if (!response.ok || !response.body) {
           throw new Error(`Failed to download video file. Status: ${response.statusText}`);

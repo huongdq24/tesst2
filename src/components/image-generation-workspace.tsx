@@ -7,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
+import { brandedImageGeneration, type BrandedImageGenerationOutput } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
@@ -39,6 +39,8 @@ export function ImageGenerationWorkspace() {
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const MAX_INPUT_IMAGES = 4;
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -46,6 +48,11 @@ export function ImageGenerationWorkspace() {
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tải ảnh lên.' });
       return;
+    }
+    
+    if (inputImageUrls.length + files.length > MAX_INPUT_IMAGES) {
+        toast({ variant: 'destructive', title: 'Quá nhiều ảnh đầu vào', description: `Bạn chỉ có thể thêm tối đa ${MAX_INPUT_IMAGES} ảnh.` });
+        return;
     }
 
     const filesToUpload = Array.from(files).filter(file => {
@@ -160,14 +167,23 @@ export function ImageGenerationWorkspace() {
     }
     setIsLoading(true);
     setGeneratedImageUrls([]);
+
+    const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Hết thời gian chờ (60 giây). Vui lòng thử lại.')), 60000)
+    );
+
     try {
-      const result = await brandedImageGeneration({
-        existingImageUris: inputImageUrls,
-        generationPrompt: prompt,
-        aspectRatio: aspectRatio,
-        numberOfImages: numberOfImages,
-        apiKey: userData.geminiApiKey,
-      });
+      const result = await Promise.race([
+        brandedImageGeneration({
+          existingImageUris: inputImageUrls,
+          generationPrompt: prompt,
+          aspectRatio: aspectRatio,
+          numberOfImages: numberOfImages,
+          apiKey: userData.geminiApiKey,
+        }),
+        timeoutPromise,
+      ]) as BrandedImageGenerationOutput;
+        
       const generatedDataUris = result.generatedImageUris;
       setGeneratedImageUrls(generatedDataUris);
 
@@ -215,6 +231,10 @@ export function ImageGenerationWorkspace() {
   };
   
   const handleImageSelectFromLibrary = (imageUrl: string) => {
+    if (inputImageUrls.length >= MAX_INPUT_IMAGES) {
+        toast({ variant: 'destructive', title: 'Đã đạt giới hạn ảnh', description: `Bạn chỉ có thể thêm tối đa ${MAX_INPUT_IMAGES} ảnh.` });
+        return;
+    }
     if (!inputImageUrls.includes(imageUrl)) {
         setInputImageUrls((prevUrls) => [...prevUrls, imageUrl]);
     }
@@ -294,6 +314,7 @@ export function ImageGenerationWorkspace() {
                         </Button>
                       </div>
                     ))}
+                    {inputImageUrls.length < MAX_INPUT_IMAGES && (
                      <div 
                       className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
                       onClick={() => fileInputRef.current?.click()}
@@ -301,6 +322,7 @@ export function ImageGenerationWorkspace() {
                        <UploadCloud className="w-6 h-6" />
                        <span className="text-xs text-center mt-1">Thêm</span>
                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
