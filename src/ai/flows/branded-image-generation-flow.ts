@@ -1,6 +1,6 @@
 'use server';
 import { z } from 'zod';
-import { GoogleGenerativeAI, Part } from '@google/generative-ai';
+import { GoogleGenerativeAI, Part } from '@google/genai';
 import { Buffer } from 'buffer';
 
 const BrandedImageGenerationInputSchema = z.object({
