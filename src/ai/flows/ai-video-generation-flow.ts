@@ -45,12 +45,13 @@ export async function aiVideoGeneration(
 
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
-  // 1. Asynchronously convert image URIs to ImageAsset-like objects
-  const imageAssets: { image: { imageBytes: string, mimeType: string }, referenceType: 'asset' }[] = [];
+  // 1. Asynchronously convert image URIs to VideoAsset objects
+  type VideoAsset = { image: { bytesBase64Encoded: string; mimeType: string } };
+  const videoAssets: VideoAsset[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
   if (hasReferenceImages) {
-    const imageAssetPromises = input.referenceImageUris!.map(async (uri) => {
+    const videoAssetPromises = input.referenceImageUris!.map(async (uri): Promise<VideoAsset> => {
         let base64Data: string;
         let mimeType: string;
 
@@ -66,9 +67,9 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        return { image: { imageBytes: base64Data, mimeType }, referenceType: 'asset' as 'asset' };
+        return { image: { bytesBase64Encoded: base64Data, mimeType } };
     });
-    imageAssets.push(...await Promise.all(imageAssetPromises));
+    videoAssets.push(...await Promise.all(videoAssetPromises));
   }
 
   const modelName = input.modelName || 'veo-3.1-generate-preview';
@@ -85,19 +86,21 @@ export async function aiVideoGeneration(
   };
   
   if (hasReferenceImages) {
-      // The `image` property takes the core image data object.
-      requestPayload.image = imageAssets[0].image;
+      // Assign the first VideoAsset to the main image property
+      requestPayload.image = videoAssets[0];
       
       // Apply model-specific configs for Image-to-Video
       if (isVeo2) {
         requestPayload.config!.personGeneration = 'allow_adult';
         requestPayload.config!.durationSeconds = 8;
+      } else {
+        // For Veo 3+
+        requestPayload.config!.personGeneration = 'allow_adult';
       }
       
-      // Veo 3 supports multiple reference images. They need to be wrapped in a VideoAsset structure.
-      if (!isVeo2 && imageAssets.length > 1) {
-        // The rest of the assets are passed as referenceImages
-        requestPayload.referenceImages = imageAssets.slice(1);
+      // Veo 3 supports multiple reference images. They need to be passed as an array of VideoAssets.
+      if (!isVeo2 && videoAssets.length > 1) {
+        requestPayload.referenceImages = videoAssets.slice(1);
       }
   } else {
       // Apply model-specific configs for Text-to-Video
