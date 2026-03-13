@@ -101,7 +101,7 @@ export async function aiVideoGeneration(
   let operation = await ai.models.generateVideos(requestPayload);
 
   // 4. Poll the operation until it's done
-  const MAX_POLLING_ATTEMPTS = 120; // 120 attempts * 10s = 20 minutes
+  const MAX_POLLING_ATTEMPTS = 55; // 55 attempts * 10s = 550s (9.1 min), safely within the 10 min server action timeout
   let pollingAttempts = 0;
   
   while (!operation.done) {
@@ -113,7 +113,9 @@ export async function aiVideoGeneration(
       );
     }
     await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await ai.operations.get(operation.name);
+    operation = await ai.operations.getVideosOperation({ 
+      operation: operation 
+  });
   }
   
   if (operation.error) {
@@ -121,7 +123,7 @@ export async function aiVideoGeneration(
     throw new Error(`Video generation failed: ${operation.error.message}`);
   }
 
-  const generatedVideos = operation.response.generatedVideos;
+  const generatedVideos = operation.response?.generatedVideos;
   if (!generatedVideos || generatedVideos.length === 0) {
       const outputJson = JSON.stringify(operation.response, null, 2);
       throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
