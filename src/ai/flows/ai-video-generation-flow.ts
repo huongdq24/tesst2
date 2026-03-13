@@ -21,6 +21,7 @@ const AiVideoGenerationInputSchema = z.object({
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
   userId: z.string().describe('The UID of the user requesting the generation for storage purposes.'),
+  modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
@@ -74,7 +75,7 @@ export async function aiVideoGeneration(
 
   // 2. Define the request payload based on whether reference images are present
   let requestPayload: any = {
-    model: 'veo-3.1-generate-preview',
+    model: input.modelName || 'veo-3.1-generate-preview',
     prompt: input.textPrompt,
     config: {
         aspectRatio: input.aspectRatio,

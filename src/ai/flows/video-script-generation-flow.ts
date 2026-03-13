@@ -14,6 +14,7 @@ const VideoScriptGenerationInputSchema = z.object({
     .array(z.string())
     .optional()
     .describe("Ảnh tham chiếu dạng data URI hoặc public URL. Format: 'data:<mime>;base64,...' hoặc 'https://...'"),
+  model: z.string().optional().describe('The model to use for script generation.'),
 });
 export type VideoScriptGenerationInput = z.infer<typeof VideoScriptGenerationInputSchema>;
 
@@ -97,8 +98,10 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
+    const modelToUse = input.model || 'gemini-3.1-pro-preview';
+
     const { output } = await ai.generate({
-      model: googleAI.model('gemini-3.1-pro-preview'),
+      model: googleAI.model(modelToUse as any),
       prompt: promptParts,
       system: systemPrompt,
       output: {

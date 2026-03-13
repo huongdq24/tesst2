@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
+import { aiVideoGeneration } from '@/app/actions/video-generation';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
@@ -27,13 +27,15 @@ export function VideoGenerationWorkspace() {
   const [cameraMovement, setCameraMovement] = useState<string | null>(null);
   const [isGeneratingScript, setIsGeneratingScript] = useState(false);
   const [aspectRatio, setAspectRatio] = useState<'16:9' | '9:16'>('16:9');
-  const [numberOfVideos, setNumberOfVideos] = useState<1 | 2 | 3 | 4>(1);
   const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [scriptModel, setScriptModel] = useState('gemini-3.1-pro-preview');
+  const [videoModel, setVideoModel] = useState('veo-3.1-generate-preview');
+
   const { toast } = useToast();
   const { t } = useI18n();
   const { user, userData } = useAuth();
@@ -135,6 +137,7 @@ export function VideoGenerationWorkspace() {
       const result = await videoScriptGeneration({
         description: scriptDescription,
         imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
+        model: scriptModel,
       });
       setPrompt(result.optimized_english_prompt);
       setMotionAnalysis(result.motion_analysis);
@@ -186,6 +189,7 @@ export function VideoGenerationWorkspace() {
         aspectRatio: aspectRatio,
         apiKey: userData.geminiApiKey,
         userId: user.uid,
+        modelName: videoModel,
       });
       setGeneratedVideoUrls([result.videoUrl]);
       toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
@@ -292,6 +296,19 @@ export function VideoGenerationWorkspace() {
                 disabled={isBusy}
                 className="resize-none"
               />
+              <div className="space-y-2">
+                <Label htmlFor="script-model">Mô hình tạo kịch bản</Label>
+                <Select value={scriptModel} onValueChange={setScriptModel} disabled={isBusy}>
+                  <SelectTrigger id="script-model" className="w-full">
+                    <SelectValue placeholder="Chọn mô hình" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini-3.1-pro-preview">iGen-3.1-pro-preview</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview">iGen-3.1-flash-lite-preview</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">iGen-3-flash-preview</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button
                 onClick={handleGenerateScript}
                 disabled={isGeneratingScript || !scriptDescription.trim()}
@@ -336,6 +353,19 @@ export function VideoGenerationWorkspace() {
                   </Button>
               </div>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="video-model">Mô hình tạo video</Label>
+              <Select value={videoModel} onValueChange={setVideoModel} disabled={isBusy}>
+                <SelectTrigger id="video-model" className="w-full">
+                  <SelectValue placeholder="Chọn mô hình video" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1</SelectItem>
+                  <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
+                  <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
@@ -350,24 +380,6 @@ export function VideoGenerationWorkspace() {
                   <SelectContent>
                     <SelectItem value="16:9">16:9 ({t('feature.videoGeneration.horizontal')})</SelectItem>
                     <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="number-of-videos">{t('feature.videoGeneration.outputCount')}</Label>
-                <Select 
-                  value={String(numberOfVideos)} 
-                  onValueChange={(val) => setNumberOfVideos(Number(val) as 1 | 2 | 3 | 4)} 
-                  disabled={true}
-                >
-                  <SelectTrigger id="number-of-videos" className="w-full">
-                    <SelectValue placeholder="Chọn số lượng" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 video</SelectItem>
-                    <SelectItem value="2" disabled>2 video</SelectItem>
-                    <SelectItem value="3" disabled>3 video</SelectItem>
-                    <SelectItem value="4" disabled>4 video</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
