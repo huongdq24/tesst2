@@ -46,7 +46,7 @@ export async function aiVideoGeneration(
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Define the standard VideoAsset type, which is just the image data object.
-  type VideoAsset = { bytesBase64Encoded: string; mimeType: string };
+  type VideoAsset = { imageBytes: string; mimeType: string };
   const videoAssets: VideoAsset[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
@@ -68,7 +68,7 @@ export async function aiVideoGeneration(
             base64Data = match[2];
         }
         // Return the correct object structure
-        return { bytesBase64Encoded: base64Data, mimeType };
+        return { imageBytes: base64Data, mimeType };
     });
     videoAssets.push(...await Promise.all(videoAssetPromises));
   }
@@ -81,13 +81,12 @@ export async function aiVideoGeneration(
     model: modelName,
     prompt: input.textPrompt,
     config: {
-        // For Veo 3 models, force 16:9 as 9:16 is not supported
         aspectRatio: isVeo2 ? input.aspectRatio : '16:9',
     }
   };
   
   if (hasReferenceImages) {
-      // Assign the first image data object directly to the image property
+      // Assign the first video asset object directly to the image property
       requestPayload.image = videoAssets[0];
       
       // Apply model-specific configs for Image-to-Video
