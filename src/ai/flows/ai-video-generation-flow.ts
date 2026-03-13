@@ -45,8 +45,8 @@ export async function aiVideoGeneration(
 
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
-  // 1. Asynchronously convert image URIs to VideoAsset objects
-  type VideoAsset = { image: { bytesBase64Encoded: string; mimeType: string } };
+  // 1. Define the standard VideoAsset type, which is just the image data object.
+  type VideoAsset = { bytesBase64Encoded: string; mimeType: string };
   const videoAssets: VideoAsset[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
@@ -67,7 +67,8 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        return { image: { bytesBase64Encoded: base64Data, mimeType } };
+        // Return the correct object structure
+        return { bytesBase64Encoded: base64Data, mimeType };
     });
     videoAssets.push(...await Promise.all(videoAssetPromises));
   }
@@ -86,13 +87,12 @@ export async function aiVideoGeneration(
   };
   
   if (hasReferenceImages) {
-      // Assign the first VideoAsset to the main image property
+      // Assign the first image data object directly to the image property
       requestPayload.image = videoAssets[0];
       
       // Apply model-specific configs for Image-to-Video
       if (isVeo2) {
         requestPayload.config!.personGeneration = 'allow_adult';
-        requestPayload.config!.durationSeconds = 8;
       } else {
         // For Veo 3+
         requestPayload.config!.personGeneration = 'allow_adult';
@@ -100,6 +100,7 @@ export async function aiVideoGeneration(
       
       // Veo 3 supports multiple reference images. They need to be passed as an array of VideoAssets.
       if (!isVeo2 && videoAssets.length > 1) {
+        // Pass the remaining image data objects
         requestPayload.referenceImages = videoAssets.slice(1);
       }
   } else {
@@ -129,7 +130,7 @@ export async function aiVideoGeneration(
     await new Promise(resolve => setTimeout(resolve, 10000));
     operation = await ai.operations.getVideosOperation({ 
       operation: operation 
-  });
+    });
   }
   
   if (operation.error) {
