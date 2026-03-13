@@ -37,11 +37,26 @@ export function VideoGenerationWorkspace() {
   const [videoModel, setVideoModel] = useState('veo-3.1-generate-preview');
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [durationSeconds, setDurationSeconds] = useState(8);
+  const [resolution, setResolution] = useState('1080p');
 
   const { toast } = useToast();
   const { t } = useI18n();
   const { user, userData } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isVeo2 = videoModel === 'veo-2.0-generate-001';
+
+  useEffect(() => {
+    if (isVeo2) {
+      setResolution('720p');
+    } else {
+      setDurationSeconds(8); // Lock duration for non-Veo2 models
+      setResolution('1080p');
+      if (aspectRatio === '9:16') {
+        setAspectRatio('16:9');
+      }
+    }
+  }, [isVeo2, aspectRatio, setAspectRatio]);
 
   useEffect(() => {
     // Cleanup interval on component unmount
@@ -207,6 +222,7 @@ export function VideoGenerationWorkspace() {
         aspectRatio: aspectRatio,
         apiKey: userData.geminiApiKey,
         modelName: videoModel,
+        durationSeconds: isVeo2 ? durationSeconds : undefined,
       });
 
       if (result.videoDataUri) {
@@ -395,26 +411,26 @@ export function VideoGenerationWorkspace() {
                   </Button>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="video-model">Mô hình tạo video</Label>
-              <Select value={videoModel} onValueChange={setVideoModel} disabled={isBusy}>
-                <SelectTrigger id="video-model" className="w-full">
-                  <SelectValue placeholder="Chọn mô hình video" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1</SelectItem>
-                  <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
-                  <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
             <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="video-model">Mô hình tạo video</Label>
+                <Select value={videoModel} onValueChange={setVideoModel} disabled={isBusy}>
+                  <SelectTrigger id="video-model" className="w-full">
+                    <SelectValue placeholder="Chọn mô hình video" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1</SelectItem>
+                    <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
+                    <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="aspect-ratio">Tỷ lệ khung hình</Label>
                 <Select 
                     value={aspectRatio} 
                     onValueChange={(value) => setAspectRatio(value as '16:9' | '9:16')} 
-                    disabled={isBusy}
+                    disabled={isBusy || !isVeo2}
                 >
                   <SelectTrigger id="aspect-ratio" className="w-full">
                     <SelectValue placeholder="Chọn tỷ lệ" />
@@ -424,6 +440,38 @@ export function VideoGenerationWorkspace() {
                     <SelectItem value="9:16">9:16 ({t('feature.videoGeneration.vertical')})</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                  <Label htmlFor="duration">Thời lượng (giây)</Label>
+                  <Select
+                      value={String(durationSeconds)}
+                      onValueChange={(value) => setDurationSeconds(Number(value))}
+                      disabled={isBusy || !isVeo2}
+                  >
+                      <SelectTrigger id="duration" className="w-full">
+                          <SelectValue placeholder="Chọn thời lượng" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {[5, 6, 7, 8].map(sec => (
+                              <SelectItem key={sec} value={String(sec)}>{sec} giây</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+              </div>
+               <div className="space-y-2">
+                  <Label htmlFor="resolution">Độ phân giải (dự kiến)</Label>
+                  <Select value={resolution} disabled>
+                      <SelectTrigger id="resolution" className="w-full">
+                          <SelectValue placeholder="Độ phân giải" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="720p">720p</SelectItem>
+                          <SelectItem value="1080p">1080p</SelectItem>
+                          <SelectItem value="4k">4K</SelectItem>
+                      </SelectContent>
+                  </Select>
               </div>
             </div>
             <Button onClick={handleGenerate} disabled={isGenerateDisabled} className="w-full mt-2">

@@ -19,6 +19,7 @@ const AiVideoGenerationInputSchema = z.object({
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
   modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
+  durationSeconds: z.number().optional().describe('Length of the video in seconds (Veo 2 only).'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
@@ -67,7 +68,6 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        // Return the correct object structure
         return { imageBytes: base64Data, mimeType };
     });
     videoAssets.push(...await Promise.all(videoAssetPromises));
@@ -85,25 +85,23 @@ export async function aiVideoGeneration(
     }
   };
   
+  if (isVeo2 && input.durationSeconds) {
+    requestPayload.config.durationSeconds = input.durationSeconds;
+  }
+  
   if (hasReferenceImages) {
-      // Assign the first video asset object directly to the image property
       requestPayload.image = videoAssets[0];
       
-      // Apply model-specific configs for Image-to-Video
       if (isVeo2) {
         requestPayload.config!.personGeneration = 'allow_adult';
       } else {
-        // For Veo 3+
         requestPayload.config!.personGeneration = 'allow_adult';
       }
       
-      // Veo 3 supports multiple reference images. They need to be passed as an array of VideoAssets.
       if (!isVeo2 && videoAssets.length > 1) {
-        // Pass the remaining image data objects
         requestPayload.referenceImages = videoAssets.slice(1);
       }
   } else {
-      // Apply model-specific configs for Text-to-Video
       if (isVeo2) {
           requestPayload.config!.personGeneration = 'allow_adult';
       } else {
@@ -151,7 +149,6 @@ export async function aiVideoGeneration(
   // 6. Download video as binary buffer.
   let videoBuffer: Buffer;
   try {
-      // The download URL might have existing query params, so append with &
       const downloadUrlWithKey = `${videoDownloadUrl}&key=${input.apiKey}`;
       const response = await fetch(downloadUrlWithKey);
       if (!response.ok || !response.body) {
