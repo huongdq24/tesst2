@@ -130,13 +130,17 @@ export async function aiVideoGeneration(
     throw new Error(`The operation completed but did not return a video. ${reason}`);
   }
     
-  const videoDownloadUrl = `${videoMediaPart.media.url}&key=${input.apiKey}`;
+  const videoDownloadUrl = videoMediaPart.media.url;
   
   // 4. Download video as binary buffer.
   let videoBuffer: Buffer;
   let contentType: string;
   try {
-      const response = await fetch(videoDownloadUrl);
+      const response = await fetch(videoDownloadUrl, {
+        headers: {
+            'x-goog-api-key': input.apiKey,
+        }
+      });
       if (!response.ok || !response.body) {
           throw new Error(`Failed to download video file. Status: ${response.statusText}`);
       }
