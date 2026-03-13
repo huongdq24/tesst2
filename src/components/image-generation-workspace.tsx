@@ -357,9 +357,9 @@ export function ImageGenerationWorkspace() {
                     <SelectValue placeholder="Chọn mô hình" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</SelectItem>
-                    <SelectItem value="gemini-3-flash-preview">gemini-3-flash-preview</SelectItem>
+                    <SelectItem value="gemini-3.1-pro-preview">iGen-3.1-pro-preview</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview">iGen-3.1-flash-lite-preview</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">iGen-3-flash-preview</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -394,9 +394,9 @@ export function ImageGenerationWorkspace() {
                   <SelectValue placeholder="Chọn mô hình" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="gemini-3.1-flash-image-preview">gemini-3.1-flash-image-preview</SelectItem>
-                  <SelectItem value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</SelectItem>
-                  <SelectItem value="gemini-2.5-flash-image">gemini-2.5-flash-image</SelectItem>
+                  <SelectItem value="gemini-3.1-flash-image-preview">iGen-3.1-flash-image-preview</SelectItem>
+                  <SelectItem value="gemini-3-pro-image-preview">iGen-3-pro-image-preview</SelectItem>
+                  <SelectItem value="gemini-2.5-flash-image">iGen-2.5-flash-image</SelectItem>
                 </SelectContent>
               </Select>
             </div>
