@@ -45,7 +45,7 @@ export async function aiVideoGeneration(
 
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
-  // 1. Asynchronously convert any image URIs (http or data) into base64 strings
+  // 1. Asynchronously convert any image URIs (http or data) into valid VideoAsset objects
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
@@ -66,6 +66,7 @@ export async function aiVideoGeneration(
         mimeType = match[1];
         base64Data = match[2];
       }
+      // This structure matches the VideoAsset type expected by the SDK
       return { image: { imageBytes: base64Data, mimeType }, referenceType: 'asset' };
     });
     referenceImageParts.push(...await Promise.all(imagePartPromises));
@@ -85,21 +86,18 @@ export async function aiVideoGeneration(
   };
   
   if (hasReferenceImages) {
-      requestPayload.image = {
-        imageBytes: referenceImageParts[0].image.imageBytes,
-        mimeType: referenceImageParts[0].image.mimeType
-      };
+      // Correctly assign the first VideoAsset object to the 'image' property.
+      requestPayload.image = referenceImageParts[0];
       
       // Apply model-specific configs for Image-to-Video
       if (isVeo2) {
         requestPayload.config!.personGeneration = 'allow_adult';
         requestPayload.config!.durationSeconds = 8;
-      } else {
-          // No specific config for Veo 3.1 image-to-video yet
       }
       
       // Veo 3 supports multiple reference images, Veo 2 does not.
       if (!isVeo2 && referenceImageParts.length > 1) {
+        // Correctly assign the rest of the VideoAsset objects to 'referenceImages'.
         requestPayload.referenceImages = referenceImageParts.slice(1);
       }
   } else {
