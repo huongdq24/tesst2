@@ -13,7 +13,7 @@ import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
@@ -180,19 +180,42 @@ export function VideoGenerationWorkspace() {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để tạo video.' });
       return;
     }
+
     setIsLoading(true);
     setGeneratedVideoUrls([]);
+
     try {
       const result = await aiVideoGeneration({
         textPrompt: prompt,
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
         apiKey: userData.geminiApiKey,
-        userId: user.uid,
         modelName: videoModel,
       });
-      setGeneratedVideoUrls([result.videoUrl]);
-      toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
+
+      if (result.videoDataUri) {
+        toast({ title: 'Tạo video thành công!', description: 'Đang lưu video vào thư viện của bạn...' });
+        
+        const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+        const videoStorageRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
+        
+        const snapshot = await uploadString(videoStorageRef, result.videoDataUri, 'data_url');
+        const publicUrl = await getDownloadURL(snapshot.ref);
+
+        await addDoc(collection(firestore, 'generatedVideos'), {
+          ownerId: user.uid,
+          prompt: result.prompt,
+          videoUrl: publicUrl,
+          storagePath: snapshot.ref.fullPath,
+          aspectRatio: result.aspectRatio,
+          createdAt: serverTimestamp(),
+        });
+
+        setGeneratedVideoUrls([publicUrl]);
+        toast({ title: 'Đã lưu video!', description: 'Video của bạn đã được lưu thành công vào thư viện.' });
+      } else {
+        throw new Error("Video generation succeeded, but no video data was returned.");
+      }
 
     } catch (error: any) {
       console.error('[VideoGeneration] Full error:', error);

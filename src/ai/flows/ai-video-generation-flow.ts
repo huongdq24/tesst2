@@ -1,15 +1,13 @@
 'use server';
 
 /**
- * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo 3.1).
- * It directly uses the @google/genai library to handle video generation, polling for completion,
- * and then uploads the final video to Firebase Storage, returning a public URL.
+ * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo).
+ * It directly uses the @google/genai library to handle video generation and polling for completion.
+ * The flow returns the generated video as a data URI to the client, which then handles
+ * uploading to Firebase Storage and creating the Firestore document.
  */
 import { z } from 'zod';
 import { Buffer } from 'buffer';
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { storage, firestore } from '@/lib/firebase/config';
 import { GoogleGenAI } from "@google/genai";
 
 // Define input schema for video generation
@@ -20,22 +18,22 @@ const AiVideoGenerationInputSchema = z.object({
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
-  userId: z.string().describe('The UID of the user requesting the generation for storage purposes.'),
   modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema for video generation - returning a public Firebase Storage URL
+// Define output schema: returns the raw video data and metadata for the client to handle.
 const AiVideoGenerationOutputSchema = z.object({
-  videoUrl: z.string().describe('The public URL of the generated video in Firebase Storage.'),
+    videoDataUri: z.string().describe('The generated video as a data URI.'),
+    prompt: z.string().describe('The prompt used for generation.'),
+    aspectRatio: z.string().describe('The aspect ratio used for generation.'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
 
 /**
  * Generates a single video based on a text prompt and optional image references.
- * The video is downloaded from Google's servers and re-uploaded to the user's
- * Firebase Storage, then a public URL is returned.
+ * The video is downloaded from Google's servers and returned as a data URI.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
@@ -164,28 +162,13 @@ export async function aiVideoGeneration(
       console.error(`An error occurred during video download and processing: ${err.message}`);
       throw new Error(`Failed to download or process generated video: ${err.message}`);
   }
-
-  // 7. Upload to Firebase Storage and save metadata to Firestore
-  let publicUrl: string;
-  try {
-    const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-    const videoStorageRef = storageRef(storage, `users/${input.userId}/generated-videos/${fileName}`);
-    const snapshot = await uploadBytes(videoStorageRef, videoBuffer, { contentType: videoFile.mimeType || 'video/mp4' });
-    publicUrl = await getDownloadURL(snapshot.ref);
-
-    await addDoc(collection(firestore, 'generatedVideos'), {
-      ownerId: input.userId,
-      prompt: input.textPrompt,
-      videoUrl: publicUrl,
-      storagePath: snapshot.ref.fullPath,
-      aspectRatio: requestPayload.config.aspectRatio,
-      createdAt: serverTimestamp(),
-    });
-  } catch (error) {
-    console.error("Failed to upload to Firebase or save metadata:", error);
-    throw new Error("Video was generated but failed to save to your library.");
-  }
   
-  // 8. Return the public Firebase Storage URL
-  return { videoUrl: publicUrl };
+  // 7. Return the video data URI and metadata to the client
+  const videoDataUri = `data:${videoFile.mimeType || 'video/mp4'};base64,${videoBuffer.toString('base64')}`;
+  
+  return { 
+    videoDataUri,
+    prompt: input.textPrompt,
+    aspectRatio: requestPayload.config.aspectRatio,
+  };
 }
