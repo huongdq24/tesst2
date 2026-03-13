@@ -32,7 +32,6 @@ export async function brandedImageGeneration(
     : generationPrompt;
 
   const genAI = new GoogleGenAI({ apiKey });
-  const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
   
   const contents: Part[] = [];
 
@@ -85,7 +84,10 @@ export async function brandedImageGeneration(
 
   // To generate multiple images, we must make parallel requests.
   const generationPromises = Array.from({ length: numberOfImages }).map(() =>
-    model.generateContent(contentRequest)
+    genAI.models.generateContent({
+        model: 'gemini-3.1-flash-image-preview',
+        ...contentRequest
+    })
   );
 
   const results = await Promise.all(generationPromises);
