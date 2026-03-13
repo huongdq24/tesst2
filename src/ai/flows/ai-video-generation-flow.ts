@@ -43,8 +43,8 @@ export async function aiVideoGeneration(
     throw new Error('Gemini API key is required to generate the video.');
   }
 
-  const { GoogleGenerativeAI } = await import('@google/genai');
-  const genAI = new GoogleGenerativeAI(input.apiKey);
+  const genai = await import('@google/genai');
+  const genAI = new genai.GoogleGenerativeAI(input.apiKey);
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
