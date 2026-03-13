@@ -9,7 +9,7 @@
  * - AiVideoGenerationInput - The input type for the aiVideoGeneration function.
  * - AiVideoGenerationOutput - The return type for the aiVideoGeneration function.
  */
-import { GoogleGenerativeAI, File as GoogleFile, Operation, GenerateVideosRequest } from '@google/genai';
+import * as genai from '@google/genai';
 import { z } from 'zod';
 import { Buffer } from 'buffer';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -48,7 +48,7 @@ export async function aiVideoGeneration(
     throw new Error('Gemini API key is required to generate the video.');
   }
 
-  const genAI = new GoogleGenerativeAI(input.apiKey);
+  const genAI = new genai.GoogleGenerativeAI(input.apiKey);
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
@@ -77,7 +77,7 @@ export async function aiVideoGeneration(
   }
 
   // 2. Define the request payload based on whether reference images are present
-  const requestPayload: GenerateVideosRequest = {
+  const requestPayload: genai.GenerateVideosRequest = {
       model: 'veo-3.1-generate-preview',
       prompt: input.textPrompt,
       config: {
@@ -95,7 +95,7 @@ export async function aiVideoGeneration(
   }
 
   // 3. Start the video generation operation
-  let operation: Operation = await genAI.models.generateVideos(requestPayload);
+  let operation: genai.Operation = await genAI.models.generateVideos(requestPayload);
 
   // 4. Poll the operation until it's done
   const MAX_POLLING_ATTEMPTS = 120; // 120 attempts * 10s = 20 minutes
@@ -126,7 +126,7 @@ export async function aiVideoGeneration(
   
   // 5. Process the result and download the video.
   const video = generatedVideos[0];
-  const videoFile: GoogleFile = video.video;
+  const videoFile: genai.File = video.video;
   const videoDownloadUrl = videoFile.uri;
   
   // 6. Download video as binary buffer.
