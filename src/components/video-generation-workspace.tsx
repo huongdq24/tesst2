@@ -6,14 +6,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { aiVideoGeneration } from '@/app/actions/video-generation';
+import { aiVideoGeneration } from '@/ai/flows/ai-video-generation-flow';
 import { videoScriptGeneration } from '@/ai/flows/video-script-generation-flow';
 import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
 import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
@@ -160,28 +160,6 @@ export function VideoGenerationWorkspace() {
     });
   };
 
-  const saveVideoToLibrary = async (videoDataUri: string, videoPrompt: string) => {
-    if (!user) return;
-    try {
-      const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-      const videoStorageRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
-      const uploadResult = await uploadString(videoStorageRef, videoDataUri, 'data_url');
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      await addDoc(collection(firestore, 'generatedVideos'), {
-        ownerId: user.uid,
-        prompt: videoPrompt,
-        videoUrl: downloadURL,
-        storagePath: uploadResult.ref.fullPath,
-        aspectRatio: aspectRatio,
-        createdAt: serverTimestamp(),
-      });
-      toast({ title: 'Đã lưu vào thư viện', description: 'Video của bạn đã được lưu thành công.' });
-    } catch (error) {
-      console.error("Failed to save video to library:", error);
-      toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: 'Không thể lưu video vào thư viện của bạn.' });
-    }
-  };
-
   const handleGenerate = async () => {
     if (!prompt.trim()) {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
@@ -207,10 +185,11 @@ export function VideoGenerationWorkspace() {
         referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
         aspectRatio: aspectRatio,
         apiKey: userData.geminiApiKey,
+        userId: user.uid,
       });
-      setGeneratedVideoUrls([result.videoDataUri]);
-      toast({ title: 'Tạo video thành công!', description: 'Đang lưu video vào thư viện của bạn...' });
-      await saveVideoToLibrary(result.videoDataUri, prompt);
+      setGeneratedVideoUrls([result.videoUrl]);
+      toast({ title: 'Tạo video thành công!', description: 'Video đã được lưu vào thư viện của bạn.' });
+
     } catch (error: any) {
       console.error('[VideoGeneration] Full error:', error);
       let description = error.message || 'Đã xảy ra lỗi không mong muốn.';

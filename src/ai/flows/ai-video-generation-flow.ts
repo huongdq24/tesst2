@@ -1,19 +1,20 @@
 'use server';
 
 /**
- * @fileOverview This file implements a Genkit flow for generating videos using AI.
- * It allows users to combine text prompts with an optional image reference to create
- * short professional-looking videos. The generated video is returned as a data URI.
+ * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo 3.1).
+ * It directly uses the @google/genai library to handle video generation, polling for completion,
+ * and then uploads the final video to Firebase Storage, returning a public URL.
  *
  * - aiVideoGeneration - A function that handles the video generation process.
  * - AiVideoGenerationInput - The input type for the aiVideoGeneration function.
  * - AiVideoGenerationOutput - The return type for the aiVideoGeneration function.
  */
-
-import { ai } from '@/ai/genkit';
-import { z } from 'genkit';
+import { GoogleGenerativeAI, File as GoogleFile, Operation, GenerateVideosRequest } from '@google/genai';
+import { z } from 'zod';
 import { Buffer } from 'buffer';
-import { googleAI } from '@genkit-ai/google-genai';
+import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { storage, firestore } from '@/lib/firebase/config';
 
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
@@ -23,75 +24,83 @@ const AiVideoGenerationInputSchema = z.object({
     ),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
+  userId: z.string().describe('The UID of the user requesting the generation for storage purposes.'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema for video generation - returning a data URI
+// Define output schema for video generation - returning a public Firebase Storage URL
 const AiVideoGenerationOutputSchema = z.object({
-  videoDataUri: z.string().describe('The generated video as a data URI.'),
+  videoUrl: z.string().describe('The public URL of the generated video in Firebase Storage.'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
+
 /**
  * Generates a single video based on a text prompt and optional image references.
- * The video is returned as a data URI for the client to handle.
+ * The video is downloaded from Google's servers and re-uploaded to the user's
+ * Firebase Storage, then a public URL is returned.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
 ): Promise<AiVideoGenerationOutput> {
-  // Construct the prompt parts for the Veo model.
-  const promptParts: Array<{ text: string } | { media: { contentType: string; url: string } }> = [
-    { text: input.textPrompt },
-  ];
-  
-  if (input.referenceImageUris) {
-    const dataUriPromises = input.referenceImageUris.map(async (uri) => {
+    
+  if (!input.apiKey) {
+    throw new Error('Gemini API key is required to generate the video.');
+  }
+
+  const genAI = new GoogleGenerativeAI(input.apiKey);
+
+  // 1. Asynchronously convert any image URIs (http or data) into base64 strings
+  const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
+  const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
+
+  if (hasReferenceImages) {
+    const imagePartPromises = input.referenceImageUris!.map(async (uri) => {
+      let base64Data: string;
+      let mimeType: string;
+
       if (uri.startsWith('https://')) {
-        try {
-          const response = await fetch(uri);
-          if (!response.ok) {
-            console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
-            return null;
-          }
-          const buffer = await response.arrayBuffer();
-          const base64Data = Buffer.from(buffer).toString('base64');
-          const mimeType = response.headers.get('content-type') || 'image/jpeg';
-          return `data:${mimeType};base64,${base64Data}`;
-        } catch (error) {
-          console.error(`Error processing image URI ${uri}:`, error);
-          return null;
-        }
+        const response = await fetch(uri);
+        if (!response.ok) throw new Error(`Failed to fetch image from ${uri}`);
+        const buffer = await response.arrayBuffer();
+        base64Data = Buffer.from(buffer).toString('base64');
+        mimeType = response.headers.get('content-type') || 'image/jpeg';
+      } else {
+        const match = uri.match(/^data:(.*?);base64,(.+)$/);
+        if (!match) throw new Error('Invalid data URI format');
+        mimeType = match[1];
+        base64Data = match[2];
       }
-      return uri;
+      return { image: { imageBytes: base64Data, mimeType }, referenceType: 'asset' };
     });
-    const resolvedUris = await Promise.all(dataUriPromises);
-    resolvedUris.forEach(uri => {
-        if (uri) {
-            const match = uri.match(/^data:(.*?);base64,/);
-            if (match && match[1]) {
-                promptParts.push({ media: { contentType: match[1], url: uri } });
-            }
-        }
-    });
+    referenceImageParts.push(...await Promise.all(imagePartPromises));
   }
 
-  // 1. Start the single generation operation.
-  let { operation } = await ai.generate({
-    model: googleAI.model('veo-2.0-generate-001'),
-    prompt: promptParts,
-    config: {
-      aspectRatio: input.aspectRatio,
-      durationSeconds: 5,
-    },
-  });
-
-  if (!operation) {
-    throw new Error('Failed to start the video generation operation.');
+  // 2. Define the request payload based on whether reference images are present
+  const requestPayload: GenerateVideosRequest = {
+      model: 'veo-3.1-generate-preview',
+      prompt: input.textPrompt,
+      config: {
+          aspectRatio: input.aspectRatio,
+      },
+  };
+  
+  if (hasReferenceImages) {
+      requestPayload.referenceImages = referenceImageParts;
+      requestPayload.config!.personGeneration = 'allow_adult';
+      // As per docs, duration must be 8s when using reference images
+      requestPayload.config!.durationSeconds = 8;
+  } else {
+      requestPayload.config!.personGeneration = 'allow_all';
   }
 
-  // 2. Poll the operation until it is done, with a timeout.
-  const MAX_POLLING_ATTEMPTS = 50; // Max ~4 minutes 10 seconds polling
+  // 3. Start the video generation operation
+  let operation: Operation = await genAI.models.generateVideos(requestPayload);
+
+  // 4. Poll the operation until it's done
+  const MAX_POLLING_ATTEMPTS = 120; // 120 attempts * 10s = 20 minutes
   let pollingAttempts = 0;
+  
   while (!operation.done) {
     pollingAttempts++;
     if (pollingAttempts > MAX_POLLING_ATTEMPTS) {
@@ -100,60 +109,62 @@ export async function aiVideoGeneration(
         'Please wait a few minutes and check your video library, then try again.'
       );
     }
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    operation = await ai.checkOperation(operation);
+    await new Promise(resolve => setTimeout(resolve, 10000));
+    operation = await genAI.operations.getVideosOperation({ name: operation.name });
   }
   
-  if (!input.apiKey) {
-      throw new Error('Gemini API key is required to download the generated video.');
-  }
-
-  // 3. Process the result and download the video.
   if (operation.error) {
     console.error('The video generation operation failed:', operation.error.message);
     throw new Error(`Video generation failed: ${operation.error.message}`);
   }
-  
-  const content = operation.output?.message?.content;
-  if (!content || content.length === 0) {
-    const outputJson = JSON.stringify(operation.output, null, 2);
-    throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
-  }
 
-  const videoMediaPart = content.find(p => !!p.media);
-  if (!videoMediaPart?.media?.url) {
-    const textPart = content.find(p => !!p.text);
-    let reason = 'This may be due to safety filters or other content restrictions.';
-    if (textPart?.text) {
-        reason += ` Model response: "${textPart.text}"`;
-    }
-    throw new Error(`The operation completed but did not return a video. ${reason}`);
+  const generatedVideos = operation.response.generatedVideos;
+  if (!generatedVideos || generatedVideos.length === 0) {
+      const outputJson = JSON.stringify(operation.response, null, 2);
+      throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
   }
-    
-  const videoDownloadUrl = videoMediaPart.media.url;
   
-  // 4. Download video as binary buffer.
+  // 5. Process the result and download the video.
+  const video = generatedVideos[0];
+  const videoFile: GoogleFile = video.video;
+  const videoDownloadUrl = videoFile.uri;
+  
+  // 6. Download video as binary buffer.
   let videoBuffer: Buffer;
-  let contentType: string;
   try {
-      const response = await fetch(videoDownloadUrl, {
-        headers: {
-            'x-goog-api-key': input.apiKey,
-        }
-      });
+      const downloadUrlWithKey = `${videoDownloadUrl}&key=${input.apiKey}`;
+      const response = await fetch(downloadUrlWithKey);
       if (!response.ok || !response.body) {
           throw new Error(`Failed to download video file. Status: ${response.statusText}`);
       }
       const arrayBuffer = await response.arrayBuffer();
       videoBuffer = Buffer.from(arrayBuffer);
-      contentType = videoMediaPart.media!.contentType || 'video/mp4';
   } catch (err: any) {
       console.error(`An error occurred during video download and processing: ${err.message}`);
       throw new Error(`Failed to download or process generated video: ${err.message}`);
   }
 
-  // 5. Convert to data URI and return to the client.
-  const videoDataUri = `data:${contentType};base64,${videoBuffer.toString('base64')}`;
+  // 7. Upload to Firebase Storage and save metadata to Firestore
+  let publicUrl: string;
+  try {
+    const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+    const videoStorageRef = storageRef(storage, `users/${input.userId}/generated-videos/${fileName}`);
+    const snapshot = await uploadBytes(videoStorageRef, videoBuffer, { contentType: videoFile.mimeType || 'video/mp4' });
+    publicUrl = await getDownloadURL(snapshot.ref);
+
+    await addDoc(collection(firestore, 'generatedVideos'), {
+      ownerId: input.userId,
+      prompt: input.textPrompt,
+      videoUrl: publicUrl,
+      storagePath: snapshot.ref.fullPath,
+      aspectRatio: input.aspectRatio,
+      createdAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Failed to upload to Firebase or save metadata:", error);
+    throw new Error("Video was generated but failed to save to your library.");
+  }
   
-  return { videoDataUri };
+  // 8. Return the public Firebase Storage URL
+  return { videoUrl: publicUrl };
 }
