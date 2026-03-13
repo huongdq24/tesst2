@@ -46,7 +46,7 @@ export async function aiVideoGeneration(
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Asynchronously convert image URIs to ImageAsset-like objects
-  const imageAssets: { imageBytes: string, mimeType: string }[] = [];
+  const imageAssets: { image: { imageBytes: string, mimeType: string }, referenceType: 'asset' }[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
   if (hasReferenceImages) {
@@ -66,7 +66,7 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        return { imageBytes: base64Data, mimeType };
+        return { image: { imageBytes: base64Data, mimeType }, referenceType: 'asset' as 'asset' };
     });
     imageAssets.push(...await Promise.all(imageAssetPromises));
   }
@@ -85,8 +85,8 @@ export async function aiVideoGeneration(
   };
   
   if (hasReferenceImages) {
-      // The `image` property takes an object with `imageBytes` and `mimeType`.
-      requestPayload.image = imageAssets[0];
+      // The `image` property takes the core image data object.
+      requestPayload.image = imageAssets[0].image;
       
       // Apply model-specific configs for Image-to-Video
       if (isVeo2) {
@@ -96,10 +96,8 @@ export async function aiVideoGeneration(
       
       // Veo 3 supports multiple reference images. They need to be wrapped in a VideoAsset structure.
       if (!isVeo2 && imageAssets.length > 1) {
-        requestPayload.referenceImages = imageAssets.slice(1).map(asset => ({
-            image: asset,
-            referenceType: 'asset' 
-        }));
+        // The rest of the assets are passed as referenceImages
+        requestPayload.referenceImages = imageAssets.slice(1);
       }
   } else {
       // Apply model-specific configs for Text-to-Video
