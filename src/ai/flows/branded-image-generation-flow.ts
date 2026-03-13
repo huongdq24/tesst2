@@ -1,6 +1,6 @@
 'use server';
 import { z } from 'zod';
-import { GoogleGenerativeAI, Part } from '@google/genai';
+import { type Part } from '@google/genai';
 import { Buffer } from 'buffer';
 
 const BrandedImageGenerationInputSchema = z.object({
@@ -31,6 +31,7 @@ export async function brandedImageGeneration(
     ? `${generationPrompt}, aspect ratio ${aspectRatio}`
     : generationPrompt;
 
+  const { GoogleGenerativeAI } = await import('@google/genai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const model = genAI.getGenerativeModel({ model: 'gemini-3.1-flash-image-preview' });
   

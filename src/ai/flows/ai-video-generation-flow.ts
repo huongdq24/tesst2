@@ -4,12 +4,7 @@
  * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo 3.1).
  * It directly uses the @google/genai library to handle video generation, polling for completion,
  * and then uploads the final video to Firebase Storage, returning a public URL.
- *
- * - aiVideoGeneration - A function that handles the video generation process.
- * - AiVideoGenerationInput - The input type for the aiVideoGeneration function.
- * - AiVideoGenerationOutput - The return type for the aiVideoGeneration function.
  */
-import { GoogleGenerativeAI } from '@google/genai';
 import { z } from 'zod';
 import { Buffer } from 'buffer';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -48,6 +43,7 @@ export async function aiVideoGeneration(
     throw new Error('Gemini API key is required to generate the video.');
   }
 
+  const { GoogleGenerativeAI } = await import('@google/genai');
   const genAI = new GoogleGenerativeAI(input.apiKey);
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
@@ -110,7 +106,7 @@ export async function aiVideoGeneration(
       );
     }
     await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await genAI.operations.get({ name: operation.name });
+    operation = await genAI.getOperation(operation.name);
   }
   
   if (operation.error) {
