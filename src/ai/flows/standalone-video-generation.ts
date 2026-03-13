@@ -1,50 +1,33 @@
 'use server';
 
-/**
- * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo 3.1).
- * It directly uses the @google/genai library to handle video generation, polling for completion,
- * and then uploads the final video to Firebase Storage, returning a public URL.
- */
 import { z } from 'zod';
 import { Buffer } from 'buffer';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { storage, firestore } from '@/lib/firebase/config';
+// ĐIỂM SỬA 1: Import đúng class GoogleGenAI từ SDK mới nhất
 import { GoogleGenAI } from "@google/genai";
 
-// Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
-  textPrompt: z.string().describe('The text prompt describing the video to generate.'),
-  referenceImageUris: z.array(z.string()).optional().describe(
-      "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
-    ),
+  textPrompt: z.string(),
+  referenceImageUris: z.array(z.string()).optional(),
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
-  apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
-  userId: z.string().describe('The UID of the user requesting the generation for storage purposes.'),
+  apiKey: z.string(),
+  userId: z.string(),
 });
+
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema for video generation - returning a public Firebase Storage URL
-const AiVideoGenerationOutputSchema = z.object({
-  videoUrl: z.string().describe('The public URL of the generated video in Firebase Storage.'),
-});
-export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
-
-
-/**
- * Generates a single video based on a text prompt and optional image references.
- * The video is downloaded from Google's servers and re-uploaded to the user's
- * Firebase Storage, then a public URL is returned.
- */
-export async function aiVideoGeneration(
+export async function standaloneVideoGeneration(
   input: AiVideoGenerationInput
-): Promise<AiVideoGenerationOutput> {
-    
+): Promise<{ videoUrl: string }> {
+
   if (!input.apiKey) {
     throw new Error('Gemini API key is required to generate the video.');
   }
 
-  const ai = new GoogleGenAI(input.apiKey);
+  // ĐIỂM SỬA 2: Khởi tạo đúng cú pháp SDK mới
+  const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
@@ -69,32 +52,27 @@ export async function aiVideoGeneration(
       }
       return { image: { imageBytes: base64Data, mimeType }, referenceType: 'asset' };
     });
-    referenceImageParts.push(...await Promise.all(imagePartPromises));
+    referenceImageParts.push(...(await Promise.all(imagePartPromises)));
   }
 
-  // 2. Define the request payload based on whether reference images are present
-  let requestPayload: any = {
-    model: 'veo-3.1-generate-preview',
-    prompt: input.textPrompt,
-    config: {
-        aspectRatio: input.aspectRatio,
-    }
+  // ĐIỂM SỬA 3: Payload chuẩn cho Veo 3.1
+  const requestPayload: any = {
+      model: 'veo-3.1-generate-preview',
+      prompt: input.textPrompt,
+      config: {
+          aspectRatio: input.aspectRatio,
+      },
   };
   
   if (hasReferenceImages) {
+      // Đối với Image-to-Video cơ bản, ta gán trực tiếp image: { imageBytes, mimeType } vào cấp gốc (root) của payload
       requestPayload.image = {
-        imageBytes: referenceImageParts[0].image.imageBytes,
-        mimeType: referenceImageParts[0].image.mimeType
+          imageBytes: referenceImageParts[0].image.imageBytes,
+          mimeType: referenceImageParts[0].image.mimeType
       };
-      // As per docs, personGeneration and duration are required for image-to-video
-      requestPayload.config!.personGeneration = 'allow_adult';
-      requestPayload.config!.durationSeconds = 8;
-      // Put the rest of the images in referenceImages, if they exist
-      if(referenceImageParts.length > 1) {
-        requestPayload.referenceImages = referenceImageParts.slice(1);
-      }
+      requestPayload.config.personGeneration = 'allow_adult';
   } else {
-      requestPayload.config!.personGeneration = 'allow_all';
+      requestPayload.config.personGeneration = 'allow_all';
   }
 
   // 3. Start the video generation operation
@@ -107,29 +85,25 @@ export async function aiVideoGeneration(
   while (!operation.done) {
     pollingAttempts++;
     if (pollingAttempts > MAX_POLLING_ATTEMPTS) {
-      throw new Error(
-        'Video generation timed out: Veo is still processing but the server limit was reached. ' +
-        'Please wait a few minutes and check your video library, then try again.'
-      );
+      throw new Error('Video generation timed out.');
     }
     await new Promise(resolve => setTimeout(resolve, 10000));
-    operation = await ai.operations.get(operation.name);
+    
+    // ĐIỂM SỬA 4: Sử dụng hàm getVideosOperation của thuộc tính operations
+    operation = await ai.operations.getVideosOperation({ operation: operation });
   }
   
   if (operation.error) {
-    console.error('The video generation operation failed:', operation.error.message);
     throw new Error(`Video generation failed: ${operation.error.message}`);
   }
 
-  const generatedVideos = operation.response.generatedVideos;
+  const generatedVideos = operation.response?.generatedVideos;
   if (!generatedVideos || generatedVideos.length === 0) {
-      const outputJson = JSON.stringify(operation.response, null, 2);
-      throw new Error(`The video operation completed but returned an empty response. This may be due to content policy violations or other restrictions. Full output from operation: ${outputJson}`);
+      throw new Error(`The video operation completed but returned an empty response.`);
   }
   
   // 5. Process the result and download the video.
-  const video = generatedVideos[0];
-  const videoFile: any = video.video;
+  const videoFile: any = generatedVideos[0].video;
   const videoDownloadUrl = videoFile.uri;
   
   // 6. Download video as binary buffer.
@@ -143,7 +117,6 @@ export async function aiVideoGeneration(
       const arrayBuffer = await response.arrayBuffer();
       videoBuffer = Buffer.from(arrayBuffer);
   } catch (err: any) {
-      console.error(`An error occurred during video download and processing: ${err.message}`);
       throw new Error(`Failed to download or process generated video: ${err.message}`);
   }
 
@@ -164,7 +137,6 @@ export async function aiVideoGeneration(
       createdAt: serverTimestamp(),
     });
   } catch (error) {
-    console.error("Failed to upload to Firebase or save metadata:", error);
     throw new Error("Video was generated but failed to save to your library.");
   }
   
