@@ -25,6 +25,7 @@ export function ImageGenerationWorkspace() {
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [promptModel, setPromptModel] = useState('gemini-3.1-pro-preview');
+  const [imageModel, setImageModel] = useState('gemini-3.1-flash-image-preview');
   const [artStyle, setArtStyle] = useState<string | null>(null);
   const [intentAnalysis, setIntentAnalysis] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -182,6 +183,7 @@ export function ImageGenerationWorkspace() {
           aspectRatio: aspectRatio,
           numberOfImages: numberOfImages,
           apiKey: userData.geminiApiKey,
+          modelName: imageModel,
         }),
         timeoutPromise,
       ]) as BrandedImageGenerationOutput;
@@ -384,6 +386,19 @@ export function ImageGenerationWorkspace() {
                 disabled={isBusy}
                 className="resize-none flex-1"
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image-model">Mô hình tạo ảnh</Label>
+              <Select value={imageModel} onValueChange={setImageModel} disabled={isBusy}>
+                <SelectTrigger id="image-model" className="w-full">
+                  <SelectValue placeholder="Chọn mô hình" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="gemini-3.1-flash-image-preview">gemini-3.1-flash-image-preview</SelectItem>
+                  <SelectItem value="gemini-3-pro-image-preview">gemini-3-pro-image-preview</SelectItem>
+                  <SelectItem value="gemini-2.5-flash-image">gemini-2.5-flash-image</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">

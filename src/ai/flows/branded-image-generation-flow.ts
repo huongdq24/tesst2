@@ -9,6 +9,7 @@ const BrandedImageGenerationInputSchema = z.object({
   aspectRatio: z.string().optional(),
   numberOfImages: z.number().min(1).max(4).optional().default(1),
   apiKey: z.string().describe('The user Gemini API key to use for generation.'),
+  modelName: z.string().optional().describe('The name of the model to use for image generation.'),
 });
 
 export type BrandedImageGenerationInput = z.infer<typeof BrandedImageGenerationInputSchema>;
@@ -22,7 +23,7 @@ export type BrandedImageGenerationOutput = z.infer<typeof BrandedImageGeneration
 export async function brandedImageGeneration(
   input: BrandedImageGenerationInput
 ): Promise<BrandedImageGenerationOutput> {
-  const { existingImageUris, generationPrompt, aspectRatio, numberOfImages, apiKey } = input;
+  const { existingImageUris, generationPrompt, aspectRatio, numberOfImages, apiKey, modelName } = input;
   if (!apiKey) {
     throw new Error('Gemini API key is required. Please add your API key in settings.');
   }
@@ -85,7 +86,7 @@ export async function brandedImageGeneration(
   // To generate multiple images, we must make parallel requests.
   const generationPromises = Array.from({ length: numberOfImages }).map(() =>
     genAI.models.generateContent({
-        model: 'gemini-3.1-flash-image-preview',
+        model: modelName || 'gemini-3.1-flash-image-preview',
         ...contentRequest
     })
   );
