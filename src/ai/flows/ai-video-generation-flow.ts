@@ -93,9 +93,11 @@ export async function aiVideoGeneration(
       };
       
       // Apply model-specific configs for Image-to-Video
-      requestPayload.config!.personGeneration = 'allow_adult'; // Common for now
       if (isVeo2) {
+        requestPayload.config!.personGeneration = 'allow_adult';
         requestPayload.config!.durationSeconds = 8;
+      } else {
+          // No specific config for Veo 3.1 image-to-video yet
       }
       
       // Veo 3 supports multiple reference images, Veo 2 does not.
@@ -151,7 +153,7 @@ export async function aiVideoGeneration(
   // 6. Download video as binary buffer.
   let videoBuffer: Buffer;
   try {
-      const downloadUrlWithKey = `${videoDownloadUrl}?key=${input.apiKey}`;
+      const downloadUrlWithKey = `${videoDownloadUrl}&key=${input.apiKey}`;
       const response = await fetch(downloadUrlWithKey);
       if (!response.ok || !response.body) {
           throw new Error(`Failed to download video file. Status: ${response.statusText}`);
