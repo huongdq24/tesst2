@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, DragEvent } from 'react';
+import { useState, useRef, DragEvent, useEffect } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -37,12 +37,24 @@ export function ImageGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const MAX_INPUT_IMAGES = 4;
+
+  useEffect(() => {
+    // Cleanup interval on component unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
+
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -170,6 +182,11 @@ export function ImageGenerationWorkspace() {
     }
     setIsLoading(true);
     setGeneratedImageUrls([]);
+    setElapsedTime(0);
+
+    timerRef.current = setInterval(() => {
+      setElapsedTime(prevTime => prevTime + 0.1);
+    }, 100);
 
     const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Hết thời gian chờ (60 giây). Vui lòng thử lại.')), 60000)
@@ -217,6 +234,9 @@ export function ImageGenerationWorkspace() {
       toast({ variant: 'destructive', title: 'Lỗi tạo ảnh', description: error.message });
     } finally {
       setIsLoading(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
     }
   };
 
@@ -445,7 +465,13 @@ export function ImageGenerationWorkspace() {
           <div className="flex flex-col items-center gap-4 text-muted-foreground">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
             <p>{t('workspace.image.loadingMessage')}</p>
-            <p className="text-sm">{t('workspace.image.loadingSubMessage')}</p>
+            <div className="flex items-center gap-2 font-mono text-lg">
+                <span className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                </span>
+                <span>{elapsedTime.toFixed(1)}s</span>
+            </div>
           </div>
         ) : generatedImageUrls.length > 0 ? (
           <div className={cn(

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, DragEvent } from 'react';
+import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -35,11 +35,22 @@ export function VideoGenerationWorkspace() {
   const [isLoading, setIsLoading] = useState(false);
   const [scriptModel, setScriptModel] = useState('gemini-3.1-pro-preview');
   const [videoModel, setVideoModel] = useState('veo-3.1-generate-preview');
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const { toast } = useToast();
   const { t } = useI18n();
   const { user, userData } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    // Cleanup interval on component unmount
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    };
+  }, []);
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -183,6 +194,11 @@ export function VideoGenerationWorkspace() {
 
     setIsLoading(true);
     setGeneratedVideoUrls([]);
+    setElapsedTime(0);
+
+    timerRef.current = setInterval(() => {
+      setElapsedTime(prevTime => prevTime + 0.1);
+    }, 100);
 
     try {
       const result = await aiVideoGeneration({
@@ -199,7 +215,7 @@ export function VideoGenerationWorkspace() {
         const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
         const videoStorageRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
         
-        const snapshot = await uploadString(videoStorageRef, result.videoDataUri, 'data_url');
+        const snapshot = await uploadString(videoStorageRef, result.videoDataUri, 'data_url', { contentType: 'video/mp4' });
         const publicUrl = await getDownloadURL(snapshot.ref);
 
         await addDoc(collection(firestore, 'generatedVideos'), {
@@ -232,6 +248,9 @@ export function VideoGenerationWorkspace() {
       });
     } finally {
       setIsLoading(false);
+      if(timerRef.current){
+        clearInterval(timerRef.current);
+      }
     }
   };
   
@@ -423,6 +442,13 @@ export function VideoGenerationWorkspace() {
             <div className="flex flex-col items-center gap-4 text-muted-foreground">
                 <Loader2 className="h-16 w-16 animate-spin text-primary" />
                 <p className="mt-4">{t('workspace.video.loadingMessage')}</p>
+                <div className="flex items-center gap-2 font-mono text-lg">
+                    <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
+                    </span>
+                    <span>{elapsedTime.toFixed(1)}s</span>
+                </div>
             </div>
         ) : generatedVideoUrls.length > 0 ? (
           <div className={cn(
