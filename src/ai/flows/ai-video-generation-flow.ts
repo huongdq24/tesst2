@@ -3,8 +3,7 @@
 /**
  * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo).
  * It directly uses the @google/genai library to handle video generation and polling for completion.
- * The flow returns the generated video as a data URI to the client, which then handles
- * uploading to Firebase Storage and creating the Firestore document.
+ * The flow returns the public URL of the generated video after saving it to Firebase.
  */
 import { z } from 'zod';
 import { Buffer } from 'buffer';
@@ -50,8 +49,8 @@ export async function aiVideoGeneration(
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Asynchronously convert image URIs to ImageAsset-like objects
-  // The error message indicates the field should be `bytesBase64Encoded`.
-  const imageAssets: { bytesBase64Encoded: string, mimeType: string }[] = [];
+  // The error message says `bytesBase64Encoded`, but the SDK seems to expect `imageBytes`.
+  const imageAssets: { imageBytes: string, mimeType: string }[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
   if (hasReferenceImages) {
@@ -71,8 +70,8 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        // This structure matches what the error message implies.
-        return { bytesBase64Encoded: base64Data, mimeType };
+        // Using `imageBytes` as this seems to be what the SDK actually expects.
+        return { imageBytes: base64Data, mimeType };
     });
     imageAssets.push(...await Promise.all(imageAssetPromises));
   }
@@ -91,7 +90,7 @@ export async function aiVideoGeneration(
   };
   
   if (hasReferenceImages) {
-      // The `image` property takes the ImageAsset-like object directly.
+      // The `image` property takes an object with `imageBytes` and `mimeType`.
       requestPayload.image = imageAssets[0];
       
       // Apply model-specific configs for Image-to-Video
