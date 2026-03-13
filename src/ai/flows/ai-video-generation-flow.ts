@@ -3,14 +3,11 @@
 /**
  * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo).
  * It directly uses the @google/genai library to handle video generation and polling for completion.
- * The flow returns the public URL of the generated video after saving it to Firebase.
+ * The flow returns the generated video as a data URI to be handled by the client.
  */
 import { z } from 'zod';
 import { Buffer } from 'buffer';
 import { GoogleGenAI } from "@google/genai";
-import { ref as storageRef, uploadString, getDownloadURL } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { storage, firestore } from '@/lib/firebase/config';
 
 
 // Define input schema for video generation
@@ -22,21 +19,21 @@ const AiVideoGenerationInputSchema = z.object({
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9'),
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
   modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
-  userId: z.string().describe('The ID of the user initiating the request.'),
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema: returns the public URL of the saved video.
+// Define output schema: returns the video data URI and other metadata.
 const AiVideoGenerationOutputSchema = z.object({
-    videoUrl: z.string().describe('The public URL of the generated and saved video in Firebase Storage.'),
+    videoDataUri: z.string().describe('The generated video content as a data URI.'),
     prompt: z.string().describe('The prompt used for generation.'),
+    aspectRatio: z.string().describe('The aspect ratio of the generated video.'),
 });
 export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSchema>;
 
 
 /**
  * Generates a single video based on a text prompt and optional image references,
- * downloads it, and saves it to Firebase Storage and Firestore.
+ * and returns it as a data URI.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
@@ -49,7 +46,6 @@ export async function aiVideoGeneration(
   const ai = new GoogleGenAI({ apiKey: input.apiKey });
 
   // 1. Asynchronously convert image URIs to ImageAsset-like objects
-  // The error message says `bytesBase64Encoded`, but the SDK seems to expect `imageBytes`.
   const imageAssets: { imageBytes: string, mimeType: string }[] = [];
   const hasReferenceImages = input.referenceImageUris && input.referenceImageUris.length > 0;
 
@@ -70,7 +66,6 @@ export async function aiVideoGeneration(
             mimeType = match[1];
             base64Data = match[2];
         }
-        // Using `imageBytes` as this seems to be what the SDK actually expects.
         return { imageBytes: base64Data, mimeType };
     });
     imageAssets.push(...await Promise.all(imageAssetPromises));
@@ -102,7 +97,7 @@ export async function aiVideoGeneration(
       // Veo 3 supports multiple reference images. They need to be wrapped in a VideoAsset structure.
       if (!isVeo2 && imageAssets.length > 1) {
         requestPayload.referenceImages = imageAssets.slice(1).map(asset => ({
-            image: asset, // The ImageAsset-like object goes here
+            image: asset,
             referenceType: 'asset' 
         }));
       }
@@ -119,7 +114,7 @@ export async function aiVideoGeneration(
   let operation = await ai.models.generateVideos(requestPayload);
 
   // 4. Poll the operation until it's done
-  const MAX_POLLING_ATTEMPTS = 55; // 55 attempts * 10s = 550s (9.1 min), safely within the 10 min server action timeout
+  const MAX_POLLING_ATTEMPTS = 85; // 85 attempts * 10s = 850s (14.1 min), safely within the 15 min server action timeout
   let pollingAttempts = 0;
   
   while (!operation.done) {
@@ -155,6 +150,7 @@ export async function aiVideoGeneration(
   // 6. Download video as binary buffer.
   let videoBuffer: Buffer;
   try {
+      // The download URL might have existing query params, so append with &
       const downloadUrlWithKey = `${videoDownloadUrl}&key=${input.apiKey}`;
       const response = await fetch(downloadUrlWithKey);
       if (!response.ok || !response.body) {
@@ -167,32 +163,13 @@ export async function aiVideoGeneration(
       throw new Error(`Failed to download or process generated video: ${err.message}`);
   }
   
-  // 7. Upload to Firebase Storage and save metadata to Firestore
-  let publicUrl: string;
-  try {
-    const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-    const videoStorageRef = storageRef(storage, `users/${input.userId}/generated-videos/${fileName}`);
-    const videoDataUri = `data:${videoFile.mimeType || 'video/mp4'};base64,${videoBuffer.toString('base64')}`;
+  // 7. Convert the video buffer to a data URI.
+  const videoDataUri = `data:${videoFile.mimeType || 'video/mp4'};base64,${videoBuffer.toString('base64')}`;
 
-    const snapshot = await uploadString(videoStorageRef, videoDataUri, 'data_url', { contentType: 'video/mp4' });
-    publicUrl = await getDownloadURL(snapshot.ref);
-
-    await addDoc(collection(firestore, 'generatedVideos'), {
-      ownerId: input.userId,
-      prompt: input.textPrompt,
-      videoUrl: publicUrl,
-      storagePath: snapshot.ref.fullPath,
-      aspectRatio: requestPayload.config.aspectRatio,
-      createdAt: serverTimestamp(),
-    });
-  } catch (error) {
-    console.error("Failed to upload to Firebase or save metadata:", error);
-    throw new Error("Video was generated but failed to save to your library.");
-  }
-  
-  // 8. Return the public Firebase Storage URL
+  // 8. Return the data URI and other info to the client
   return { 
-    videoUrl: publicUrl,
+    videoDataUri: videoDataUri,
     prompt: input.textPrompt,
+    aspectRatio: requestPayload.config.aspectRatio,
   };
 }
