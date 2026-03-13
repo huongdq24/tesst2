@@ -10,6 +10,7 @@ import { Buffer } from 'buffer';
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { storage, firestore } from '@/lib/firebase/config';
+import { GoogleGenerativeAI } from "@google/genai";
 
 // Define input schema for video generation
 const AiVideoGenerationInputSchema = z.object({
@@ -43,8 +44,7 @@ export async function aiVideoGeneration(
     throw new Error('Gemini API key is required to generate the video.');
   }
 
-  const genai = await import('@google/genai');
-  const genAI = new genai.GoogleGenerativeAI(input.apiKey);
+  const genAI = new GoogleGenerativeAI(input.apiKey);
 
   // 1. Asynchronously convert any image URIs (http or data) into base64 strings
   const referenceImageParts: { image: { imageBytes: string, mimeType: string }, referenceType: string }[] = [];
