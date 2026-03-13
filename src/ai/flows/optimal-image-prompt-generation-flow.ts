@@ -20,6 +20,7 @@ const OptimalImagePromptGenerationInputSchema = z.object({
   imageUris: z.array(z.string()).optional().describe(
       "Optional array of reference images as data URIs or public URLs. Format: 'data:<mimetype>;base64,<encoded_data>' or 'https://...'"
     ),
+  model: z.string().optional().describe("The model to use for prompt generation."),
 });
 export type OptimalImagePromptGenerationInput = z.infer<typeof OptimalImagePromptGenerationInputSchema>;
 
@@ -105,8 +106,10 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
+    const modelToUse = input.model || 'gemini-3.1-pro-preview';
+
     const { output } = await ai.generate({
-      model: googleAI.model('gemini-3.1-pro-preview'),
+      model: googleAI.model(modelToUse as any),
       prompt: promptParts,
       system: systemPrompt,
       output: {

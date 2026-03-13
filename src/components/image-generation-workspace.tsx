@@ -24,6 +24,7 @@ export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [promptModel, setPromptModel] = useState('gemini-3.1-pro-preview');
   const [artStyle, setArtStyle] = useState<string | null>(null);
   const [intentAnalysis, setIntentAnalysis] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -136,6 +137,7 @@ export function ImageGenerationWorkspace() {
       const result = await optimalImagePromptGeneration({
         description: simplePrompt,
         imageUris: inputImageUrls,
+        model: promptModel,
       });
       setPrompt(result.optimized_english_prompt);
       setArtStyle(result.art_style_inferred);
@@ -346,6 +348,19 @@ export function ImageGenerationWorkspace() {
                 disabled={isBusy}
                 className="resize-none"
               />
+              <div className="space-y-2">
+                <Label htmlFor="prompt-model">Mô hình tạo Prompt</Label>
+                <Select value={promptModel} onValueChange={setPromptModel} disabled={isBusy}>
+                  <SelectTrigger id="prompt-model" className="w-full">
+                    <SelectValue placeholder="Chọn mô hình" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">gemini-3-flash-preview</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <Button onClick={handleGenerateOptimalPrompt} disabled={isGeneratingPrompt || !simplePrompt.trim()} size="sm" className="w-full">
                 {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
                 {t('workspace.image.generatePromptButton')}
