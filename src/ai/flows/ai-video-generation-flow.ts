@@ -73,12 +73,16 @@ export async function aiVideoGeneration(
     referenceImageParts.push(...await Promise.all(imagePartPromises));
   }
 
-  // 2. Define the request payload based on whether reference images are present
+  const modelName = input.modelName || 'veo-3.1-generate-preview';
+  const isVeo2 = modelName === 'veo-2.0-generate-001';
+
+  // 2. Define the request payload with model-specific configurations
   let requestPayload: any = {
-    model: input.modelName || 'veo-3.1-generate-preview',
+    model: modelName,
     prompt: input.textPrompt,
     config: {
-        aspectRatio: input.aspectRatio,
+        // For Veo 3 models, force 16:9 as 9:16 is not supported
+        aspectRatio: isVeo2 ? input.aspectRatio : '16:9',
     }
   };
   
@@ -87,15 +91,24 @@ export async function aiVideoGeneration(
         imageBytes: referenceImageParts[0].image.imageBytes,
         mimeType: referenceImageParts[0].image.mimeType
       };
-      // As per docs, personGeneration and duration are required for image-to-video
-      requestPayload.config!.personGeneration = 'allow_adult';
-      requestPayload.config!.durationSeconds = 8;
-      // Put the rest of the images in referenceImages, if they exist
-      if(referenceImageParts.length > 1) {
+      
+      // Apply model-specific configs for Image-to-Video
+      requestPayload.config!.personGeneration = 'allow_adult'; // Common for now
+      if (isVeo2) {
+        requestPayload.config!.durationSeconds = 8;
+      }
+      
+      // Veo 3 supports multiple reference images, Veo 2 does not.
+      if (!isVeo2 && referenceImageParts.length > 1) {
         requestPayload.referenceImages = referenceImageParts.slice(1);
       }
   } else {
-      requestPayload.config!.personGeneration = 'allow_adult';
+      // Apply model-specific configs for Text-to-Video
+      if (isVeo2) {
+          requestPayload.config!.personGeneration = 'allow_adult';
+      } else {
+          requestPayload.config!.personGeneration = 'allow_all';
+      }
   }
 
   // 3. Start the video generation operation
@@ -163,7 +176,7 @@ export async function aiVideoGeneration(
       prompt: input.textPrompt,
       videoUrl: publicUrl,
       storagePath: snapshot.ref.fullPath,
-      aspectRatio: input.aspectRatio,
+      aspectRatio: requestPayload.config.aspectRatio,
       createdAt: serverTimestamp(),
     });
   } catch (error) {
