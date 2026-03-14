@@ -40,6 +40,7 @@ const formSchema = z.object({
   heyGenApiKey: z.string().optional(),
 });
 
+// Function to mask the API key, showing first 3 and last 3 characters
 const maskApiKey = (key?: string) => {
   if (!key || key.length <= 6) {
     return '••••••';
@@ -53,6 +54,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const { toast } = useToast();
   const { t } = useI18n();
 
+  // Initialize form with empty default values to prevent crash on initial render
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -62,6 +64,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
     }
   });
 
+  // Use useEffect to safely reset the form with user data when the modal opens
   useEffect(() => {
     if (open && userData) {
         form.reset({
