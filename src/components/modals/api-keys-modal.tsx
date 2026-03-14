@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { KeyRound } from 'lucide-react';
 import { useI18n } from '@/contexts/i18n-context';
 import { IGenLogo } from '../igen-logo';
+import { useEffect } from 'react';
 
 interface ApiKeysModalProps {
   open: boolean;
@@ -39,6 +40,14 @@ const formSchema = z.object({
   heyGenApiKey: z.string().optional(),
 });
 
+const maskApiKey = (key?: string) => {
+  if (!key || key.length <= 6) {
+    return '••••••';
+  }
+  return `${key.substring(0, 3)}...${key.slice(-3)}`;
+};
+
+
 export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const { user, userData } = useAuth();
   const { toast } = useToast();
@@ -46,18 +55,32 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    values: {
-        geminiApiKey: userData?.geminiApiKey || '',
-        elevenLabsApiKey: userData?.elevenLabsApiKey || '',
-        heyGenApiKey: userData?.heyGenApiKey || '',
+    defaultValues: {
+        geminiApiKey: '',
+        elevenLabsApiKey: '',
+        heyGenApiKey: '',
     }
   });
+
+  useEffect(() => {
+    if (open && userData) {
+        form.reset({
+            geminiApiKey: userData.geminiApiKey || '',
+            elevenLabsApiKey: userData.elevenLabsApiKey || '',
+            heyGenApiKey: userData.heyGenApiKey || '',
+        });
+    }
+  }, [open, userData, form]);
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     if (!user) return;
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
-      await updateDoc(userDocRef, values);
+      await updateDoc(userDocRef, {
+        geminiApiKey: values.geminiApiKey,
+        elevenLabsApiKey: values.elevenLabsApiKey,
+        heyGenApiKey: values.heyGenApiKey
+      });
       toast({
         title: 'Success!',
         description: t('apikeys.modal.success'),
@@ -105,7 +128,10 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="geminiApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.gemini')} /></FormLabel>
+                  <div className="flex justify-between items-baseline">
+                    <FormLabel><ApiKeyLabel text={t('apikeys.modal.gemini')} /></FormLabel>
+                    {field.value && <span className="text-xs text-muted-foreground font-mono">{maskApiKey(field.value)}</span>}
+                  </div>
                   <FormControl>
                     <Input type="password" placeholder={t('apikeys.modal.gemini.placeholder')} {...field} />
                   </FormControl>
@@ -118,7 +144,10 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="elevenLabsApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.elevenlabs')} /></FormLabel>
+                  <div className="flex justify-between items-baseline">
+                    <FormLabel><ApiKeyLabel text={t('apikeys.modal.elevenlabs')} /></FormLabel>
+                     {field.value && <span className="text-xs text-muted-foreground font-mono">{maskApiKey(field.value)}</span>}
+                  </div>
                   <FormControl>
                     <Input type="password" placeholder={t('apikeys.modal.elevenlabs.placeholder')} {...field} />
                   </FormControl>
@@ -131,7 +160,10 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
               name="heyGenApiKey"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel><ApiKeyLabel text={t('apikeys.modal.heygen')} /></FormLabel>
+                  <div className="flex justify-between items-baseline">
+                    <FormLabel><ApiKeyLabel text={t('apikeys.modal.heygen')} /></FormLabel>
+                    {field.value && <span className="text-xs text-muted-foreground font-mono">{maskApiKey(field.value)}</span>}
+                  </div>
                   <FormControl>
                     <Input type="password" placeholder={t('apikeys.modal.heygen.placeholder')} {...field} />
                   </FormControl>
