@@ -40,6 +40,8 @@ const formSchema = z.object({
   heyGenApiKey: z.string().optional(),
 });
 
+type FormValues = z.infer<typeof formSchema>;
+
 // Function to mask the API key, showing first 4 and last 4 characters
 const maskApiKey = (key?: string) => {
   if (!key || key.length <= 8) {
@@ -55,7 +57,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const { t } = useI18n();
 
   // Initialize form with empty default values to prevent crash on initial render
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
         geminiApiKey: '',
@@ -75,7 +77,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
     }
   }, [open, userData, form]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>>) => {
+  const onSubmit = async (values: FormValues) => {
     if (!user) return;
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
