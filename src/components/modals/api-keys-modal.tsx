@@ -40,12 +40,12 @@ const formSchema = z.object({
   heyGenApiKey: z.string().optional(),
 });
 
-// Function to mask the API key, showing first 3 and last 3 characters
+// Function to mask the API key, showing first 4 and last 4 characters
 const maskApiKey = (key?: string) => {
-  if (!key || key.length <= 6) {
-    return '••••••';
+  if (!key || key.length <= 8) {
+    return '••••••••';
   }
-  return `${key.substring(0, 3)}...${key.slice(-3)}`;
+  return `${key.substring(0, 4)}...${key.slice(-4)}`;
 };
 
 
@@ -75,7 +75,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
     }
   }, [open, userData, form]);
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: z.infer<typeof formSchema>>) => {
     if (!user) return;
     const userDocRef = doc(firestore, 'users', user.uid);
     try {
