@@ -1,4 +1,4 @@
-const { GoogleGenerativeAI } = require('@google/genai');
+const { GoogleGenAI } = require('@google/genai');
 
-const ai = new GoogleGenerativeAI({apiKey: 'abc'});
+const ai = new GoogleGenAI({apiKey: 'abc'});
 console.log(Object.keys(ai.models));

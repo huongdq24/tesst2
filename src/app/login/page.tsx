@@ -12,13 +12,17 @@ export default function LoginPage() {
 
   useEffect(() => {
     // If done loading, user is logged in, and user is NOT an admin, redirect to home.
-    if (!loading && user && userData?.role !== 'Admin') {
-      router.replace('/home');
+    if (!loading && user) {
+      if (userData?.role == 'Admin'){
+      router.replace('/admin');
+     }else{
+      router.replace('/home')
+     }
     }
   }, [user, userData, loading, router]);
 
   // Show a loader while checking or if redirecting a non-admin user
-  if (loading || (user && userData?.role !== 'Admin')) {
+  if (loading || user) {
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />

@@ -1,4 +1,4 @@
-'use server';
+// Genkit development entry point - run via CLI 
 import { config } from 'dotenv';
 config();
 

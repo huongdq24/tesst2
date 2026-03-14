@@ -12,9 +12,6 @@ import Image from 'next/image';
 import { useI18n } from '@/contexts/i18n-context';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from '@/contexts/auth-context';
-import { storage, firestore } from '@/lib/firebase/config';
-import { ref as storageRef, uploadBytes, getDownloadURL, uploadString } from 'firebase/storage';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Card, CardContent } from './ui/card';
@@ -56,7 +53,7 @@ export function VideoGenerationWorkspace() {
         setAspectRatio('16:9');
       }
     }
-  }, [isVeo2, aspectRatio, setAspectRatio]);
+  }, [isVeo2, aspectRatio]);
 
   useEffect(() => {
     // Cleanup interval on component unmount
@@ -90,8 +87,12 @@ export function VideoGenerationWorkspace() {
     
     try {
       const uploadPromises = filesToUpload.map(async (file) => {
+        const { ref, uploadBytes, getDownloadURL } = await import('firebase/storage');
+        const { collection, addDoc, serverTimestamp } = await import('firebase/firestore');
+        const { storage, firestore } = await import('@/lib/firebase/config');
+
         const fileName = `input-${Date.now()}-${file.name}`;
-        const imageRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+        const imageRef = ref(storage, `users/${user.uid}/inputs/${fileName}`);
         await uploadBytes(imageRef, file);
         const downloadURL = await getDownloadURL(imageRef);
         await addDoc(collection(firestore, 'inputImages'), {
@@ -223,31 +224,15 @@ export function VideoGenerationWorkspace() {
         apiKey: userData.geminiApiKey,
         modelName: videoModel,
         durationSeconds: isVeo2 ? durationSeconds : undefined,
+       userId: user.uid,
       });
 
-      if (result.videoDataUri) {
-        toast({ title: 'Tạo video thành công!', description: 'Đang lưu video vào thư viện của bạn...' });
-        
-        const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-        const videoStorageRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
-        
-        const snapshot = await uploadString(videoStorageRef, result.videoDataUri, 'data_url', { contentType: 'video/mp4' });
-        const publicUrl = await getDownloadURL(snapshot.ref);
-
-        await addDoc(collection(firestore, 'generatedVideos'), {
-          ownerId: user.uid,
-          prompt: result.prompt,
-          videoUrl: publicUrl,
-          storagePath: snapshot.ref.fullPath,
-          aspectRatio: result.aspectRatio,
-          createdAt: serverTimestamp(),
-        });
-
-        setGeneratedVideoUrls([publicUrl]);
-        toast({ title: 'Đã lưu video!', description: 'Video của bạn đã được lưu thành công vào thư viện.' });
-      } else {
-        throw new Error("Video generation succeeded, but no video data was returned.");
-      }
+      if (result.videoUrl) {
+             setGeneratedVideoUrls([result.videoUrl]);
+               toast({ title: 'Đã tạo và lưu video!', description: 'Video của bạn đã được lưu thành công vào thư viện.' });
+             } else {
+               throw new Error("Video generation succeeded, but no video URL was returned.");
+            }
 
     } catch (error: any) {
       console.error('[VideoGeneration] Full error:', error);

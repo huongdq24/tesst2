@@ -3,7 +3,9 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   serverActions: {
     bodySizeLimit: '50mb', // 50MB đủ để truyền ảnh tham chiếu (không cần 100mb vì video không trả về nữa)
-    executionTimeout: 900,
+    //executionTimeout: 900,
+    // executionTimeout chỉ hoạt động trên Vercel Pro/Enterprise.
+   // Trên Firebase App Hosting, timeout được cấu hình trong apphosting.yaml (timeoutSeconds: 900).
   },
   devIndicators: {
     allowedDevOrigins: [

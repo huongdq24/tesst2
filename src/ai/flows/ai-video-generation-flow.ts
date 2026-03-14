@@ -2,12 +2,12 @@
 
 /**
  * @fileOverview This file implements a flow for generating videos using the Google GenAI SDK (Veo).
- * It directly uses the @google/genai library to handle video generation and polling for completion.
- * The flow returns the generated video as a data URI to be handled by the client.
+ * It uploads the generated video to Firebase storage on the server and returns the public URL.
  */
 import { z } from 'zod';
 import { Buffer } from 'buffer';
 import { GoogleGenAI } from "@google/genai";
+import { adminStorage, adminFirestore } from '@/lib/firebase/admin';
 
 
 // Define input schema for video generation
@@ -20,12 +20,14 @@ const AiVideoGenerationInputSchema = z.object({
   apiKey: z.string().describe('The user Gemini API key to use for generation and downloading.'),
   modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
   durationSeconds: z.number().optional().describe('Length of the video in seconds (Veo 2 only).'),
+  userId: z.string().describe('The authenticated user ID for saving to their storage folder.')
 });
 export type AiVideoGenerationInput = z.infer<typeof AiVideoGenerationInputSchema>;
 
-// Define output schema: returns the video data URI and other metadata.
+// Define output schema: returns the video public URL and other metadata.
 const AiVideoGenerationOutputSchema = z.object({
-    videoDataUri: z.string().describe('The generated video content as a data URI.'),
+    videoUrl: z.string().describe('The public Firebase Storage URL of the generated video.'),
+    storagePath: z.string().describe('The storage path for the video.'),
     prompt: z.string().describe('The prompt used for generation.'),
     aspectRatio: z.string().describe('The aspect ratio of the generated video.'),
 });
@@ -33,8 +35,7 @@ export type AiVideoGenerationOutput = z.infer<typeof AiVideoGenerationOutputSche
 
 
 /**
- * Generates a single video based on a text prompt and optional image references,
- * and returns it as a data URI.
+ * Generates a single video, uploads it to storage, and returns the public URL.
  */
 export async function aiVideoGeneration(
   input: AiVideoGenerationInput
@@ -81,7 +82,7 @@ export async function aiVideoGeneration(
     model: modelName,
     prompt: input.textPrompt,
     config: {
-        aspectRatio: isVeo2 ? input.aspectRatio : '16:9',
+      aspectRatio: isVeo2 ? input.aspectRatio : '16:9',
     }
   };
   
@@ -91,29 +92,22 @@ export async function aiVideoGeneration(
   
   if (hasReferenceImages) {
       requestPayload.image = videoAssets[0];
-      
-      if (isVeo2) {
-        requestPayload.config!.personGeneration = 'allow_adult';
-      } else {
-        requestPayload.config!.personGeneration = 'allow_adult';
-      }
+      // Veo 3+ requires allow_all, Veo 2 uses allow_adult for this case
+      requestPayload.config!.personGeneration = isVeo2 ? 'allow_adult' : 'allow_all';
       
       if (!isVeo2 && videoAssets.length > 1) {
         requestPayload.referenceImages = videoAssets.slice(1);
       }
   } else {
-      if (isVeo2) {
-          requestPayload.config!.personGeneration = 'allow_adult';
-      } else {
-          requestPayload.config!.personGeneration = 'allow_all';
-      }
+      // For text-to-video, allow_all is generally supported.
+      requestPayload.config!.personGeneration = 'allow_all';
   }
 
   // 3. Start the video generation operation
   let operation = await ai.models.generateVideos(requestPayload);
 
   // 4. Poll the operation until it's done
-  const MAX_POLLING_ATTEMPTS = 85; // 85 attempts * 10s = 850s (14.1 min), safely within the 15 min server action timeout
+  const MAX_POLLING_ATTEMPTS = 85; 
   let pollingAttempts = 0;
   
   while (!operation.done) {
@@ -161,13 +155,38 @@ export async function aiVideoGeneration(
       throw new Error(`Failed to download or process generated video: ${err.message}`);
   }
   
-  // 7. Convert the video buffer to a data URI.
-  const videoDataUri = `data:${videoFile.mimeType || 'video/mp4'};base64,${videoBuffer.toString('base64')}`;
-
-  // 8. Return the data URI and other info to the client
-  return { 
-    videoDataUri: videoDataUri,
-    prompt: input.textPrompt,
-    aspectRatio: requestPayload.config.aspectRatio,
-  };
+  // 7. Upload video to Firebase Storage using Admin SDK
+ const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
+ const storagePath = `users/${input.userId}/generated-videos/${fileName}`;
+ const bucket = adminStorage.bucket();
+ const file = bucket.file(storagePath);
+ 
+ await file.save(videoBuffer, {
+   metadata: {
+     contentType: videoFile.mimeType || 'video/mp4',
+   },
+ });
+ 
+ // Create a public URL
+ await file.makePublic();
+ const videoUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+ 
+ // 8. Save metadata to Firestore
+ const { FieldValue } = require('firebase-admin/firestore');
+ await adminFirestore.collection('generatedVideos').add({
+   ownerId: input.userId,
+   prompt: input.textPrompt,
+   videoUrl: videoUrl,
+   storagePath: storagePath,
+   aspectRatio: requestPayload.config.aspectRatio,
+   createdAt: FieldValue.serverTimestamp(),
+ });
+ 
+ // 9. Return only the URL and metadata (a few bytes)
+ return { 
+   videoUrl: videoUrl,
+   storagePath: storagePath,
+   prompt: input.textPrompt,
+   aspectRatio: requestPayload.config.aspectRatio,
+ };
 }
