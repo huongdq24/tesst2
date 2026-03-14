@@ -90,17 +90,27 @@ export async function aiVideoGeneration(
     requestPayload.config.durationSeconds = input.durationSeconds;
   }
   
+  // Refined logic for personGeneration based on observed API behavior
   if (hasReferenceImages) {
       requestPayload.image = videoAssets[0];
-      // Veo 3+ requires allow_all, Veo 2 uses allow_adult for this case
-      requestPayload.config!.personGeneration = isVeo2 ? 'allow_adult' : 'allow_all';
       
+      // For Veo 3+, add multiple reference images if they exist
       if (!isVeo2 && videoAssets.length > 1) {
         requestPayload.referenceImages = videoAssets.slice(1);
       }
-  } else {
-      // For text-to-video, allow_all is generally supported.
-      requestPayload.config!.personGeneration = 'allow_all';
+      
+      // Image-to-Video: Set personGeneration based on model.
+      // - Veo 2 requires 'allow_adult' for this use case.
+      // - Veo 3+ seems to reject this parameter when an image is present, so we omit it.
+      if (isVeo2) {
+        requestPayload.config.personGeneration = 'allow_adult';
+      }
+  } else { // Text-to-Video
+      // For Veo 3+ text-to-video, 'allow_all' is the only supported value.
+      if (!isVeo2) {
+        requestPayload.config.personGeneration = 'allow_all';
+      }
+      // For Veo 2 text-to-video, we omit the parameter to be safe.
   }
 
   // 3. Start the video generation operation
