@@ -22,7 +22,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Slider } from '@/components/ui/slider';
 
 export function ImageGenerationWorkspace() {
-<<<<<<< HEAD
   const IMAGE_TEMPLATES = [
     { id: 'none', label: 'Tùy chỉnh (Tự nhập)', prompt: '' },
     { id: 'fashion', label: '👗 Thời trang / Lookbook', prompt: 'Chụp ảnh lookbook thời trang chuyên nghiệp cho [SẢN PHẨM/NGƯỜI MẪU], phong cách ấn tượng, ánh sáng studio, chất lượng tạp chí Vogue' },
@@ -35,8 +34,6 @@ export function ImageGenerationWorkspace() {
   ];
 
   const [selectedTemplate, setSelectedTemplate] = useState('none');
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
@@ -283,15 +280,11 @@ export function ImageGenerationWorkspace() {
       setIntentAnalysis(result.original_intent_analysis);
     } catch (error: any) {
       console.error(error);
-<<<<<<< HEAD
       let errorMsg = error.message;
       if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
         errorMsg = 'API Gemini của bạn đã hết lượt (Lỗi 429 Quota). Vui lòng chọn mô hình khác (VD: flash-lite) ở menu Mô hình tạo Prompt hoặc thử lại sau.';
       }
       toast({ variant: 'destructive', title: 'Lỗi tạo prompt', description: errorMsg });
-=======
-      toast({ variant: 'destructive', title: 'Lỗi tạo prompt', description: error.message });
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
     } finally {
       setIsGeneratingPrompt(false);
     }
@@ -450,7 +443,6 @@ export function ImageGenerationWorkspace() {
             <Separator />
             {/* Simple prompt section */}
             <div className="space-y-2">
-<<<<<<< HEAD
               <div className="flex justify-between items-center mb-1">
                 <Label htmlFor="simple-prompt">{t('workspace.image.simplePromptLabel')}</Label>
                 <Select
@@ -476,23 +468,15 @@ export function ImageGenerationWorkspace() {
                   </SelectContent>
                 </Select>
               </div>
-=======
-              <Label htmlFor="simple-prompt">{t('workspace.image.simplePromptLabel')}</Label>
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
               <Textarea
                 id="simple-prompt"
                 placeholder={t('workspace.image.simplePromptPlaceholder')}
                 value={simplePrompt}
-<<<<<<< HEAD
                 onChange={(e) => {
                   setSimplePrompt(e.target.value);
                   setSelectedTemplate('none');
                 }}
                 rows={3}
-=======
-                onChange={(e) => setSimplePrompt(e.target.value)}
-                rows={2}
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
                 disabled={isBusy}
                 className="resize-none"
               />

@@ -4,11 +4,7 @@ import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-<<<<<<< HEAD
 import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download, ArrowRight, ImagePlus } from 'lucide-react';
-=======
-import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download } from 'lucide-react';
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
 import { useToast } from '@/hooks/use-toast';
 import { startVideoGeneration } from '@/app/actions/video-generation';
 import { checkVideoStatus } from '@/app/actions/check-video-status';
@@ -24,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
-<<<<<<< HEAD
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 
 // Input mode types
@@ -42,10 +37,6 @@ export function VideoGenerationWorkspace() {
   ];
 
   const [selectedTemplate, setSelectedTemplate] = useState('none');
-=======
-
-export function VideoGenerationWorkspace() {
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   const [prompt, setPrompt] = useState('');
   const [scriptDescription, setScriptDescription] = useState('');
   const [motionAnalysis, setMotionAnalysis] = useState<string | null>(null);
@@ -63,7 +54,6 @@ export function VideoGenerationWorkspace() {
   const [frameRate, setFrameRate] = useState('24');
   const [outputResolution, setOutputResolution] = useState('720p');
 
-<<<<<<< HEAD
   // Before & After mode states
   const [inputMode, setInputMode] = useState<InputMode>('standard');
   const [beforeImageUrl, setBeforeImageUrl] = useState<string | null>(null);
@@ -74,8 +64,6 @@ export function VideoGenerationWorkspace() {
   const [isDraggingAfter, setIsDraggingAfter] = useState(false);
   const [libraryTarget, setLibraryTarget] = useState<'standard' | 'before' | 'after'>('standard');
 
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   // Elapsed time counter (like image workspace)
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -249,7 +237,6 @@ export function VideoGenerationWorkspace() {
     cleanupPolling();
   };
 
-<<<<<<< HEAD
   // Before/After file refs
   const beforeFileInputRef = useRef<HTMLInputElement>(null);
   const afterFileInputRef = useRef<HTMLInputElement>(null);
@@ -342,10 +329,6 @@ export function VideoGenerationWorkspace() {
 
   const handleGenerate = async () => {
     if (inputMode === 'standard' && !prompt.trim()) {
-=======
-  const handleGenerate = async () => {
-    if (!prompt.trim()) {
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
       return;
     }
@@ -362,7 +345,6 @@ export function VideoGenerationWorkspace() {
       return;
     }
 
-<<<<<<< HEAD
     // Validate before/after mode
     if (inputMode === 'before-after') {
       if (!beforeImageUrl || !afterImageUrl) {
@@ -371,8 +353,6 @@ export function VideoGenerationWorkspace() {
       }
     }
 
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
     resetGenerationState();
     setJobStatus('processing');
     setElapsedTime(0);
@@ -383,7 +363,6 @@ export function VideoGenerationWorkspace() {
     }, 1000);
     toast({ title: "Bắt đầu tạo video...", description: "Quá trình này có thể mất vài phút." });
 
-<<<<<<< HEAD
     // Build reference images and prompt based on input mode
     let referenceImages: string[] | undefined;
     let finalPrompt = prompt;
@@ -404,12 +383,6 @@ export function VideoGenerationWorkspace() {
         textPrompt: finalPrompt,
         referenceImageUris: referenceImages,
         afterImageUri: (inputMode === 'before-after' && afterImageUrl) ? afterImageUrl : undefined,
-=======
-    try {
-      const result = await startVideoGeneration({
-        textPrompt: prompt,
-        referenceImageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
         aspectRatio: aspectRatio,
         modelName: videoModel,
         userId: user.uid,
@@ -538,13 +511,7 @@ export function VideoGenerationWorkspace() {
   };
 
   const handleImageSelectFromLibrary = (imageUrl: string) => {
-<<<<<<< HEAD
     handleImageSelectFromLibraryBA(imageUrl);
-=======
-    if (!inputImageUrls.includes(imageUrl)) {
-        setInputImageUrls((prevUrls) => [...prevUrls, imageUrl]);
-    }
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   };
   
   const handleGenerateScript = async () => {
@@ -557,7 +524,6 @@ export function VideoGenerationWorkspace() {
     setPrompt('');
 
     try {
-<<<<<<< HEAD
       // Build image URIs based on input mode
       let imageUrisForScript: string[] | undefined;
       let enhancedDescription = scriptDescription;
@@ -589,11 +555,6 @@ export function VideoGenerationWorkspace() {
       const result = await videoScriptGeneration({
         description: enhancedDescription,
         imageUris: imageUrisForScript,
-=======
-      const result = await videoScriptGeneration({
-        description: scriptDescription,
-        imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
         model: scriptModel,
         apiKey: userData?.geminiApiKey,
       });
@@ -602,7 +563,6 @@ export function VideoGenerationWorkspace() {
       setCameraMovement(result.camera_movement);
     } catch (error: any) {
       console.error(error);
-<<<<<<< HEAD
       let errorMsg = error.message || t('toast.image.unexpectedError');
       if (typeof errorMsg === 'string' && (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED'))) {
         errorMsg = 'API Gemini của bạn đã hết lượt (Lỗi 429). Vui lòng chọn mô hình khác ở menu Mô hình tạo kịch bản (VD: flash-lite) hoặc thử lại sau ít phút.';
@@ -611,12 +571,6 @@ export function VideoGenerationWorkspace() {
         variant: 'destructive',
         title: t('toast.video.scriptGenerationFailed.title'),
         description: errorMsg,
-=======
-      toast({
-        variant: 'destructive',
-        title: t('toast.video.scriptGenerationFailed.title'),
-        description: error.message || t('toast.image.unexpectedError'),
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
       });
     } finally {
       setIsGeneratingScript(false);
@@ -632,13 +586,8 @@ export function VideoGenerationWorkspace() {
     });
   };
   
-<<<<<<< HEAD
   const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isUploadingBefore || isUploadingAfter || isSaving;
   const isGenerateDisabled = isBusy || (inputMode === 'standard' && !prompt.trim()) || (inputMode === 'before-after' && (!beforeImageUrl || !afterImageUrl));
-=======
-  const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isSaving;
-  const isGenerateDisabled = isBusy || !prompt.trim();
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
@@ -647,12 +596,9 @@ export function VideoGenerationWorkspace() {
         onOpenChange={setIsLibraryOpen}
         onImageSelect={handleImageSelectFromLibrary}
       />
-<<<<<<< HEAD
       {/* Hidden file inputs for Before/After mode */}
       <input ref={beforeFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'before')} disabled={isBusy} />
       <input ref={afterFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'after')} disabled={isBusy} />
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
       <div className="lg:col-span-1 flex flex-col">
         <Card className="flex-1 flex flex-col">
           <CardContent className="p-6 flex flex-col flex-1 gap-4">
@@ -661,7 +607,6 @@ export function VideoGenerationWorkspace() {
                 ⚠️ Bạn chưa thêm Gemini API Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo video.
               </div>
             )}
-<<<<<<< HEAD
             {/* === INPUT MODE TABS === */}
             <div className="space-y-2">
               <Label>Chế độ đầu vào</Label>
@@ -897,79 +842,15 @@ export function VideoGenerationWorkspace() {
                   </SelectContent>
                 </Select>
               </div>
-=======
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <Label htmlFor="image-upload-input">{t('workspace.image.inputLabel')}</Label>
-                <Button variant="outline" size="sm" onClick={() => setIsLibraryOpen(true)} disabled={isBusy}>
-                  <Images className="mr-2 h-4 w-4" />
-                  Library
-                </Button>
-              </div>
-              <div
-                className={cn(
-                  'relative flex flex-col items-center justify-center w-full min-h-32 p-2 border-2 border-dashed rounded-lg transition-colors',
-                  isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
-                )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                {isUploading ? (
-                  <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <Loader2 className="w-8 h-8 animate-spin" />
-                    <p className="text-sm mt-2">{t('workspace.image.uploading')}</p>
-                  </div>
-                ) : inputImageUrls.length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 w-full">
-                    {inputImageUrls.map((url) => (
-                      <div key={url} className="relative aspect-square">
-                        <Image src={url} alt="Input preview" fill style={{ objectFit: 'contain' }} className="rounded-md p-1 bg-white" />
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className="absolute -top-2 -right-2 h-6 w-6 rounded-full z-10"
-                          onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                     <div 
-                      className="flex aspect-square flex-col items-center justify-center rounded-lg border border-dashed text-muted-foreground hover:bg-muted/50 hover:text-primary transition-colors cursor-pointer"
-                      onClick={() => fileInputRef.current?.click()}
-                     >
-                       <UploadCloud className="w-6 h-6" />
-                       <span className="text-xs text-center mt-1">Thêm</span>
-                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center h-full w-full text-muted-foreground text-center cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    <UploadCloud className="w-8 h-8 mb-2" />
-                    <p className="text-sm">{isDragging ? t('workspace.image.dropLabel') : t('workspace.image.uploadTooltip')}</p>
-                  </div>
-                )}
-                <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
-              </div>
-            </div>
-            <Separator />
-            <div className="space-y-2">
-              <Label htmlFor="script-description">{t('workspace.video.generateScriptButton')}</Label>
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
               <Textarea
                 id="script-description"
                 placeholder={t('workspace.video.scriptDescriptionPlaceholder')}
                 value={scriptDescription}
-<<<<<<< HEAD
                 onChange={(e) => {
                   setScriptDescription(e.target.value);
                   setSelectedTemplate('none');
                 }}
                 rows={4}
-=======
-                onChange={(e) => setScriptDescription(e.target.value)}
-                rows={3}
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
                 disabled={isBusy}
                 className="resize-none"
               />

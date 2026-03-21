@@ -19,11 +19,8 @@ import { Label } from '@/components/ui/label';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
 import { VideoGenerationWorkspace } from '@/components/video-generation-workspace';
 import { ContentStudioWorkspace } from '@/components/content-studio-workspace';
-<<<<<<< HEAD
 import { VoiceCloningWorkspace } from '@/components/voice-cloning-workspace';
 import { AvatarCloningWorkspace } from '@/components/avatar-cloning-workspace';
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
 
 const featureConfig = {
   'voice-cloning': {
@@ -99,16 +96,10 @@ export default function FeatureWorkspacePage() {
             return <ImageGenerationWorkspace />;
         case 'video-generation':
             return <VideoGenerationWorkspace />;
-<<<<<<< HEAD
         case 'voice-cloning':
             return <VoiceCloningWorkspace />;
         case 'avatar-cloning':
             return <AvatarCloningWorkspace />;
-=======
-        // Add cases for other features here
-        // case 'voice-cloning':
-        //   return <VoiceCloningWorkspace />;
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
         default:
             return <GenericFeatureWorkspace />;
     }

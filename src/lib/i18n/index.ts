@@ -117,7 +117,6 @@ export const translations = {
     'library.emptyImages': 'Thư viện ảnh của bạn trống. Các ảnh đã tạo hoặc tải lên sẽ xuất hiện ở đây.',
     'library.emptyVideos': 'Thư viện video của bạn trống. Các video đã tạo sẽ xuất hiện ở đây.',
     'library.select': 'Chọn',
-<<<<<<< HEAD
     'voice.cloning.title': 'Nhân bản giọng nói',
     'voice.cloning.selectVoice': 'Chọn giọng nói',
     'voice.cloning.textInput': 'Văn bản cần đọc',
@@ -134,8 +133,6 @@ export const translations = {
     'avatar.cloning.step1': 'ElevenLabs tạo giọng',
     'avatar.cloning.step2': 'HeyGen tạo video',
     'avatar.cloning.step3': 'Video hoàn tất',
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   },
   en: {
     'app.title': 'iGen - Personal Branding AI Assistant',
@@ -255,7 +252,6 @@ export const translations = {
     'library.emptyImages': 'Your image library is empty. Generated or uploaded images will appear here.',
     'library.emptyVideos': 'Your video library is empty. Generated videos will appear here.',
     'library.select': 'Select',
-<<<<<<< HEAD
     'voice.cloning.title': 'Voice Cloning',
     'voice.cloning.selectVoice': 'Select voice',
     'voice.cloning.textInput': 'Text to speak',
@@ -272,8 +268,6 @@ export const translations = {
     'avatar.cloning.step1': 'ElevenLabs generates voice',
     'avatar.cloning.step2': 'HeyGen creates video',
     'avatar.cloning.step3': 'Video complete',
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   },
   zh: {
     'app.title': 'iGen - 个人品牌AI助手',
@@ -393,7 +387,6 @@ export const translations = {
     'library.emptyImages': '您的图片库是空的。生成或上传的图片将显示在此处。',
     'library.emptyVideos': '您的视频库是空的。生成的视频将显示在此处。',
     'library.select': '选择',
-<<<<<<< HEAD
     'voice.cloning.title': '语音克隆',
     'voice.cloning.selectVoice': '选择语音',
     'voice.cloning.textInput': '要朗读的文本',
@@ -410,8 +403,6 @@ export const translations = {
     'avatar.cloning.step1': 'ElevenLabs生成语音',
     'avatar.cloning.step2': 'HeyGen创建视频',
     'avatar.cloning.step3': '视频完成',
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   },
 };
 

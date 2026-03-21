@@ -47,15 +47,9 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     values: {
-<<<<<<< HEAD
       geminiApiKey: userData?.geminiApiKey || '',
       elevenLabsApiKey: userData?.elevenLabsApiKey || '',
       heyGenApiKey: userData?.heyGenApiKey || '',
-=======
-        geminiApiKey: userData?.geminiApiKey || '',
-        elevenLabsApiKey: userData?.elevenLabsApiKey || '',
-        heyGenApiKey: userData?.heyGenApiKey || '',
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
     }
   });
 
@@ -97,11 +91,7 @@ export function ApiKeysModal({ open, onOpenChange }: ApiKeysModalProps) {
       <DialogContent className="sm:max-w-md bg-white/70 backdrop-blur-xl border-white/20">
         <DialogHeader>
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 mb-4">
-<<<<<<< HEAD
             <KeyRound className="h-6 w-6 text-primary" />
-=======
-              <KeyRound className="h-6 w-6 text-primary" />
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
           </div>
           <DialogTitle className="text-center text-xl">{t('apikeys.modal.title')}</DialogTitle>
           <DialogDescription className="text-center">

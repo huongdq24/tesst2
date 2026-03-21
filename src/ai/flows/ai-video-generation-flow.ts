@@ -15,12 +15,9 @@ const StartVideoGenerationInputSchema = z.object({
   referenceImageUris: z.array(z.string()).optional().describe(
     "Optional array of reference images as data URIs or public URLs."
   ),
-<<<<<<< HEAD
   afterImageUri: z.string().optional().describe(
     "Optional 'after' image for Before & After mode. Used to describe the end state of a transformation video."
   ),
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
   aspectRatio: z.enum(['16:9', '9:16']).optional().default('16:9').describe('The aspect ratio for the video.'),
   modelName: z.string().optional().describe('The name of the Veo model to use for generation.'),
   userId: z.string().describe('The UID of the user initiating the job.'),
@@ -50,7 +47,6 @@ export async function startVideoGeneration(
 }
 
 
-<<<<<<< HEAD
 /**
  * Analyzes the AFTER image using Gemini to produce an ultra-detailed description.
  * This description is then used in the Veo prompt so the generated video
@@ -135,8 +131,6 @@ Output ONLY the detailed room description in English. No introductions or explan
 }
 
 
-=======
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
 const startVideoGenerationFlow = ai.defineFlow(
   {
     name: 'startVideoGenerationFlow',
@@ -169,7 +163,6 @@ const startVideoGenerationFlow = ai.defineFlow(
       config.resolution = input.resolution;
     }
 
-<<<<<<< HEAD
     // ===== BEFORE & AFTER MODE: Analyze the AFTER image with Gemini =====
     let enhancedPrompt = input.textPrompt;
     if (input.afterImageUri && input.apiKey) {
@@ -236,11 +229,7 @@ const startVideoGenerationFlow = ai.defineFlow(
       console.log(`[VideoGen] Prepared lastFrame payload from AFTER image. This ensures 100% match at the end of the video.`);
     }
 
-=======
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [10000, 30000, 60000];
 
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
     let lastError = '';
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -248,7 +237,6 @@ const startVideoGenerationFlow = ai.defineFlow(
         const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predictLongRunning?key=${input.apiKey}`;
 
         const payload: any = {
-<<<<<<< HEAD
           instances: [{ prompt: enhancedPrompt }],
           parameters: config,
         };
@@ -256,42 +244,6 @@ const startVideoGenerationFlow = ai.defineFlow(
         // Add FIRST frame (BEFORE image)
         if (firstFramePayload) {
           payload.instances[0].image = firstFramePayload;
-=======
-          instances: [{ prompt: input.textPrompt }],
-          parameters: config,
-        };
-
-        // Add reference image if provided
-        if (input.referenceImageUris && input.referenceImageUris.length > 0) {
-          const uri = input.referenceImageUris[0];
-          if (uri.startsWith('data:')) {
-            const mimeMatch = uri.match(/^data:([^;]+);base64,(.+)$/);
-            if (mimeMatch) {
-              payload.instances[0].image = {
-                bytesBase64Encoded: mimeMatch[2],
-                mimeType: mimeMatch[1],
-              };
-            }
-          } else if (uri.startsWith('http://') || uri.startsWith('https://')) {
-            try {
-              const fetchRes = await fetch(uri);
-              if (fetchRes.ok) {
-                const arrayBuffer = await fetchRes.arrayBuffer();
-                const buffer = Buffer.from(arrayBuffer);
-                const mimeType = fetchRes.headers.get('content-type') || 'image/jpeg';
-                payload.instances[0].image = {
-                  bytesBase64Encoded: buffer.toString('base64'),
-                  mimeType: mimeType,
-                };
-                console.log(`[VideoGen] Successfully fetched remote image and converted to base64 (${mimeType}).`);
-              } else {
-                console.warn(`[VideoGen] Failed to fetch remote image: ${fetchRes.status}`);
-              }
-            } catch (err: any) {
-              console.error(`[VideoGen] Error fetching remote image: ${err.message}`);
-            }
-          }
->>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
         }
 
         console.log(`[VideoGen] Calling ${fetchUrl.split('?')[0]} (attempt ${attempt + 1})...`);
