@@ -105,7 +105,7 @@ async function analyzeAfterImage(imageUri: string, apiKey: string): Promise<stri
       return '';
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${apiKey}`;
     const geminiPayload = {
       contents: [{
         parts: [
@@ -177,11 +177,6 @@ const startVideoGenerationFlow = ai.defineFlow(
       // Allow person generation for all models to avoid unnecessary blocks
       personGeneration: 'allow_all',
     };
-
-    // Veo 3.x models support native audio generation
-    if (isVeo3) {
-      config.generateAudio = true;
-    }
 
     if (input.durationSeconds) {
       let duration = Number(input.durationSeconds);
