@@ -174,8 +174,6 @@ const startVideoGenerationFlow = ai.defineFlow(
 
     const config: any = {
       aspectRatio: input.aspectRatio,
-      // Allow person generation for all models to avoid unnecessary blocks
-      personGeneration: 'allow_all',
     };
 
     if (input.durationSeconds) {
@@ -296,9 +294,31 @@ const startVideoGenerationFlow = ai.defineFlow(
           const errMessage = result?.error?.message || JSON.stringify(result);
           const statusCode = fetchResponse.status;
 
-          // FIX #3: Fail fast for non-retryable errors
-          if (statusCode === 400 || statusCode === 403 || statusCode === 404) {
-            // These are not retryable - bad request, auth issue, or model not found
+          // FIX: For 400 errors, auto-strip potentially unsupported params and retry once
+          if (statusCode === 400) {
+            console.warn(`[VideoGen] Got 400 error: ${errMessage}`);
+            
+            // Check if we have extra params that could be stripped
+            const hasExtraParams = config.resolution || config.durationSeconds;
+            if (hasExtraParams && attempt === 0) {
+              console.warn(`[VideoGen] Stripping optional params (resolution, durationSeconds) and retrying...`);
+              // Remove params that might not be supported by this model version
+              delete config.resolution;
+              delete config.durationSeconds;
+              // Update the payload for next retry
+              payload.parameters = config;
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue; // Retry with stripped params
+            }
+            
+            // If we already stripped params or had none, fail
+            lastError = `Google API returned ${statusCode}: ${errMessage}`;
+            console.error(`[VideoGen] Non-retryable error (${statusCode}):`, errMessage);
+            break;
+          }
+          
+          if (statusCode === 403 || statusCode === 404) {
+            // These are genuinely non-retryable - auth issue or model not found
             lastError = `Google API returned ${statusCode}: ${errMessage}`;
             console.error(`[VideoGen] Non-retryable error (${statusCode}):`, errMessage);
             break; // Exit retry loop immediately

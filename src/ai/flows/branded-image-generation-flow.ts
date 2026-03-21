@@ -185,21 +185,32 @@ const brandedImageGenerationFlow = ai.defineFlow(
         lastError = error;
         console.error(`[ImageGen] Generation with model ${model} failed:`, error.message);
         
+        // For 400 errors (bad request / unsupported params), also try the next model
+        // because different models support different config params
         const isServiceUnavailable = error.message && (
           error.message.includes('503') || 
           error.message.toLowerCase().includes('unavailable') || 
           error.message.toLowerCase().includes('rate limit') ||
           error.message.includes('429') ||
-          error.message.includes('RESOURCE_EXHAUSTED')
+          error.message.includes('RESOURCE_EXHAUSTED') ||
+          error.message.includes('400') ||
+          error.message.includes('INVALID_ARGUMENT')
         );
 
         if (isServiceUnavailable) {
-          console.warn(`[ImageGen] Model ${model} is unavailable. Trying next model...`);
+          console.warn(`[ImageGen] Model ${model} failed (will try next model if available):`, error.message?.substring(0, 200));
           continue;
-        } else {
-          // Non-retryable error (e.g. 400, 403), fail fast - don't try other models
+        }
+        
+        // Only truly non-retryable errors (403 forbidden, 404 not found) should break
+        if (error.message?.includes('403') || error.message?.includes('404')) {
+          console.error(`[ImageGen] Non-retryable error for model ${model}. Stopping.`);
           break;
         }
+        
+        // For any other error, also try the next model
+        console.warn(`[ImageGen] Unknown error for model ${model}, trying next model...`);
+        continue;
       }
     }
 
