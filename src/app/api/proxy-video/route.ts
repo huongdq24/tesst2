@@ -9,15 +9,42 @@ export async function GET(request: Request) {
   }
 
   try {
-    // FIX #7: Add 60-second timeout to prevent indefinite hanging
+    // FIX: Add 60-second timeout to prevent indefinite hanging
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const response = await fetch(videoUrl, { signal: controller.signal });
+    // FIX: For Google AI video URLs, extract the API key and forward it as a header
+    // The URL format is: https://generativelanguage.googleapis.com/.../files/xxx?key=API_KEY
+    const fetchHeaders: Record<string, string> = {};
+    let cleanUrl = videoUrl;
+
+    if (videoUrl.includes('generativelanguage.googleapis.com')) {
+      try {
+        const urlObj = new URL(videoUrl);
+        const apiKey = urlObj.searchParams.get('key');
+        if (apiKey) {
+          fetchHeaders['x-goog-api-key'] = apiKey;
+          // Remove the key from the URL to avoid it being logged in server access logs
+          urlObj.searchParams.delete('key');
+          cleanUrl = urlObj.toString();
+        }
+      } catch (e) {
+        // If URL parsing fails, just use the original URL
+        console.warn('[ProxyVideo] Failed to parse video URL:', e);
+      }
+    }
+
+    const response = await fetch(cleanUrl, {
+      signal: controller.signal,
+      headers: fetchHeaders,
+      redirect: 'follow',
+    });
     clearTimeout(timeoutId);
     
     if (!response.ok) {
-      throw new Error(`Failed to fetch video: ${response.statusText}`);
+      const errorText = await response.text().catch(() => '');
+      console.error(`[ProxyVideo] Fetch failed: ${response.status} ${response.statusText}`, errorText.substring(0, 200));
+      throw new Error(`Failed to fetch video: ${response.status} ${response.statusText}`);
     }
 
     const contentType = response.headers.get('Content-Type') || 'video/mp4';

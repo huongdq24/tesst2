@@ -18,12 +18,21 @@ interface CheckStatusResult {
 function extractVideoFromOperation(operation: any): string | null {
   if (!operation) return null;
 
-  // Pattern 1: response.generateVideoResponse.generatedSamples
+  // Log the full response structure for debugging
+  console.log('[CheckStatus] Full operation response keys:', JSON.stringify(Object.keys(operation)));
+  if (operation.response) {
+    console.log('[CheckStatus] Response keys:', JSON.stringify(Object.keys(operation.response)));
+  }
+
+  // Pattern 1: response.generateVideoResponse.generatedSamples (Veo 2.x & 3.x standard)
   try {
     const samples = operation.response?.generateVideoResponse?.generatedSamples;
     if (samples && samples.length > 0) {
       const video = samples[0]?.video;
-      if (video?.uri) return video.uri;
+      if (video?.uri) {
+        console.log('[CheckStatus] Found video via Pattern 1 (generateVideoResponse.generatedSamples)');
+        return video.uri;
+      }
     }
   } catch (e) { /* ignore */ }
 
@@ -32,19 +41,51 @@ function extractVideoFromOperation(operation: any): string | null {
     const videos = operation.response?.videos;
     if (videos && videos.length > 0) {
       const video = videos[0];
-      if (video.gcsUri) return video.gcsUri;
+      if (video.uri) {
+        console.log('[CheckStatus] Found video via Pattern 2a (response.videos[].uri)');
+        return video.uri;
+      }
+      if (video.gcsUri) {
+        console.log('[CheckStatus] Found video via Pattern 2b (response.videos[].gcsUri)');
+        return video.gcsUri;
+      }
       if (video.bytesBase64Encoded) {
+        console.log('[CheckStatus] Found video via Pattern 2c (base64 encoded)');
         return `data:${video.mimeType || 'video/mp4'};base64,${video.bytesBase64Encoded}`;
       }
     }
   } catch (e) { /* ignore */ }
 
-  // Pattern 3: Direct video in metadata or result
+  // Pattern 3: Direct video in metadata
   try {
     const metadata = operation.metadata;
     if (metadata?.videos && metadata.videos.length > 0) {
       const v = metadata.videos[0];
-      if (v.gcsUri) return v.gcsUri;
+      if (v.uri) {
+        console.log('[CheckStatus] Found video via Pattern 3a (metadata.videos[].uri)');
+        return v.uri;
+      }
+      if (v.gcsUri) {
+        console.log('[CheckStatus] Found video via Pattern 3b (metadata.videos[].gcsUri)');
+        return v.gcsUri;
+      }
+    }
+  } catch (e) { /* ignore */ }
+
+  // Pattern 4: Deep search — walk all keys looking for a video URI
+  try {
+    const responseStr = JSON.stringify(operation.response || operation);
+    // Look for generativelanguage.googleapis.com file URIs
+    const fileUriMatch = responseStr.match(/"(https:\/\/generativelanguage\.googleapis\.com\/[^"]+)"/);  
+    if (fileUriMatch) {
+      console.log('[CheckStatus] Found video via Pattern 4 (deep URI search)');
+      return fileUriMatch[1];
+    }
+    // Look for any "uri" field containing a video-like URL
+    const uriMatch = responseStr.match(/"uri"\s*:\s*"(https?:\/\/[^"]+)"/);  
+    if (uriMatch) {
+      console.log('[CheckStatus] Found video via Pattern 4b (generic uri field)');
+      return uriMatch[1];
     }
   } catch (e) { /* ignore */ }
 
@@ -131,18 +172,22 @@ export async function checkVideoStatus(operationName: string, apiKey: string): P
     const videoUrl = extractVideoFromOperation(operation);
 
     if (!videoUrl) {
-      console.error('[CheckStatus] Complete operation but no video found:', JSON.stringify(operation).substring(0, 1000));
+      // Log the FULL response so we can add the correct pattern next time
+      console.error('[CheckStatus] Complete operation but no video found. FULL RESPONSE:', JSON.stringify(operation, null, 2));
       return {
         status: 'failed',
         error: '❌ Video đã được tạo xong nhưng không tìm thấy URL video trong kết quả. Vui lòng thử lại.',
       };
     }
 
-    // Append API key for authenticated access to Google AI file URLs
+    // For Google AI file URIs, append API key as query param for download access
     let accessibleUrl = videoUrl;
     if (videoUrl.startsWith('https://generativelanguage.googleapis.com')) {
-      accessibleUrl = `${videoUrl}${videoUrl.includes('?') ? '&' : '?'}key=${apiKey}`;
+      const separator = videoUrl.includes('?') ? '&' : '?';
+      accessibleUrl = `${videoUrl}${separator}key=${apiKey}`;
     }
+
+    console.log('[CheckStatus] Video URL ready:', accessibleUrl.substring(0, 100) + '...');
 
     return {
       status: 'completed',

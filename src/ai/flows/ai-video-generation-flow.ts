@@ -170,25 +170,32 @@ const startVideoGenerationFlow = ai.defineFlow(
   async (input) => {
     const modelName = input.modelName || 'veo-2.0-generate-001';
     const isVeo2 = modelName.includes('veo-2');
+    const isVeo3 = modelName.includes('veo-3');
 
     const config: any = {
       aspectRatio: input.aspectRatio,
+      // Allow person generation for all models to avoid unnecessary blocks
+      personGeneration: 'allow_all',
     };
+
+    // Veo 3.x models support native audio generation
+    if (isVeo3) {
+      config.generateAudio = true;
+    }
 
     if (input.durationSeconds) {
       let duration = Number(input.durationSeconds);
       if (isVeo2) {
         if (![5, 6, 8].includes(duration)) duration = 8;
       } else {
-        if (input.resolution === '1080p' || input.resolution === '4k') {
-          duration = 8;
-        } else if (![4, 6, 8].includes(duration)) {
-          duration = 8;
-        }
+        // Veo 3.x: valid durations are 4, 6, 8
+        if (![4, 6, 8].includes(duration)) duration = 8;
       }
+      // API expects durationSeconds as a NUMBER (integer)
       config.durationSeconds = duration;
     }
 
+    // Resolution: Veo 3.x supports 720p, 1080p, 4k; Veo 2 does not
     if (!isVeo2 && input.resolution) {
       config.resolution = input.resolution;
     }
