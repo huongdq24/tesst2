@@ -88,17 +88,25 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
       const dataUriPromises = input.imageUris.map(async (uri) => {
         if (uri.startsWith('https://')) {
           try {
-            const response = await fetch(uri);
+            // FIX: Add 15-second timeout to prevent hanging on slow Firebase URLs
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const response = await fetch(uri, { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (!response.ok) {
-              console.warn(`Failed to fetch image from Storage: ${uri}. Status: ${response.statusText}`);
+              console.warn(`[PromptGen] Failed to fetch image: ${uri}. Status: ${response.statusText}`);
               return null;
             }
             const buffer = await response.arrayBuffer();
             const base64Data = Buffer.from(buffer).toString('base64');
             const mimeType = response.headers.get('content-type') || 'image/jpeg';
             return `data:${mimeType};base64,${base64Data}`;
-          } catch (error) {
-            console.error(`Error processing image URI ${uri}:`, error);
+          } catch (error: any) {
+            if (error.name === 'AbortError') {
+              console.error(`[PromptGen] Timeout fetching image: ${uri}`);
+            } else {
+              console.error(`[PromptGen] Error processing image URI ${uri}:`, error.message);
+            }
             return null;
           }
         }

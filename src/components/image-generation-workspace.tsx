@@ -1,5 +1,5 @@
 'use client';
-import { useState, useRef, DragEvent, useEffect } from 'react';
+import { useState, useRef, DragEvent, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -49,12 +49,11 @@ export function ImageGenerationWorkspace() {
   // Extended config options (matching AI Studio)
   const [resolution, setResolution] = useState<string>('1K');
   const [temperature, setTemperature] = useState<number>(1);
-  const [outputFormat, setOutputFormat] = useState<'IMAGE_ONLY' | 'IMAGE_AND_TEXT'>('IMAGE_ONLY');;
+  const [outputFormat, setOutputFormat] = useState<'IMAGE_ONLY' | 'IMAGE_AND_TEXT'>('IMAGE_ONLY');
   
   // State for the new state-driven generation logic
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationQueue, setGenerationQueue] = useState<number[]>([]);
-  const [allGeneratedUrisForSave, setAllGeneratedUrisForSave] = useState<string[]>([]);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -66,6 +65,34 @@ export function ImageGenerationWorkspace() {
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // ===== FIX #1: Use refs to avoid infinite loop in useEffect =====
+  // Track successfully generated URIs for saving via ref (not state that triggers re-renders)
+  const generatedUrisForSaveRef = useRef<string[]>([]);
+  // Refs for values used inside the effect to avoid stale closures
+  const promptRef = useRef(prompt);
+  const userRef = useRef(user);
+  const numberOfImagesRef = useRef(numberOfImages);
+  
+  // Keep refs in sync with state
+  useEffect(() => { promptRef.current = prompt; }, [prompt]);
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { numberOfImagesRef.current = numberOfImages; }, [numberOfImages]);
+
+  // FIX #5: Refs for generation configs to prevent mid-generation re-renders
+  const aspectRatioRef = useRef(aspectRatio);
+  const imageModelRef = useRef(imageModel);
+  const inputImageUrlsRef = useRef(inputImageUrls);
+  const resolutionRef = useRef(resolution);
+  const temperatureRef = useRef(temperature);
+  const outputFormatRef = useRef(outputFormat);
+
+  useEffect(() => { aspectRatioRef.current = aspectRatio; }, [aspectRatio]);
+  useEffect(() => { imageModelRef.current = imageModel; }, [imageModel]);
+  useEffect(() => { inputImageUrlsRef.current = inputImageUrls; }, [inputImageUrls]);
+  useEffect(() => { resolutionRef.current = resolution; }, [resolution]);
+  useEffect(() => { temperatureRef.current = temperature; }, [temperature]);
+  useEffect(() => { outputFormatRef.current = outputFormat; }, [outputFormat]);
+
   const MAX_INPUT_IMAGES = 4;
 
   // This effect hook manages the sequential generation of images from a queue.
@@ -76,35 +103,41 @@ export function ImageGenerationWorkspace() {
         setIsGenerating(false);
         if (timerRef.current) clearInterval(timerRef.current);
 
-        if (allGeneratedUrisForSave.length > 0) {
+        const savedUris = generatedUrisForSaveRef.current;
+        if (savedUris.length > 0) {
           toast({
             title: 'Tạo ảnh hoàn tất!',
-            description: `Đã tạo thành công ${allGeneratedUrisForSave.length} ảnh.`,
+            description: `Đã tạo thành công ${savedUris.length} ảnh.`,
           });
           // Save all successfully generated images to Firebase Storage and Firestore
-          const saveImages = async () => {
-            try {
-              await Promise.all(allGeneratedUrisForSave.map(async (uri) => {
-                const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
-                const imageRef = storageRef(storage, `users/${user!.uid}/generated/${fileName}`);
-                await uploadString(imageRef, uri, 'data_url');
-                const downloadURL = await getDownloadURL(imageRef);
-                await addDoc(collection(firestore, 'generatedImages'), {
-                  ownerId: user!.uid,
-                  prompt: prompt,
-                  imageUrl: downloadURL,
-                  createdAt: serverTimestamp(),
-                });
-              }));
-              toast({ title: `Đã lưu ${allGeneratedUrisForSave.length} ảnh`, description: 'Các ảnh đã được lưu vào thư viện của bạn.' });
-            } catch (saveError) {
-              console.error('Failed to save image(s):', saveError);
-              toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: `Tạo ảnh thành công nhưng không thể lưu vào thư viện.` });
-            }
-          };
-          if (user) saveImages();
+          const currentUser = userRef.current;
+          const currentPrompt = promptRef.current;
+          if (currentUser) {
+            const saveImages = async () => {
+              try {
+                await Promise.all(savedUris.map(async (uri) => {
+                  const fileName = `generated-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+                  const imageRef = storageRef(storage, `users/${currentUser.uid}/generated/${fileName}`);
+                  await uploadString(imageRef, uri, 'data_url');
+                  const downloadURL = await getDownloadURL(imageRef);
+                  await addDoc(collection(firestore, 'generatedImages'), {
+                    ownerId: currentUser.uid,
+                    prompt: currentPrompt,
+                    imageUrl: downloadURL,
+                    createdAt: serverTimestamp(),
+                  });
+                }));
+                toast({ title: `Đã lưu ${savedUris.length} ảnh`, description: 'Các ảnh đã được lưu vào thư viện của bạn.' });
+              } catch (saveError) {
+                console.error('Failed to save image(s):', saveError);
+                toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: `Tạo ảnh thành công nhưng không thể lưu vào thư viện.` });
+              }
+            };
+            saveImages();
+          }
         }
-        setAllGeneratedUrisForSave([]);
+        // Reset the ref
+        generatedUrisForSaveRef.current = [];
       }
       return;
     }
@@ -113,33 +146,35 @@ export function ImageGenerationWorkspace() {
 
     // Function to process a single item from the queue with retry logic.
     const processQueue = async () => {
-      const currentQueueItemCount = numberOfImages - generationQueue.length + 1;
+      const totalImages = numberOfImagesRef.current;
+      const currentQueueItemCount = totalImages - generationQueue.length + 1;
       const MAX_RETRIES = 2; // Try each image up to 3 times (1 initial + 2 retries)
       const RETRY_DELAY = 5000; // 5 seconds
 
       for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
           toast({
-            title: `Đang tạo ảnh ${currentQueueItemCount} trên ${numberOfImages}${attempt > 0 ? ` (thử lại lần ${attempt})` : ''}...`,
+            title: `Đang tạo ảnh ${currentQueueItemCount} trên ${totalImages}${attempt > 0 ? ` (thử lại lần ${attempt})` : ''}...`,
             description: 'Vui lòng chờ trong giây lát.',
           });
 
           const result = await brandedImageGeneration({
-            existingImageUris: inputImageUrls,
-            generationPrompt: prompt,
-            aspectRatio: aspectRatio,
-            modelName: imageModel,
+            existingImageUris: inputImageUrlsRef.current,
+            generationPrompt: promptRef.current,
+            aspectRatio: aspectRatioRef.current,
+            modelName: imageModelRef.current,
             apiKey: userData?.geminiApiKey,
-            resolution: resolution,
-            temperature: temperature,
-            outputFormat: outputFormat,
+            resolution: resolutionRef.current,
+            temperature: temperatureRef.current,
+            outputFormat: outputFormatRef.current,
           });
 
           if (isCancelled) return;
 
           if (result.generatedImageUri) {
             setGeneratedImageUrls(prev => [...prev, result.generatedImageUri]);
-            setAllGeneratedUrisForSave(prev => [...prev, result.generatedImageUri]);
+            // Use ref instead of state to avoid triggering re-renders/infinite loops
+            generatedUrisForSaveRef.current = [...generatedUrisForSaveRef.current, result.generatedImageUri];
           }
           break; // Success, break the retry loop
         } catch (error: any) {
@@ -175,7 +210,10 @@ export function ImageGenerationWorkspace() {
     return () => {
       isCancelled = true;
     };
-  }, [isGenerating, generationQueue, aspectRatio, imageModel, inputImageUrls, numberOfImages, prompt, user, allGeneratedUrisForSave]);
+    // FIX #1 & #5: Removed all static config from deps (now using refs).
+    // Keep only the deps that should actually trigger the loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGenerating, generationQueue, userData?.geminiApiKey]);
 
 
   const handleFilesUpload = async (files: FileList | null) => {
@@ -310,7 +348,7 @@ export function ImageGenerationWorkspace() {
 
     setIsGenerating(true);
     setGeneratedImageUrls([]);
-    setAllGeneratedUrisForSave([]);
+    generatedUrisForSaveRef.current = []; // Reset the ref
     setElapsedTime(0);
 
     // Create a queue of indices to process

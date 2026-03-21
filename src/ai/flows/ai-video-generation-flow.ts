@@ -46,6 +46,36 @@ export async function startVideoGeneration(
   return startVideoGenerationFlow(input);
 }
 
+/**
+ * FIX #3 helper: Convert a URL to base64 data with a timeout.
+ * Reused from branded-image-generation-flow pattern.
+ */
+async function fetchImageAsBase64(url: string, timeoutMs: number = 15000): Promise<{ base64: string; mimeType: string } | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`[VideoGen] Failed to fetch image: ${response.status}`);
+      return null;
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    return { base64: buffer.toString('base64'), mimeType };
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      console.error(`[VideoGen] Timeout fetching image: ${url}`);
+    } else {
+      console.error(`[VideoGen] Error fetching image: ${err.message}`);
+    }
+    return null;
+  }
+}
 
 /**
  * Analyzes the AFTER image using Gemini to produce an ultra-detailed description.
@@ -187,8 +217,10 @@ const startVideoGenerationFlow = ai.defineFlow(
       }
     }
 
-    const MAX_RETRIES = 3;
-    const RETRY_DELAYS = [10000, 30000, 60000];
+    // FIX #3: Reduced retry delays and added per-request timeout
+    const MAX_RETRIES = 2; // Reduced from 3 → 2 (total 3 attempts)
+    const RETRY_DELAYS = [3000, 5000]; // Reduced from [10000, 30000, 60000]
+    const REQUEST_TIMEOUT_MS = 30000; // 30s per request to prevent indefinite hanging
 
     // Prepare image payloads before entering the retry loop to avoid downloading them repeatedly
     const prepareImagePayload = async (uri: string) => {
@@ -199,15 +231,10 @@ const startVideoGenerationFlow = ai.defineFlow(
             return { bytesBase64Encoded: mimeMatch[2], mimeType: mimeMatch[1] };
           }
         } else if (uri.startsWith('http://') || uri.startsWith('https://')) {
-          const fetchRes = await fetch(uri);
-          if (fetchRes.ok) {
-            const arrayBuffer = await fetchRes.arrayBuffer();
-            const buffer = Buffer.from(arrayBuffer);
-            const mimeType = fetchRes.headers.get('content-type') || 'image/jpeg';
-            console.log(`[VideoGen] Successfully fetched remote image and converted to base64 (${mimeType}).`);
-            return { bytesBase64Encoded: buffer.toString('base64'), mimeType };
-          } else {
-            console.warn(`[VideoGen] Failed to fetch remote image: ${fetchRes.status}`);
+          // FIX: Use helper with timeout instead of raw fetch
+          const imageData = await fetchImageAsBase64(uri);
+          if (imageData) {
+            return { bytesBase64Encoded: imageData.base64, mimeType: imageData.mimeType };
           }
         }
       } catch (err: any) {
@@ -248,17 +275,34 @@ const startVideoGenerationFlow = ai.defineFlow(
 
         console.log(`[VideoGen] Calling ${fetchUrl.split('?')[0]} (attempt ${attempt + 1})...`);
 
+        // FIX #3: Add per-request timeout via AbortController
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
         const fetchResponse = await fetch(fetchUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
+          signal: controller.signal,
         });
+
+        clearTimeout(timeoutId);
 
         const result = await fetchResponse.json();
 
         if (!fetchResponse.ok) {
           const errMessage = result?.error?.message || JSON.stringify(result);
-          throw new Error(`Google API returned ${fetchResponse.status}: ${errMessage}`);
+          const statusCode = fetchResponse.status;
+
+          // FIX #3: Fail fast for non-retryable errors
+          if (statusCode === 400 || statusCode === 403 || statusCode === 404) {
+            // These are not retryable - bad request, auth issue, or model not found
+            lastError = `Google API returned ${statusCode}: ${errMessage}`;
+            console.error(`[VideoGen] Non-retryable error (${statusCode}):`, errMessage);
+            break; // Exit retry loop immediately
+          }
+
+          throw new Error(`Google API returned ${statusCode}: ${errMessage}`);
         }
 
         // ===== CASE A: API returns an LRO operation =====
@@ -290,6 +334,18 @@ const startVideoGenerationFlow = ai.defineFlow(
         lastError = `Unexpected API response format: ${JSON.stringify(result).substring(0, 500)}`;
 
       } catch (e: any) {
+        // Handle AbortController timeout
+        if (e.name === 'AbortError') {
+          lastError = 'Request timed out after 30 seconds. The API server may be slow.';
+          if (attempt < MAX_RETRIES) {
+            console.warn(`[VideoGen] Attempt ${attempt + 1} timed out. Retrying in ${RETRY_DELAYS[attempt]}ms...`);
+            await new Promise(resolve => setTimeout(resolve, RETRY_DELAYS[attempt]));
+            continue;
+          }
+          console.error(`[VideoGen] All attempts timed out.`);
+          break;
+        }
+
         const isRetryable =
           e.message?.includes('429') ||
           e.message?.includes('503') ||
@@ -348,3 +404,4 @@ function extractVideoUrl(result: any): string | null {
 
   return null;
 }
+

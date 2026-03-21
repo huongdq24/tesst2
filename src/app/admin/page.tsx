@@ -172,7 +172,14 @@ export default function AdminPage() {
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmDelete} disabled={isDeleting} className={cn(buttonVariants({ variant: "destructive" }))}>
+                <AlertDialogAction 
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleConfirmDelete();
+                  }} 
+                  disabled={isDeleting} 
+                  className={cn(buttonVariants({ variant: "destructive" }))}
+                >
                     {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Xóa vĩnh viễn
                 </AlertDialogAction>

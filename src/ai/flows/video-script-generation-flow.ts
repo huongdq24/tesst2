@@ -88,14 +88,22 @@ const videoScriptGenerationFlow = ai.defineFlow(
       const dataUriPromises = input.imageUris.map(async (uri) => {
         if (uri.startsWith('https://')) {
           try {
-            const response = await fetch(uri);
+            // FIX: Add 15-second timeout to prevent hanging on slow Firebase URLs
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000);
+            const response = await fetch(uri, { signal: controller.signal });
+            clearTimeout(timeoutId);
             if (!response.ok) throw new Error(`Failed to fetch: ${response.statusText}`);
             const buffer = await response.arrayBuffer();
             const base64Data = Buffer.from(buffer).toString('base64');
             const mimeType = response.headers.get('content-type') || 'image/jpeg';
             return `data:${mimeType};base64,${base64Data}`;
-          } catch (error) {
-            console.error(`[ScriptGen] Error converting image URL:`, error);
+          } catch (error: any) {
+            if (error.name === 'AbortError') {
+              console.error(`[ScriptGen] Timeout fetching image: ${uri}`);
+            } else {
+              console.error(`[ScriptGen] Error converting image URL:`, error.message);
+            }
             return null;
           }
         }

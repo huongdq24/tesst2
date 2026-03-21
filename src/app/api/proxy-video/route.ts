@@ -9,7 +9,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const response = await fetch(videoUrl);
+    // FIX #7: Add 60-second timeout to prevent indefinite hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+
+    const response = await fetch(videoUrl, { signal: controller.signal });
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
       throw new Error(`Failed to fetch video: ${response.statusText}`);
@@ -24,6 +29,10 @@ export async function GET(request: Request) {
     // Return the readable stream directly to the client
     return new NextResponse(response.body, { headers });
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error('Video proxy timeout: request took longer than 60 seconds');
+      return NextResponse.json({ error: 'Video download timed out after 60 seconds' }, { status: 504 });
+    }
     console.error('Error proxying video:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

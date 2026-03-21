@@ -9,6 +9,7 @@ import { ai } from '@/ai/genkit';
 import { genkit, z } from 'genkit';
 import type { Part } from 'genkit';
 import { googleAI } from '@genkit-ai/google-genai';
+import { Buffer } from 'buffer';
 
 // Cache Genkit instances per API key to avoid re-creation
 const genkitCache = new Map<string, ReturnType<typeof genkit>>();
@@ -49,13 +50,44 @@ export async function brandedImageGeneration(
 }
 
 // Resolution mapping to Genkit's `imageSize` enum (which expects '1K', '2K', '4K').
-// 512 is not strictly in the enum, but we'll try to pass it anyway or default to omitting if it fails.
 const RESOLUTION_MAP: Record<string, string> = {
-  '512': '512', // Not officially in ImageSize enum but might be supported by the API via passthrough
+  '512': '512',
   '1K': '1K',
   '2K': '2K',
   '4K': '4K',
 };
+
+/**
+ * FIX #4: Helper to convert a URL (e.g. Firebase Storage) to a base64 data URI.
+ * This is necessary because Genkit/Google AI cannot directly access Firebase Storage URLs.
+ * Includes a timeout to prevent hanging on slow/failing URLs.
+ */
+async function urlToDataUri(url: string, timeoutMs: number = 15000): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      console.warn(`[ImageGen] Failed to fetch image from URL: ${url}. Status: ${response.statusText}`);
+      return null;
+    }
+
+    const buffer = await response.arrayBuffer();
+    const base64Data = Buffer.from(buffer).toString('base64');
+    const mimeType = response.headers.get('content-type') || 'image/jpeg';
+    return `data:${mimeType};base64,${base64Data}`;
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error(`[ImageGen] Timeout fetching image URL: ${url}`);
+    } else {
+      console.error(`[ImageGen] Error fetching image URL ${url}:`, error.message);
+    }
+    return null;
+  }
+}
 
 const brandedImageGenerationFlow = ai.defineFlow(
   {
@@ -88,9 +120,27 @@ const brandedImageGenerationFlow = ai.defineFlow(
 
     // Construct the prompt parts for the AI model.
     const promptParts: Part[] = [{ text: generationPrompt }];
+    
+    // FIX #4: Convert all image URLs to base64 data URIs before passing to Genkit.
+    // Firebase Storage URLs are not accessible by Google AI directly.
     if (existingImageUris && existingImageUris.length > 0) {
-      existingImageUris.forEach(uri => {
-        promptParts.push({ media: { url: uri } });
+      const imageConversions = await Promise.all(
+        existingImageUris.map(async (uri) => {
+          if (uri.startsWith('data:')) {
+            // Already a data URI, use as-is
+            return uri;
+          } else if (uri.startsWith('http://') || uri.startsWith('https://')) {
+            // Convert remote URL to data URI
+            return await urlToDataUri(uri);
+          }
+          return null;
+        })
+      );
+
+      imageConversions.forEach((dataUri) => {
+        if (dataUri) {
+          promptParts.push({ media: { url: dataUri } });
+        }
       });
     }
 
@@ -104,14 +154,11 @@ const brandedImageGenerationFlow = ai.defineFlow(
         console.log(`[ImageGen] Attempting generation with model: ${model}`);
 
         // Build image config
-        // Resolution supported on gemini-3.1-flash-image-preview and gemini-3-pro-image-preview
-        // NOT on gemini-2.5-flash-image (it uses a different internal config)
         const imageConfig: any = {
           aspectRatio: aspectRatio,
         };
         const supportsResolution = model.includes('3.1-flash-image') || model.includes('3-pro-image');
         if (resolution && supportsResolution) {
-          // Genkit schema uses `imageSize` instead of `resolution`
           imageConfig.imageSize = RESOLUTION_MAP[resolution] || resolution;
         }
         
@@ -127,7 +174,6 @@ const brandedImageGenerationFlow = ai.defineFlow(
 
         if (result.media) {
           console.log(`[ImageGen] Successfully generated image with model: ${model}`);
-          // Extract any text caption if IMAGE_AND_TEXT was requested
           const caption = outputFormat === 'IMAGE_AND_TEXT' ? result.text : undefined;
           return { generatedImageUri: result.media.url, caption };
         } else {
@@ -142,13 +188,16 @@ const brandedImageGenerationFlow = ai.defineFlow(
         const isServiceUnavailable = error.message && (
           error.message.includes('503') || 
           error.message.toLowerCase().includes('unavailable') || 
-          error.message.toLowerCase().includes('rate limit')
+          error.message.toLowerCase().includes('rate limit') ||
+          error.message.includes('429') ||
+          error.message.includes('RESOURCE_EXHAUSTED')
         );
 
         if (isServiceUnavailable) {
           console.warn(`[ImageGen] Model ${model} is unavailable. Trying next model...`);
           continue;
         } else {
+          // Non-retryable error (e.g. 400, 403), fail fast - don't try other models
           break;
         }
       }

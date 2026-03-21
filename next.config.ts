@@ -1,14 +1,10 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  serverActions: {
-    bodySizeLimit: '50mb', // 50MB đủ để truyền ảnh tham chiếu (không cần 100mb vì video không trả về nữa)
-    executionTimeout: 600,
-  },
-  devIndicators: {
-    allowedDevOrigins: [
-      'https://6000-firebase-studio-1772788450238.cluster-y75up3teuvc62qmnwys4deqv6y.cloudworkstations.dev',
-    ],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: '50mb', // 50MB đủ để truyền ảnh tham chiếu
+    },
   },
   typescript: {
     ignoreBuildErrors: true,

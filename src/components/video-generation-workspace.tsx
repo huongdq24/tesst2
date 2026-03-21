@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, ChangeEvent, DragEvent, useEffect } from 'react';
+import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -82,6 +82,17 @@ export function VideoGenerationWorkspace() {
   const { user, userData } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // FIX #6: Use refs to always access current values in polling callback
+  const promptRef = useRef(prompt);
+  const userRef = useRef(user);
+  const videoModelRef = useRef(videoModel);
+  const aspectRatioRef = useRef(aspectRatio);
+  
+  useEffect(() => { promptRef.current = prompt; }, [prompt]);
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { videoModelRef.current = videoModel; }, [videoModel]);
+  useEffect(() => { aspectRatioRef.current = aspectRatio; }, [aspectRatio]);
+
   const cleanupPolling = () => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -96,9 +107,10 @@ export function VideoGenerationWorkspace() {
     }
   };
 
-  // Save video to Firebase Storage → Firestore (client-side, like image workspace)
-  const saveVideoToFirebase = async (videoUrl: string) => {
-    if (!user) return;
+  // FIX #6: Save video to Firebase using refs for current values
+  const saveVideoToFirebase = useCallback(async (videoUrl: string) => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
     setIsSaving(true);
     try {
       // Fetch the video blob via our internal proxy to bypass CORS
@@ -108,16 +120,16 @@ export function VideoGenerationWorkspace() {
       const blob = await response.blob();
 
       const fileName = `generated-video-${Date.now()}-${Math.random().toString(36).substring(7)}.mp4`;
-      const videoRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
+      const videoRef = storageRef(storage, `users/${currentUser.uid}/generated-videos/${fileName}`);
       await uploadBytes(videoRef, blob);
       const downloadURL = await getDownloadURL(videoRef);
 
       await addDoc(collection(firestore, 'generatedVideos'), {
-        ownerId: user.uid,
-        prompt: prompt,
+        ownerId: currentUser.uid,
+        prompt: promptRef.current,
         videoUrl: downloadURL,
-        aspectRatio: aspectRatio,
-        modelName: videoModel,
+        aspectRatio: aspectRatioRef.current,
+        modelName: videoModelRef.current,
         createdAt: serverTimestamp(),
       });
 
@@ -128,7 +140,7 @@ export function VideoGenerationWorkspace() {
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [toast]); // Only depends on toast (stable from hook)
 
   // Effect to handle polling based on operationName
   useEffect(() => {
@@ -196,7 +208,8 @@ export function VideoGenerationWorkspace() {
     }
 
     return () => cleanupPolling();
-  }, [operationName, jobStatus, userData?.geminiApiKey]); // BUG #16 FIX: Removed toast
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operationName, jobStatus, userData?.geminiApiKey, saveVideoToFirebase]);
 
   // Effect to adjust settings based on the selected video model and resolution
   useEffect(() => {
@@ -418,6 +431,7 @@ export function VideoGenerationWorkspace() {
       } else {
         setErrorDetails('Phản hồi từ server không hợp lệ.');
         setJobStatus('failed');
+        stopTimer();
       }
     } catch (error: any) {
       console.error('[VideoGeneration] Start error:', error);
