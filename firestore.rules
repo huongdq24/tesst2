@@ -1,0 +1,250 @@
+/**
+ * This ruleset enforces a strict, user-centric security model designed for a modern AI application.
+ *
+ * Core Philosophy:
+ * The security model is built on the principle of "Authorization Independence," where access decisions
+ * for a document are made using only the data within that document and the user's authentication token.
+ * This approach avoids slow and costly cross-document reads (`get()`, `exists()`) for common operations,
+ * leading to a more performant and scalable system. The default security posture is to deny all access.
+ *
+ * Data Structure:
+ * - /users/{userId}: Stores private user profiles, API keys, and app-specific flags.
+ * - /files/{fileId}: Stores metadata for user-uploaded files, with each document containing a
+ *   denormalized `ownerId` for direct authorization checks.
+ *
+ * Key Security Decisions:
+ * - User Isolation: Users can only access their own data. Listing other users' profiles is explicitly forbidden unless you are an Admin.
+ * - Ownership-Based Access: All user-generated content (like files) is secured via a mandatory `ownerId`
+ *   field within the document itself, ensuring that only the creator can read or modify their data.
+ * - Secure Admin Role Management: Global administrator privileges are determined by the `role` field
+ *   within the user's own profile document (`/users/{userId}`). This makes the user document the single source of
+ *   truth for authorization.
+ * - Flexible Schema: In this prototyping stage, rules enforce authorization but do not validate the
+ *   specific shape or data types of documents, allowing for rapid iteration on the data model.
+ *
+ * Denormalization for Authorization:
+ * To create simpler and more performant rules, ownership data is denormalized:
+ * - The `ownerId` field is included on every `File` document. This allows a rule on `/files/{fileId}`
+ *   to check ownership instantly without needing to `get()` a separate user document.
+ *
+ * Structural Segregation:
+ * Data is segregated into distinct top-level collections (`users`, `files`) based on its
+ * security context. This simplifies rules and makes access patterns clear and auditable.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    //-------------------------------------------------------------------------
+    // Helper Functions
+    //-------------------------------------------------------------------------
+
+    /**
+     * Returns true if the user is authenticated.
+     * @param {object|null} auth - The request.auth object.
+     */
+    function isSignedIn(auth) {
+      return auth != null;
+    }
+
+    /**
+     * Returns true if the authenticated user's UID matches the provided userId.
+     * This is the primary function for checking document ownership.
+     * @param {object|null} auth - The request.auth object.
+     * @param {string} userId - The ID of the user.
+     */
+    function isOwner(auth, userId) {
+      return isSignedIn(auth) && auth.uid == userId;
+    }
+
+    /**
+     * Returns true if the user is a global administrator.
+     * Checks the 'role' field on the user's own profile document.
+     * @param {object|null} auth - The request.auth object.
+     */
+    function isAdmin(auth) {
+      return isSignedIn(auth) && get(/databases/$(database)/documents/users/$(auth.uid)).data.role == 'Admin';
+    }
+
+    /**
+     * On create, validates the incoming document's ownerId matches the user.
+     * @param {object|null} auth - The request.auth object.
+     * @param {object} requestResourceData - The request.resource.data object.
+     */
+    function isNewFileOwner(auth, requestResourceData) {
+      return isSignedIn(auth) && requestResourceData.ownerId == auth.uid;
+    }
+    
+    /**
+     * On update, ensures the ownerId field is immutable.
+     * @param {object} requestResourceData - The request.resource.data object.
+     * @param {object} currentResourceData - The resource.data object.
+     */
+    function isOwnerIdUnchanged(requestResourceData, currentResourceData) {
+    	return requestResourceData.ownerId == currentResourceData.ownerId;
+    }
+
+    /**
+     * On create, ensures the document's internal `id` field matches the path `userId`.
+     * @param {object} requestResourceData - The request.resource.data object.
+     * @param {string} userId - The ID from the path.
+     */
+    function hasMatchingPathAndDocId(requestResourceData, userId) {
+      return requestResourceData.id == userId;
+    }
+
+    /**
+     * On update, ensures the document's internal `id` field is immutable.
+     * @param {object} requestResourceData - The request.resource.data object.
+     * @param {object} currentResourceData - The resource.data object.
+     */
+    function isDocIdUnchanged(requestResourceData, currentResourceData) {
+      return requestResourceData.id == currentResourceData.id;
+    }
+
+    //-------------------------------------------------------------------------
+    // Collection: users
+    //-------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to user profile documents.
+     * @path /users/{userId}
+     * @allow (create) An authenticated user can create their own profile document. Admins can create any user.
+     * @deny (list) Non-admin users cannot list documents in the /users collection to prevent user enumeration.
+     * @principle Admins have full CRUD. Users can only manage their own data.
+     */
+    match /users/{userId} {
+      // Admins can read any user profile, owners can read their own.
+      allow get: if isOwner(request.auth, userId) || isAdmin(request.auth);
+      
+      // Admins can list all users; otherwise, listing is denied.
+      allow list: if isAdmin(request.auth);
+      
+      // Admins can create any user. Users can only create their own profile.
+      // The document's 'id' field must match the document path's userId.
+      allow create: if (isOwner(request.auth, userId) || isAdmin(request.auth)) 
+                      && hasMatchingPathAndDocId(request.resource.data, userId);
+                      
+      // Admins can update any user. Users can only update their own profile.
+      // The document's 'id' field must not be changed.
+      allow update: if (isOwner(request.auth, userId) || isAdmin(request.auth)) 
+                      && isDocIdUnchanged(request.resource.data, resource.data);
+                      
+      // Admins can delete any user. Users can only delete their own profile.
+      allow delete: if isOwner(request.auth, userId) || isAdmin(request.auth);
+    }
+
+    //-------------------------------------------------------------------------
+    // Collection: files
+    //-------------------------------------------------------------------------
+
+    /**
+     * @description Controls access to metadata for user-uploaded files.
+     * @path /files/{fileId}
+     * @allow (get) The user who owns the file (based on `ownerId`) can read its metadata.
+     * @deny (update) A user trying to update a file document they do not own.
+     * @principle Enforces document ownership for all reads and writes via a denormalized `ownerId` field.
+     */
+    match /files/{fileId} {
+      // Owners can read their files, Admins can read any file.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own files (via queries), Admins can list all.
+      allow list: if isSignedIn(request.auth) || isAdmin(request.auth);
+      allow create: if isNewFileOwner(request.auth, request.resource.data);
+      // On update, `resource` (the existing document) will always be non-null.
+      allow update: if isOwner(request.auth, resource.data.ownerId) && isOwnerIdUnchanged(request.resource.data, resource.data);
+      // On delete, `resource` (the existing document) must be non-null.
+      allow delete: if isOwner(request.auth, resource.data.ownerId) && resource != null;
+    }
+
+    //-------------------------------------------------------------------------
+    // Collection: generatedImages
+    //-------------------------------------------------------------------------
+    match /generatedImages/{imageId} {
+      // Owners can read their images, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own images via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own images.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
+    //-------------------------------------------------------------------------
+    // Collection: inputImages
+    //-------------------------------------------------------------------------
+    match /inputImages/{imageId} {
+      // Owners can read their images, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own images via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // No updates allowed to keep records immutable. Deletion is allowed.
+      allow update: if false;
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
+
+    //-------------------------------------------------------------------------
+    // Collection: generatedVideos
+    //-------------------------------------------------------------------------
+    match /generatedVideos/{videoId} {
+      // Owners can read their videos, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own videos via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own videos.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
+    
+    //-------------------------------------------------------------------------
+<<<<<<< HEAD
+    // Collection: generatedVoices
+    //-------------------------------------------------------------------------
+    match /generatedVoices/{voiceId} {
+      // Owners can read their voices, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own voices via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own voices.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
+
+    //-------------------------------------------------------------------------
+    // Collection: generatedAvatarVideos
+    //-------------------------------------------------------------------------
+    match /generatedAvatarVideos/{avatarVideoId} {
+      // Owners can read their avatar videos, Admins can read any.
+      allow get: if isOwner(request.auth, resource.data.ownerId) || isAdmin(request.auth);
+      // Signed-in users can list their own avatar videos via query.
+      allow list: if isSignedIn(request.auth);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Owners can update and delete their own avatar videos.
+      allow update: if isOwner(request.auth, resource.data.ownerId);
+      allow delete: if isOwner(request.auth, resource.data.ownerId);
+    }
+
+    //-------------------------------------------------------------------------
+=======
+>>>>>>> 7d28e1a8b26d69a3daa766112eb1ba6876765906
+    // Collection: videoJobs
+    //-------------------------------------------------------------------------
+    match /videoJobs/{jobId} {
+      // Owners can read and update their own jobs.
+      allow read, update: if isOwner(request.auth, resource.data.ownerId);
+      // Only authenticated users can create, and ownerId must match their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.ownerId == request.auth.uid;
+      // Allow users to query for their own jobs, but not delete.
+      allow list: if isSignedIn(request.auth);
+      allow delete: if false;
+    }
+  }
+}
