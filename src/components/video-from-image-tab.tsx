@@ -367,8 +367,16 @@ export function VideoFromImageTab({
       body: uploadForm,
     });
     if (!uploadResponse.ok) {
-      const errData = await uploadResponse.json().catch(() => ({}));
-      throw new Error(errData.error || 'Không thể tải audio lên HeyGen.');
+        const errorText = await uploadResponse.text();
+        try {
+            // Try to parse as JSON to get a specific error message
+            const errorJson = JSON.parse(errorText);
+            throw new Error(errorJson.error || 'Không thể tải audio lên HeyGen.');
+        } catch (e) {
+            // If parsing fails, it's likely an HTML error page (like a 404)
+            const cleanError = errorText.replace(/<[^>]*>/g, ' ').replace(/\s\s+/g, ' ').trim();
+            throw new Error(cleanError || 'Không thể tải audio lên HeyGen.');
+        }
     }
     const uploadData = await uploadResponse.json();
     const audioHeyGenUrl = uploadData.data?.url || uploadData.url;
