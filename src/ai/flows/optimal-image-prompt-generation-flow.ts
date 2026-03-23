@@ -126,7 +126,7 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    const modelToUse = input.model || 'gemini-2.5-pro';
+    const modelToUse = input.model || 'gemini-3.1-pro-preview';
     const localAi = getOrCreateGenkit(input.apiKey);
 
     const { output } = await localAi.generate({

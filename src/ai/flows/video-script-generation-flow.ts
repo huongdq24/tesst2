@@ -136,7 +136,7 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    const modelToUse = input.model || 'gemini-2.5-pro';
+    const modelToUse = input.model || 'gemini-3.1-pro-preview';
 
     const { output } = await aiInstance.generate({
       model: googleAI.model(modelToUse as any),
