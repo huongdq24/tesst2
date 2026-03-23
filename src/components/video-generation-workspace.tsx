@@ -87,6 +87,9 @@ export function VideoGenerationWorkspace() {
   const userRef = useRef(user);
   const videoModelRef = useRef(videoModel);
   const aspectRatioRef = useRef(aspectRatio);
+  // Bypass refs
+  const handleGenerateRef = useRef<((isAutoBypass?: boolean) => Promise<void>) | null>(null);
+  const isSafetyBypassModeRef = useRef(false);
   
   useEffect(() => { promptRef.current = prompt; }, [prompt]);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -174,9 +177,32 @@ export function VideoGenerationWorkspace() {
             cleanupPolling();
             setOperationName(null);
           } else if (result.status === 'failed') {
+            const errorMsg = result.error || "Đã xảy ra lỗi không xác định.";
+
+            // === AUTO-BYPASS LRO SAFETY ERROR ===
+            const isCelebrityError = errorMsg.toLowerCase().includes('celebrity') || 
+                                     errorMsg.toLowerCase().includes('likeness') ||
+                                     errorMsg.toLowerCase().includes('children') ||
+                                     errorMsg.toLowerCase().includes('bộ lọc an toàn');
+            
+            if (isCelebrityError && !isSafetyBypassModeRef.current && (inputImageUrls.length > 0 || inputMode === 'before-after')) {
+               console.warn(`[VideoGen Poll] Detected RAI safety block. Auto-retrying without reference image...`);
+               isSafetyBypassModeRef.current = true;
+               toast({ 
+                 title: "Vượt qua bộ lọc an toàn...", 
+                 description: "Đang tự động khởi tạo lại video chỉ dựa trên kịch bản chữ (bỏ qua ảnh gốc).", 
+                 defaultOpen: true
+               });
+               cleanupPolling();
+               setOperationName(null);
+               if (handleGenerateRef.current) {
+                 handleGenerateRef.current(true);
+               }
+               return; // Skip normal failure flow
+            }
+
             setJobStatus('failed');
             stopTimer();
-            const errorMsg = result.error || "Đã xảy ra lỗi không xác định.";
             setErrorDetails(errorMsg);
             toast({
               variant: 'destructive',
@@ -340,7 +366,14 @@ export function VideoGenerationWorkspace() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (bypassParam?: boolean | any) => {
+    // If triggered by a real user button click, bypassParam is an Event object, not true.
+    const isAutoBypass = bypassParam === true;
+    
+    if (!isAutoBypass) {
+      isSafetyBypassModeRef.current = false;
+    }
+
     if (inputMode === 'standard' && !prompt.trim()) {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
       return;
@@ -359,7 +392,7 @@ export function VideoGenerationWorkspace() {
     }
 
     // Validate before/after mode
-    if (inputMode === 'before-after') {
+    if (inputMode === 'before-after' && !isAutoBypass) {
       if (!beforeImageUrl || !afterImageUrl) {
         toast({ variant: 'destructive', title: 'Thiếu ảnh', description: 'Vui lòng tải lên cả ảnh TRƯỚC và ảnh SAU để tạo video chuyển đổi.' });
         return;
@@ -380,7 +413,11 @@ export function VideoGenerationWorkspace() {
     let referenceImages: string[] | undefined;
     let finalPrompt = prompt;
 
-    if (inputMode === 'before-after' && beforeImageUrl && afterImageUrl) {
+    if (isAutoBypass === true) {
+      referenceImages = undefined; // Strip images to bypass filter
+      finalPrompt = prompt.trim() || '';
+      console.log("[VideoGen] Executing text-only fallback generation state...");
+    } else if (inputMode === 'before-after' && beforeImageUrl && afterImageUrl) {
       // BEFORE image = reference image = first frame of the video
       referenceImages = [beforeImageUrl];
       // The AFTER image will be sent via afterImageUri to the flow,
@@ -446,6 +483,9 @@ export function VideoGenerationWorkspace() {
       stopTimer();
     }
   };
+
+  // Wire up the ref
+  handleGenerateRef.current = handleGenerate;
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
