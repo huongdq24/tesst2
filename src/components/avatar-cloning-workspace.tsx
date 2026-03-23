@@ -17,6 +17,7 @@ import {
   Clock,
   Trash2,
   Sparkles,
+  Square,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
@@ -79,7 +80,7 @@ export function AvatarCloningWorkspace() {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { t } = useI18n();
@@ -246,7 +247,10 @@ export function AvatarCloningWorkspace() {
         body: uploadForm,
       });
 
-      if (!uploadResponse.ok) throw new Error('Không thể tải audio lên HeyGen.');
+      if (!uploadResponse.ok) {
+        const errData = await uploadResponse.json().catch(() => ({}));
+        throw new Error(errData.error || 'Không thể tải audio lên HeyGen.');
+      }
       const uploadData = await uploadResponse.json();
       const audioUrl = uploadData.data?.url || uploadData.url;
 

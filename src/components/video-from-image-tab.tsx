@@ -132,7 +132,7 @@ export function VideoFromImageTab({
   const [imageTarget, setImageTarget] = useState<'before' | 'after'>('before');
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { user, userData } = useAuth();
@@ -366,7 +366,10 @@ export function VideoFromImageTab({
       headers: { 'x-heygen-api-key': userData!.heyGenApiKey! },
       body: uploadForm,
     });
-    if (!uploadResponse.ok) throw new Error('Không thể tải audio lên HeyGen.');
+    if (!uploadResponse.ok) {
+      const errData = await uploadResponse.json().catch(() => ({}));
+      throw new Error(errData.error || 'Không thể tải audio lên HeyGen.');
+    }
     const uploadData = await uploadResponse.json();
     const audioHeyGenUrl = uploadData.data?.url || uploadData.url;
     if (!audioHeyGenUrl) throw new Error('Không nhận được URL audio từ HeyGen.');
@@ -823,7 +826,7 @@ export function VideoFromImageTab({
                                         const video = document.createElement('video');
                                         video.src = item.videoUrl;
                                         video.controls = true;
-                                        Object.assign(video.style, { position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', maxWidth:'90vw', maxHeight:'90vh', zIndex:'9999', borderRadius:'12px' });
+                                        Object.assign(video.style, { position:'fixed', top:'50%', left:'50%', transform:'translate(-50%, -50%)', maxWidth:'90vw', maxHeight:'90vh', zIndex:'9999', borderRadius:'12px' });
                                         const overlay = document.createElement('div');
                                         overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998';
                                         overlay.onclick = () => { overlay.remove(); video.remove(); };

@@ -37,8 +37,27 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('[HeyGen Upload] API Error:', response.status, errorBody);
+      
+      let errorMessage = `HeyGen Upload Error: ${response.statusText}`;
+      try {
+        const errorJson = JSON.parse(errorBody);
+        // Check for common HeyGen error formats
+        if (errorJson.message) {
+          errorMessage = `HeyGen: ${errorJson.message}`;
+        } else if (errorJson.error?.message) {
+          errorMessage = `HeyGen: ${errorJson.error.message}`;
+        } else if (errorJson.data?.message) {
+           errorMessage = `HeyGen: ${errorJson.data.message}`;
+        } else {
+           errorMessage = errorBody;
+        }
+      } catch {
+        // If it's not JSON, use the raw text
+        errorMessage = errorBody;
+      }
+      
       return NextResponse.json(
-        { error: `HeyGen Upload Error: ${response.statusText}` },
+        { error: errorMessage },
         { status: response.status }
       );
     }
