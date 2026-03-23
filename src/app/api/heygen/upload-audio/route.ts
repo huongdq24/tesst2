@@ -49,11 +49,12 @@ export async function POST(request: NextRequest) {
         } else if (errorJson.data?.message) {
            errorMessage = `HeyGen: ${errorJson.data.message}`;
         } else {
-           errorMessage = errorBody;
+           // It's JSON, but not a known format. Stringify it.
+           errorMessage = JSON.stringify(errorJson);
         }
       } catch {
-        // If it's not JSON, use the raw text
-        errorMessage = errorBody;
+        // If it's not JSON (likely HTML), clean it up.
+        errorMessage = errorBody.replace(/<[^>]*>/g, ' ').replace(/\s\s+/g, ' ').trim();
       }
       
       return NextResponse.json(
