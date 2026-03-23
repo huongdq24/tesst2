@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, ChangeEvent, DragEvent } from 'react';
+import { useState, useRef, useEffect, ChangeEvent, DragEvent, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -16,6 +16,9 @@ import {
   Clock,
   Trash2,
   Sparkles,
+  ArrowRight,
+  ImagePlus,
+  CheckCircle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
@@ -30,6 +33,7 @@ import {
   onSnapshot,
   deleteDoc,
   doc,
+  getDocs,
 } from 'firebase/firestore';
 import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
@@ -52,6 +56,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Voice {
   voice_id: string;
@@ -68,6 +75,13 @@ interface GeneratedAvatarVideo {
   videoUrl: string;
   thumbnailUrl?: string;
   aspectRatio?: string;
+  createdAt: any;
+}
+
+interface ImageRecord {
+  id: string;
+  url: string;
+  prompt?: string;
   createdAt: any;
 }
 
@@ -111,6 +125,11 @@ export function VideoFromImageTab({
   const [elapsedTime, setElapsedTime] = useState(0);
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+
+  // New states for image library
+  const [imageLibrary, setImageLibrary] = useState<ImageRecord[]>([]);
+  const [isLibraryLoading, setIsLibraryLoading] = useState(false);
+  const [imageTarget, setImageTarget] = useState<'before' | 'after'>('before');
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +175,48 @@ export function VideoFromImageTab({
     });
     return () => unsub();
   }, [user]);
+
+  // Load image library from Firestore
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchMedia = async () => {
+      setIsLibraryLoading(true);
+      try {
+        const generatedImagesQuery = query(
+          collection(firestore, 'generatedImages'),
+          where('ownerId', '==', user.uid)
+        );
+        const inputImagesQuery = query(
+          collection(firestore, 'inputImages'),
+          where('ownerId', '==', user.uid)
+        );
+
+        const [generatedImagesSnapshot, inputImagesSnapshot] = await Promise.all([
+            getDocs(generatedImagesQuery),
+            getDocs(inputImagesQuery),
+        ]);
+
+        const generatedImagesList: ImageRecord[] = generatedImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl } as ImageRecord));
+        const inputImagesList: ImageRecord[] = inputImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl } as ImageRecord));
+
+        const combinedList = [...generatedImagesList, ...inputImagesList];
+        combinedList.sort((a, b) => {
+          const dateA = a.createdAt?.toDate ? a.createdAt.toDate() : new Date(0);
+          const dateB = b.createdAt?.toDate ? b.createdAt.toDate() : new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setImageLibrary(combinedList);
+      } catch (e) {
+        console.error("Failed to fetch image library:", e);
+        toast({ variant: 'destructive', title: 'Lỗi tải thư viện ảnh', description: 'Không thể tải thư viện ảnh của bạn.'});
+      } finally {
+        setIsLibraryLoading(false);
+      }
+    };
+    fetchMedia();
+  }, [user, toast]);
 
   // Timer helpers
   const stopTimer = () => {
@@ -691,83 +752,119 @@ export function VideoFromImageTab({
           </CardContent>
         </Card>
 
-        {/* Video History */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              <h3 className="font-semibold">Lịch sử Video Avatar</h3>
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                {history.length}
-              </span>
-            </div>
-
-            {history.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Chưa có video nào. Hãy tạo video avatar đầu tiên!
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[500px] overflow-y-auto pr-1">
-                {history.map((item) => (
-                  <div key={item.id} className="group rounded-lg border overflow-hidden hover:shadow-md transition-shadow">
-                    <div className="aspect-video bg-black/5 relative">
-                      <video
-                        src={item.videoUrl}
-                        className="w-full h-full object-cover"
-                        preload="metadata"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
-                        <Button
-                          variant="secondary"
-                          size="icon"
-                          className="h-12 w-12 rounded-full"
-                          onClick={() => {
-                            // Simple overlay video player
-                            const video = document.createElement('video');
-                            video.src = item.videoUrl;
-                            video.controls = true;
-                            Object.assign(video.style, { position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', maxWidth:'90vw', maxHeight:'90vh', zIndex:'9999', borderRadius:'12px' });
-                            const overlay = document.createElement('div');
-                            overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998';
-                            overlay.onclick = () => { overlay.remove(); video.remove(); };
-                            document.body.append(overlay, video);
-                            video.play();
-                          }}
-                        >
-                          <Play className="h-5 w-5 ml-0.5" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div className="p-3">
-                      <p className="text-sm truncate">{item.text}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className="text-xs text-muted-foreground">{item.voiceName}</span>
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleDownloadVideo(item.videoUrl, `${(item.text || 'igen-video').slice(0,25)}.mp4`)}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={() => setVideoToDelete(item.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+        {/* Library & History Tabs */}
+        <Tabs defaultValue="library" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="library">Thư viện ảnh</TabsTrigger>
+                <TabsTrigger value="history">Lịch sử Video</TabsTrigger>
+            </TabsList>
+            <TabsContent value="library" className="mt-4">
+                <Card>
+                    <CardContent className="p-4">
+                        {isLibraryLoading ? (
+                            <div className="flex items-center justify-center h-48">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : imageLibrary.length === 0 ? (
+                            <div className="text-center text-sm text-muted-foreground py-12">
+                                Thư viện ảnh của bạn trống.
+                            </div>
+                        ) : (
+                            <ScrollArea className="h-[400px] pr-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                    {imageLibrary.map((item) => (
+                                        <div
+                                            key={item.id}
+                                            className="relative group aspect-square rounded-lg overflow-hidden cursor-pointer"
+                                            onClick={() => {
+                                                setAvatarImageUrl(item.url);
+                                                toast({ title: 'Đã chọn ảnh đại diện' });
+                                            }}
+                                        >
+                                            <Image src={item.url} alt={item.prompt || 'Library Image'} fill className="object-cover transition-transform group-hover:scale-105" />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                                                <CheckCircle className="h-8 w-8 text-white opacity-0 group-hover:opacity-100" />
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </CardContent>
+                </Card>
+            </TabsContent>
+            <TabsContent value="history" className="mt-4">
+                <Card>
+                <CardContent className="p-4">
+                    {history.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                        Chưa có video nào. Hãy tạo video avatar đầu tiên!
+                    </p>
+                    ) : (
+                    <ScrollArea className="h-[400px] pr-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {history.map((item) => (
+                            <div key={item.id} className="group rounded-lg border overflow-hidden hover:shadow-md transition-shadow">
+                                <div className="aspect-video bg-black/5 relative">
+                                <video
+                                    src={item.videoUrl}
+                                    className="w-full h-full object-cover"
+                                    preload="metadata"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/30">
+                                    <Button
+                                    variant="secondary"
+                                    size="icon"
+                                    className="h-12 w-12 rounded-full"
+                                    onClick={() => {
+                                        const video = document.createElement('video');
+                                        video.src = item.videoUrl;
+                                        video.controls = true;
+                                        Object.assign(video.style, { position:'fixed', top:'50%', left:'50%', transform:'translate(-50%,-50%)', maxWidth:'90vw', maxHeight:'90vh', zIndex:'9999', borderRadius:'12px' });
+                                        const overlay = document.createElement('div');
+                                        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998';
+                                        overlay.onclick = () => { overlay.remove(); video.remove(); };
+                                        document.body.append(overlay, video);
+                                        video.play();
+                                    }}
+                                    >
+                                    <Play className="h-5 w-5 ml-0.5" />
+                                    </Button>
+                                </div>
+                                </div>
+                                <div className="p-3">
+                                <p className="text-sm truncate">{item.text}</p>
+                                <div className="flex items-center justify-between mt-2">
+                                    <span className="text-xs text-muted-foreground">{item.voiceName}</span>
+                                    <div className="flex gap-1">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => handleDownloadVideo(item.videoUrl, `${(item.text || 'igen-video').slice(0,25)}.mp4`)}
+                                    >
+                                        <Download className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-destructive hover:text-destructive"
+                                        onClick={() => setVideoToDelete(item.id)}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                    </div>
+                                </div>
+                                </div>
+                            </div>
+                            ))}
                         </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                    </ScrollArea>
+                    )}
+                </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
       </div>
 
       {/* Delete Confirmation */}
