@@ -48,7 +48,7 @@ export function VideoGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
-  const [scriptModel, setScriptModel] = useState('gemini-3.1-pro-preview');
+  const [scriptModel, setScriptModel] = useState('gemini-3.1-flash-lite-preview');
   const [videoModel, setVideoModel] = useState('veo-3.1-fast-generate-preview');
   const [videoDuration, setVideoDuration] = useState('8');
   const [frameRate, setFrameRate] = useState('24');

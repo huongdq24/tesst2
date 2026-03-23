@@ -37,7 +37,7 @@ export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [promptModel, setPromptModel] = useState('gemini-3.1-pro-preview');
+  const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
   const [imageModel, setImageModel] = useState('gemini-3.1-flash-image-preview');
   const [artStyle, setArtStyle] = useState<string | null>(null);
   const [intentAnalysis, setIntentAnalysis] = useState<string | null>(null);
