@@ -298,6 +298,24 @@ const startVideoGenerationFlow = ai.defineFlow(
           if (statusCode === 400) {
             console.warn(`[VideoGen] Got 400 error: ${errMessage}`);
             
+            // === CELEBRITY/CHILDREN LIKENESS BYPASS ===
+            // If the error is about celebrity or children likeness in the INPUT IMAGE,
+            // retry WITHOUT the reference image. The detailed text prompt from script
+            // generation already describes the scene perfectly, so Veo can generate
+            // a matching video using text-only mode.
+            const isCelebrityError = errMessage.toLowerCase().includes('celebrity') || 
+                                     errMessage.toLowerCase().includes('likeness') ||
+                                     errMessage.toLowerCase().includes('children') ||
+                                     errMessage.toLowerCase().includes('photorealistic children');
+            if (isCelebrityError && firstFramePayload) {
+              console.warn(`[VideoGen] Celebrity/children likeness detected in reference image. Retrying WITHOUT reference image (text-only mode)...`);
+              // Remove the image from the payload so Veo uses text-only
+              delete payload.instances[0].image;
+              firstFramePayload = null; // Prevent re-adding on future retries
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              continue; // Retry immediately without the image
+            }
+
             // Check if we have extra params that could be stripped
             const hasExtraParams = config.resolution || config.durationSeconds;
             const isSafetyError = errMessage.toLowerCase().includes('safety') || errMessage.toLowerCase().includes('policy');
