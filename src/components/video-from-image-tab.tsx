@@ -332,7 +332,10 @@ export function VideoFromImageTab({
       // Download existing audio
       setPipelineStep('generating_audio');
       setPipelineMessage('Đang tải audio có sẵn...');
-      const response = await fetch(audioUrl);
+      
+      // FIX: Use a server-side proxy to bypass potential CORS issues when fetching the audio blob from Firebase Storage.
+      const proxyUrl = `/api/proxy-video?url=${encodeURIComponent(audioUrl)}`;
+      const response = await fetch(proxyUrl);
       if (!response.ok) throw new Error('Không thể tải audio có sẵn.');
       const audioBlob = await response.blob();
 
