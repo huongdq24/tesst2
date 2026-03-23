@@ -300,7 +300,8 @@ const startVideoGenerationFlow = ai.defineFlow(
             
             // Check if we have extra params that could be stripped
             const hasExtraParams = config.resolution || config.durationSeconds;
-            if (hasExtraParams && attempt === 0) {
+            const isSafetyError = errMessage.toLowerCase().includes('safety') || errMessage.toLowerCase().includes('policy');
+            if (hasExtraParams && attempt === 0 && !isSafetyError) {
               console.warn(`[VideoGen] Stripping optional params (resolution, durationSeconds) and retrying...`);
               // Remove params that might not be supported by this model version
               delete config.resolution;

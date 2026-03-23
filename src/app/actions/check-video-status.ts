@@ -102,8 +102,8 @@ function formatDetailedError(message: string): string {
   if (message.includes('403') || message.includes('PERMISSION_DENIED')) {
     return `🔑 API Key không hợp lệ hoặc không có quyền sử dụng model này.`;
   }
-  if (message.includes('content policy') || message.includes('SAFETY') || message.includes('blockReason')) {
-    return `⛔ Yêu cầu đã bị chặn do vi phạm chính sách nội dung. Vui lòng thử prompt khác.`;
+  if (message.includes('content policy') || message.includes('SAFETY') || message.includes('blockReason') || message.toLowerCase().includes('rai')) {
+    return `⛔ Yêu cầu đã bị chặn do vi phạm chính sách an toàn (RAI). Vui lòng thử: 1. Đổi ảnh khác (không có người thật/nổi tiếng). 2. Thay đổi prompt.`;
   }
   if (message.includes('DEADLINE_EXCEEDED') || message.includes('timeout')) {
     return `⏱️ Quá thời gian xử lý. Vui lòng thử lại.`;
@@ -167,6 +167,19 @@ export async function checkVideoStatus(operationName: string, apiKey: string): P
       const errorMessage = operation.error.message || 'Unknown error during video generation.';
       return { status: 'failed', error: formatDetailedError(errorMessage) };
     }
+
+    // Check if the content was filtered by RAI (Responsible AI)
+    try {
+      const generateResponse = operation.response?.generateVideoResponse || operation.response;
+      if (generateResponse?.raiMediaFilteredCount > 0) {
+        const reasons = generateResponse.raiMediaFilteredReasons?.join(' ') || 'Vi phạm chính sách an toàn (RAI).';
+        console.warn(`[CheckStatus] Content filtered by RAI. Reasons: ${reasons}`);
+        return {
+          status: 'failed',
+          error: `🚫 Video bị chặn bởi bộ lọc an toàn: ${reasons}`,
+        };
+      }
+    } catch (e) { /* ignore */ }
 
     // Operation is done and successful - extract video URL
     const videoUrl = extractVideoFromOperation(operation);
