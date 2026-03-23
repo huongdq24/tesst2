@@ -126,26 +126,40 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    const modelToUse = input.model || 'gemini-3.1-flash-lite-preview';
+    const primaryModel = input.model || 'gemini-3.1-flash-lite-preview';
     const localAi = getOrCreateGenkit(input.apiKey);
+    const fallbackModels = [primaryModel, 'gemini-3.1-flash-lite-preview', 'gemini-2.0-flash'].filter(
+      (m, i, arr) => arr.indexOf(m) === i
+    );
 
-    const { output } = await localAi.generate({
-      model: googleAI.model(modelToUse as any),
-      prompt: promptParts,
-      system: systemPrompt,
-      output: {
-        format: 'json',
-        schema: OptimalImagePromptGenerationOutputSchema,
-      },
-      config: {
-        temperature: 0.2,
-      },
-    });
+    let lastError: any = null;
+    for (const modelName of fallbackModels) {
+      try {
+        console.log(`[PromptGen] Trying model: ${modelName}`);
+        const { output } = await localAi.generate({
+          model: googleAI.model(modelName as any),
+          prompt: promptParts,
+          system: systemPrompt,
+          output: {
+            format: 'json',
+            schema: OptimalImagePromptGenerationOutputSchema,
+          },
+          config: {
+            temperature: 0.2,
+          },
+        });
 
-    if (!output) {
-      throw new Error('Failed to generate an optimized prompt.');
+        if (!output) {
+          throw new Error(`[PromptGen] Model ${modelName} returned empty output.`);
+        }
+        console.log(`[PromptGen] Success with model: ${modelName}`);
+        return output;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[PromptGen] Model ${modelName} failed: ${err.message}. Trying next fallback...`);
+      }
     }
-    
-    return output;
+
+    throw new Error(`[PromptGen] All models failed. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 );

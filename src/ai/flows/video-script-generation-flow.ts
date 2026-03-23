@@ -136,24 +136,39 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    const modelToUse = input.model || 'gemini-3.1-flash-lite-preview';
+    const primaryModel = input.model || 'gemini-3.1-flash-lite-preview';
+    const fallbackModels = [primaryModel, 'gemini-3.1-flash-lite-preview', 'gemini-2.0-flash'].filter(
+      (m, i, arr) => arr.indexOf(m) === i // deduplicate
+    );
 
-    const { output } = await aiInstance.generate({
-      model: googleAI.model(modelToUse as any),
-      prompt: promptParts,
-      system: systemPrompt,
-      output: {
-        format: 'json',
-        schema: VideoScriptGenerationOutputSchema,
-      },
-      config: {
-        temperature: 0.3,
-      },
-    });
+    let lastError: any = null;
+    for (const modelName of fallbackModels) {
+      try {
+        console.log(`[ScriptGen] Trying model: ${modelName}`);
+        const { output } = await aiInstance.generate({
+          model: googleAI.model(modelName as any),
+          prompt: promptParts,
+          system: systemPrompt,
+          output: {
+            format: 'json',
+            schema: VideoScriptGenerationOutputSchema,
+          },
+          config: {
+            temperature: 0.3,
+          },
+        });
 
-    if (!output) {
-      throw new Error('[ScriptGen] Failed to generate video script.');
+        if (!output) {
+          throw new Error(`[ScriptGen] Model ${modelName} returned empty output.`);
+        }
+        console.log(`[ScriptGen] Success with model: ${modelName}`);
+        return output;
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[ScriptGen] Model ${modelName} failed: ${err.message}. Trying next fallback...`);
+      }
     }
-    return output;
+
+    throw new Error(`[ScriptGen] All models failed. Last error: ${lastError?.message || 'Unknown error'}`);
   }
 );
