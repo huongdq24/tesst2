@@ -48,7 +48,7 @@ export function VideoGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
-  const [scriptModel, setScriptModel] = useState('gemini-3.1-pro-preview');
+  const [scriptModel, setScriptModel] = useState('gemini-2.5-pro');
   const [videoModel, setVideoModel] = useState('veo-3.1-fast-generate-preview');
   const [videoDuration, setVideoDuration] = useState('8');
   const [frameRate, setFrameRate] = useState('24');
@@ -875,9 +875,9 @@ export function VideoGenerationWorkspace() {
                     <SelectValue placeholder="Chọn mô hình" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-3.1-pro-preview">iGen-3.1-pro-preview</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview">iGen-3.1-flash-lite-preview</SelectItem>
-                    <SelectItem value="gemini-3-flash-preview">iGen-3-flash-preview</SelectItem>
+                    <SelectItem value="gemini-2.5-pro">iGen 2.5 Pro</SelectItem>
+                    <SelectItem value="gemini-2.5-flash">iGen 2.5 Flash</SelectItem>
+                    <SelectItem value="gemini-2.0-flash">iGen 2.0 Flash</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
