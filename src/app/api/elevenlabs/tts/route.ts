@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
  * POST /api/elevenlabs/tts
  * Generates speech audio from text using ElevenLabs Text-to-Speech API.
  * 
- * Body: { voice_id, text, model_id?, language_code? }
+ * Body: { voice_id, text, model_id?, language_code?, stability?, similarity_boost?, style?, use_speaker_boost? }
  * Returns: audio/mpeg binary stream
  */
 export async function POST(request: NextRequest) {
@@ -16,7 +16,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { voice_id, text, model_id, language_code, speed } = body;
+    const { 
+      voice_id, 
+      text, 
+      model_id, 
+      language_code, 
+      stability,
+      similarity_boost,
+      style,
+      use_speaker_boost
+    } = body;
 
     if (!voice_id || !text) {
       return NextResponse.json(
@@ -35,18 +44,12 @@ export async function POST(request: NextRequest) {
       text,
       model_id: resolvedModelId,
       voice_settings: {
-        stability: 0.65,
-        similarity_boost: 0.80,
-        style: 0.0,
-        use_speaker_boost: true,
+        stability: stability ?? 0.5,
+        similarity_boost: similarity_boost ?? 0.75,
+        style: style ?? 0.0,
+        use_speaker_boost: use_speaker_boost ?? true,
       },
     };
-
-    if (speed !== undefined && speed !== 1.0) {
-      // Speed parameter (supported in newer models like Turbo v2.5 or v3)
-      // Some versions of API accept it here
-      ttsBody.voice_settings.speed = speed;
-    }
 
     // Add language_code if provided — critical for non-English languages like Vietnamese
     if (language_code) {
@@ -58,6 +61,7 @@ export async function POST(request: NextRequest) {
       model_id: ttsBody.model_id,
       language_code: language_code || 'auto',
       text_length: text.length,
+      voice_settings: ttsBody.voice_settings
     });
 
     const response = await fetch(
@@ -100,4 +104,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
