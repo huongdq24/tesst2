@@ -606,16 +606,19 @@ export function VoiceCloningWorkspace() {
                                   : "hover:bg-muted/50"
                               )}
                             >
-                              <div className="flex justify-between items-center">
-                                <h4 className="font-semibold">{model.name}</h4>
+                              <div className="flex justify-between items-start">
+                                <div>
+                                    <h4 className="font-semibold">{model.name}</h4>
+                                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
+                                </div>
                                 {selectedUIModelId === model.id && (
-                                  <Check className="h-5 w-5 text-primary" />
+                                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
                                 )}
                               </div>
-                              <p className="text-xs text-muted-foreground mt-1">
+                              <p className="text-xs text-muted-foreground mt-2">
                                 {model.description}
                               </p>
-                              <div className="flex gap-2 mt-2">
+                              <div className="flex flex-wrap gap-2 mt-2">
                                 {model.tags.map((tag) => (
                                   <Badge
                                     key={tag}
