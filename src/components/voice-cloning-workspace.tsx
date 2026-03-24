@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -19,6 +20,7 @@ import {
   Plus,
   BookOpen,
   Video,
+  Check,
 } from 'lucide-react';
 import { AddVoiceModal } from '@/components/modals/add-voice-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -61,6 +63,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 interface Voice {
   voice_id: string;
@@ -82,6 +85,28 @@ interface GeneratedVoice {
   speed?: number;
 }
 
+const MODELS = [
+  {
+    id: 'eleven_multilingual_v2',
+    name: 'Eleven Multilingual v2',
+    description: 'Mô hình sống động, giàu cảm xúc với hơn 29 ngôn ngữ. Tốt nhất cho lồng tiếng, sách nói, hậu kỳ.',
+    tags: ['Chất lượng cao'],
+  },
+  {
+    id: 'eleven_turbo_v2_5',
+    name: 'Eleven Turbo v2.5',
+    description: 'Mô hình có độ trễ cực thấp với 32 ngôn ngữ. Lý tưởng cho các trường hợp đàm thoại.',
+    tags: ['Nhanh & Rẻ'],
+    default: true,
+  },
+  {
+    id: 'eleven_multilingual_v1',
+    name: 'Eleven Multilingual v1',
+    description: 'Mô hình đa ngôn ngữ ổn định, hỗ trợ 10 ngôn ngữ, bao gồm tiếng Việt.',
+    tags: ['Ổn định'],
+  },
+];
+
 export function VoiceCloningWorkspace() {
   const [text, setText] = useState('');
   const [title, setTitle] = useState('');
@@ -91,6 +116,7 @@ export function VoiceCloningWorkspace() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('vi');
+  const [selectedModelId, setSelectedModelId] = useState('eleven_turbo_v2_5');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isDeletingVoice, setIsDeletingVoice] = useState(false);
@@ -210,7 +236,7 @@ export function VoiceCloningWorkspace() {
         body: JSON.stringify({
           voice_id: selectedVoiceId,
           text: "Xin chào, đây là giọng nói thử nghiệm mà tôi vừa tạo thành công.",
-          model_id: "eleven_turbo_v2_5",
+          model_id: selectedModelId,
           language_code: "vi",
         }),
       });
@@ -327,6 +353,7 @@ export function VoiceCloningWorkspace() {
         body: JSON.stringify({
           voice_id: selectedVoiceId,
           text: text,
+          model_id: selectedModelId,
           language_code: selectedLanguage !== 'auto' ? selectedLanguage : undefined,
           speed: speed[0],
         }),
@@ -501,77 +528,103 @@ export function VoiceCloningWorkspace() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            {/* Model Selection */}
+            <div className="space-y-3">
+              <Label>Chọn Model AI</Label>
+              <RadioGroup value={selectedModelId} onValueChange={setSelectedModelId} className="grid grid-cols-1 gap-2">
+                {MODELS.map((model) => (
+                  <Label key={model.id} htmlFor={model.id} className={cn(
+                    "flex flex-col p-4 border rounded-lg cursor-pointer transition-colors",
+                    selectedModelId === model.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-accent/50"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value={model.id} id={model.id} />
+                        <span className="font-semibold">{model.name}</span>
+                      </div>
+                      <div className="flex gap-1.5">
+                        {model.tags.map(tag => (
+                           <span key={tag} className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full">{tag}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2 pl-6">{model.description}</p>
+                  </Label>
+                ))}
+              </RadioGroup>
+            </div>
 
-              {/* Language Selection */}
-              <div className="space-y-2 pt-2 border-t mt-4">
-                <Label>Ngôn ngữ (giúp AI phát âm chuẩn hơn)</Label>
-                <Select
-                  value={selectedLanguage}
-                  onValueChange={setSelectedLanguage}
-                  disabled={isBusy}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn ngôn ngữ" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Đa ngôn ngữ (Pha trộn Anh - Việt)</SelectItem>
-                    <SelectItem value="vi">Chỉ đọc Tiếng Việt (Thuần Việt)</SelectItem>
-                    <SelectItem value="en">Chỉ đọc Tiếng Anh</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Preview & Delete selected voice */}
-              {selectedVoiceId && (
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    disabled={isPreviewing || isDeletingVoice}
-                    onClick={handlePreviewVoice}
-                  >
-                    {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
-                    Nghe thử giọng
-                  </Button>
-
-                  {(['cloned', 'generated'].includes(voices.find(v => v.voice_id === selectedVoiceId)?.category?.toLowerCase() || '')) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                      disabled={isDeletingVoice || isPreviewing}
-                      onClick={() => setVoiceToDelete(selectedVoiceId)}
-                    >
-                      {isDeletingVoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                      Xóa giọng
-                    </Button>
-                  )}
-                </div>
-              )}
-              {/* Add new voice button & Guide */}
+            {/* Language Selection */}
+            <div className="space-y-2">
+              <Label>Ngôn ngữ (giúp AI phát âm chuẩn hơn)</Label>
+              <Select
+                value={selectedLanguage}
+                onValueChange={setSelectedLanguage}
+                disabled={isBusy}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn ngôn ngữ" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Đa ngôn ngữ (Pha trộn Anh - Việt)</SelectItem>
+                  <SelectItem value="vi">Chỉ đọc Tiếng Việt (Thuần Việt)</SelectItem>
+                  <SelectItem value="en">Chỉ đọc Tiếng Anh</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Preview & Delete selected voice */}
+            {selectedVoiceId && (
               <div className="flex gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:text-primary"
-                  onClick={() => setShowAddVoiceModal(true)}
-                  disabled={isBusy || !userData?.elevenLabsApiKey}
+                  className="flex-1"
+                  disabled={isPreviewing || isDeletingVoice}
+                  onClick={handlePreviewVoice}
                 >
-                  <Plus className="mr-1 h-4 w-4" />
-                  Thêm giọng nói mới
+                  {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                  Nghe thử giọng
                 </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-10 px-0 flex-shrink-0"
-                  onClick={() => setShowGuideModal(true)}
-                  title="Hướng dẫn sử dụng"
-                >
-                  <BookOpen className="h-4 w-4" />
-                </Button>
+
+                {(['cloned', 'generated'].includes(voices.find(v => v.voice_id === selectedVoiceId)?.category?.toLowerCase() || '')) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                    disabled={isDeletingVoice || isPreviewing}
+                    onClick={() => setVoiceToDelete(selectedVoiceId)}
+                  >
+                    {isDeletingVoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    Xóa giọng
+                  </Button>
+                )}
               </div>
+            )}
+            {/* Add new voice button & Guide */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:text-primary"
+                onClick={() => setShowAddVoiceModal(true)}
+                disabled={isBusy || !userData?.elevenLabsApiKey}
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Thêm giọng nói mới
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-10 px-0 flex-shrink-0"
+                onClick={() => setShowGuideModal(true)}
+                title="Hướng dẫn sử dụng"
+              >
+                <BookOpen className="h-4 w-4" />
+              </Button>
             </div>
 
             <Separator />
