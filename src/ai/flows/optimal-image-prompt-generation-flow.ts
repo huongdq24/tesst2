@@ -151,7 +151,7 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
 
     const primaryModel = input.model || 'gemini-3.1-flash-lite-preview';
     const localAi = getOrCreateGenkit(input.apiKey);
-    const fallbackModels = [primaryModel, 'gemini-3.1-flash-lite-preview', 'gemini-2.0-flash'].filter(
+    const fallbackModels = [primaryModel, 'gemini-3.1-flash-lite-preview', 'gemini-pro'].filter(
       (m, i, arr) => arr.indexOf(m) === i
     );
 
