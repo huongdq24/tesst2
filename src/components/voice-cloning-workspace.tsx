@@ -128,6 +128,7 @@ export function VoiceCloningWorkspace() {
   const [playingHistoryId, setPlayingHistoryId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [playingPreviewId, setPlayingPreviewId] = useState<string | null>(null);
 
   // New settings states
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -172,6 +173,7 @@ export function VoiceCloningWorkspace() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const historyAudioRef = useRef<HTMLAudioElement | null>(null);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { t } = useI18n();
   const { user, userData } = useAuth();
@@ -397,6 +399,14 @@ export function VoiceCloningWorkspace() {
   };
 
   const handlePlayPause = () => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      setPlayingPreviewId(null);
+    }
+    if (historyAudioRef.current) {
+      historyAudioRef.current.pause();
+      setPlayingHistoryId(null);
+    }
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
@@ -407,6 +417,15 @@ export function VoiceCloningWorkspace() {
   };
 
   const handlePlayHistory = (item: GeneratedVoice) => {
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+      setPlayingPreviewId(null);
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+
     if (playingHistoryId === item.id) {
       historyAudioRef.current?.pause();
       setPlayingHistoryId(null);
@@ -421,6 +440,47 @@ export function VoiceCloningWorkspace() {
     audio.play();
     setPlayingHistoryId(item.id);
     audio.onended = () => setPlayingHistoryId(null);
+  };
+
+  const togglePlayPreview = (e: React.MouseEvent, voice: Voice) => {
+    e.stopPropagation();
+
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+    }
+    if (historyAudioRef.current && !historyAudioRef.current.paused) {
+      historyAudioRef.current.pause();
+      setPlayingHistoryId(null);
+    }
+
+    if (playingPreviewId === voice.voice_id) {
+      previewAudioRef.current?.pause();
+      setPlayingPreviewId(null);
+      return;
+    }
+
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause();
+    }
+
+    if (!voice.preview_url) {
+      toast({
+        variant: 'destructive',
+        title: 'Không có bản nghe thử',
+        description: 'Giọng nói này không có sẵn file nghe thử.',
+      });
+      return;
+    }
+
+    const audio = new Audio(voice.preview_url);
+    previewAudioRef.current = audio;
+    audio.play().catch(() => {
+      toast({ variant: 'destructive', title: 'Lỗi phát audio' });
+      setPlayingPreviewId(null);
+    });
+    setPlayingPreviewId(voice.voice_id);
+    audio.onended = () => setPlayingPreviewId(null);
   };
 
   const handleDeleteHistory = async (id: string) => {
@@ -508,15 +568,12 @@ export function VoiceCloningWorkspace() {
                           <div className="flex justify-between items-start">
                             <div>
                                 <h4 className="font-semibold text-sm">{model.name}</h4>
-                                <p className="text-xs text-muted-foreground mt-0.5">API ID: {model.apiId}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{model.description}</p>
                             </div>
                             {selectedUIModelId === model.id && (
                               <Check className="h-4 w-4 text-primary flex-shrink-0" />
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1.5">
-                            {model.description}
-                          </p>
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {model.tags.map((tag) => (
                               <Badge
@@ -666,8 +723,8 @@ export function VoiceCloningWorkspace() {
                       <div className="space-y-2 pr-4">
                         {filteredMyVoices.map(voice => (
                            <div key={voice.voice_id} className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted">
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { /* play preview */ }}>
-                                <Play className="h-4 w-4"/>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => togglePlayPreview(e, voice)}>
+                                {playingPreviewId === voice.voice_id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4"/>}
                               </Button>
                               <div className="flex-1 cursor-pointer" onClick={() => {setSelectedVoiceId(voice.voice_id); setSettingsView('main');}}>
                                   <p className="font-medium text-sm">{voice.name}</p>
@@ -687,8 +744,8 @@ export function VoiceCloningWorkspace() {
                       <div className="space-y-2 pr-4">
                          {filteredLibraryVoices.map(voice => (
                            <div key={voice.voice_id} className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted" onClick={() => {setSelectedVoiceId(voice.voice_id); setSettingsView('main');}}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); /* play preview */ }}>
-                                <Play className="h-4 w-4"/>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => togglePlayPreview(e, voice)}>
+                                {playingPreviewId === voice.voice_id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4"/>}
                               </Button>
                               <div className="flex-1 cursor-pointer">
                                   <p className="font-medium text-sm">{voice.name}</p>
