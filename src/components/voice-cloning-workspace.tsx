@@ -646,21 +646,23 @@ export function VoiceCloningWorkspace() {
                 <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
               </div>
 
-              {/* Speaker Boost */}
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                      <Label htmlFor="speaker-boost" className={cn("cursor-pointer", selectedUIModelId === 'eleven_v3' && 'opacity-50')}>Tăng cường giọng nói</Label>
-                      <p className="text-[11px] text-muted-foreground">
-                          Tăng độ tương đồng với người nói gốc.
-                      </p>
-                  </div>
-                  <Switch
-                      id="speaker-boost"
-                      checked={speakerBoost}
-                      onCheckedChange={setSpeakerBoost}
-                      disabled={isBusy || selectedUIModelId === 'eleven_v3'}
-                  />
-              </div>
+              {/* Speaker Boost - Conditionally rendered */}
+              {selectedUIModelId !== 'eleven_v3' && (
+                <div className="flex items-center justify-between rounded-lg border p-3">
+                    <div className="space-y-0.5">
+                        <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
+                        <p className="text-[11px] text-muted-foreground">
+                            Tăng độ tương đồng với người nói gốc.
+                        </p>
+                    </div>
+                    <Switch
+                        id="speaker-boost"
+                        checked={speakerBoost}
+                        onCheckedChange={setSpeakerBoost}
+                        disabled={isBusy}
+                    />
+                </div>
+              )}
               
               {/* Language Override */}
               <div className="flex items-center justify-between rounded-lg border p-3">
