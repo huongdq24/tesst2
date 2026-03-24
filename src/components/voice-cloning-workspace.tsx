@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
@@ -87,19 +86,29 @@ interface GeneratedVoice {
 
 const MODELS = [
   {
-    id: 'eleven_multilingual_v2',
+    id: 'eleven_v3', // Unique UI ID
+    apiId: 'eleven_multilingual_v2',
     name: 'Eleven v3',
-    description: 'Mô hình biểu cảm nhất. Hỗ trợ 70+ ngôn ngữ. Yêu cầu kỹ thuật prompt cao hơn các model trước.',
+    description: 'The most expressive model. Supports 70+ languages. Requires more prompt engineering than our previous models.',
     tags: ['Cảm xúc cao', '70+ Ngôn ngữ'],
   },
   {
-    id: 'eleven_turbo_v2_5',
+    id: 'eleven_flash_v2.5', // Unique UI ID
+    apiId: 'eleven_turbo_v2_5', // NOTE: API uses turbo for flash-like performance
+    name: 'Eleven Flash v2.5',
+    description: 'Our ultra low latency model in 32 languages. Ideal for conversational use cases.',
+    tags: ['50% cheaper'],
+  },
+  {
+    id: 'eleven_turbo_v2.5', // Unique UI ID
+    apiId: 'eleven_turbo_v2_5',
     name: 'Eleven Turbo v2.5',
-    description: 'Mô hình chất lượng cao, độ trễ thấp hỗ trợ 32 ngôn ngữ. Tốt nhất cho các trường hợp cần tốc độ và hỗ trợ nhiều ngôn ngữ ngoài tiếng Anh.',
-    tags: ['50% rẻ hơn', 'Độ trễ thấp'],
+    description: 'Our high quality, low latency model in 32 languages. Best for developer use cases where speed matters and you need non-English languages.',
+    tags: ['50% cheaper'],
     default: true,
   },
 ];
+
 
 export function VoiceCloningWorkspace() {
   const [text, setText] = useState('');
@@ -110,7 +119,7 @@ export function VoiceCloningWorkspace() {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState('vi');
-  const [selectedModelId, setSelectedModelId] = useState('eleven_turbo_v2_5');
+  const [selectedUIModelId, setSelectedUIModelId] = useState('eleven_turbo_v2.5');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isDeletingVoice, setIsDeletingVoice] = useState(false);
@@ -221,6 +230,7 @@ export function VoiceCloningWorkspace() {
     // Generate dynamic preview if no url exists
     setIsPreviewing(true);
     try {
+      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_turbo_v2_5';
       const response = await fetch('/api/elevenlabs/tts', {
         method: 'POST',
         headers: {
@@ -230,7 +240,7 @@ export function VoiceCloningWorkspace() {
         body: JSON.stringify({
           voice_id: selectedVoiceId,
           text: "Xin chào, đây là giọng nói thử nghiệm mà tôi vừa tạo thành công.",
-          model_id: selectedModelId,
+          model_id: selectedModelApiId,
           language_code: "vi",
         }),
       });
@@ -338,6 +348,7 @@ export function VoiceCloningWorkspace() {
     setGeneratedAudioUrl(null);
 
     try {
+      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_turbo_v2_5';
       const response = await fetch('/api/elevenlabs/tts', {
         method: 'POST',
         headers: {
@@ -347,7 +358,7 @@ export function VoiceCloningWorkspace() {
         body: JSON.stringify({
           voice_id: selectedVoiceId,
           text: text,
-          model_id: selectedModelId,
+          model_id: selectedModelApiId,
           language_code: selectedLanguage !== 'auto' ? selectedLanguage : undefined,
           speed: speed[0],
         }),
@@ -527,11 +538,11 @@ export function VoiceCloningWorkspace() {
             {/* Model Selection */}
             <div className="space-y-3">
               <Label>Chọn Model AI</Label>
-              <RadioGroup value={selectedModelId} onValueChange={setSelectedModelId} className="grid grid-cols-1 gap-2">
+              <RadioGroup value={selectedUIModelId} onValueChange={setSelectedUIModelId} className="grid grid-cols-1 gap-2">
                 {MODELS.map((model) => (
                   <Label key={model.id} htmlFor={model.id} className={cn(
                     "flex flex-col p-4 border rounded-lg cursor-pointer transition-colors",
-                    selectedModelId === model.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-accent/50"
+                    selectedUIModelId === model.id ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-accent/50"
                   )}>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
