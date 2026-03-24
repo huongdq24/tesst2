@@ -67,10 +67,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 
 interface Voice {
@@ -144,6 +147,7 @@ export function VoiceCloningWorkspace() {
   const [speakerBoost, setSpeakerBoost] = useState(true);
   const [languageOverride, setLanguageOverride] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('auto');
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
 
   const VOICE_SCRIPT_TEMPLATES = [
@@ -501,559 +505,567 @@ export function VoiceCloningWorkspace() {
 
   return (
     <>
-    <AddVoiceModal
-      open={showAddVoiceModal}
-      onOpenChange={setShowAddVoiceModal}
-      onVoiceAdded={handleVoiceAdded}
-    />
-    <VoiceGuideModal open={showGuideModal} onOpenChange={setShowGuideModal} />
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-      <TabsList className="w-full max-w-md mb-6">
-        <TabsTrigger value="voice" className="flex-1 gap-2">
-          <Voicemail className="h-4 w-4" /> Tạo Giọng Nói
-        </TabsTrigger>
-        <TabsTrigger value="video" className="flex-1 gap-2">
-          <Video className="h-4 w-4" /> Tạo Video từ Ảnh
-        </TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="voice" className="flex-1">
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
-      {/* LEFT PANEL - Controls */}
-      <div className="lg:col-span-1 flex flex-col">
-        <Card className="flex-1 flex flex-col">
-          <CardContent className="p-6 flex flex-col flex-1 gap-4">
-            {!userData?.elevenLabsApiKey && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                ⚠️ Bạn chưa thêm ElevenLabs API Key (iGen Code 2). Vui lòng thêm API key trong menu tài khoản.
-              </div>
-            )}
-
-             {/* Settings Section */}
-            <Collapsible defaultOpen className="space-y-4">
-              <div className="flex items-center justify-between">
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="-ml-3">
-                    <Settings2 className="h-4 w-4 mr-2" />
-                    Cài đặt giọng nói
-                  </Button>
-                </CollapsibleTrigger>
-                <Button variant="ghost" size="sm" onClick={handleResetSettings} disabled={isBusy}>
-                  <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
-                </Button>
-              </div>
-              <CollapsibleContent className="space-y-4">
-                <div className="grid grid-cols-1 gap-4">
-                    {/* Voice Selection */}
-                    <div className="space-y-2 col-span-2">
-                      <Label>Giọng nói (Voice)</Label>
-                      <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId} disabled={isBusy || voices.length === 0}>
-                        <SelectTrigger>
-                          <SelectValue placeholder={isLoadingVoices ? 'Đang tải...' : 'Chọn giọng nói'} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {voices.map((voice) => (
-                            <SelectItem key={voice.voice_id} value={voice.voice_id}>
-                              <div className="flex items-center gap-2">
-                                <span>{voice.name}</span>
-                                <span className="text-xs text-muted-foreground capitalize">({voice.category})</span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {selectedVoiceId && (
-                        <div className="flex gap-2">
+      <AddVoiceModal
+        open={showAddVoiceModal}
+        onOpenChange={setShowAddVoiceModal}
+        onVoiceAdded={handleVoiceAdded}
+      />
+      <VoiceGuideModal open={showGuideModal} onOpenChange={setShowGuideModal} />
+      <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+        <DialogContent className="sm:max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Cài đặt giọng nói nâng cao</DialogTitle>
+                <DialogDescription>
+                    Tinh chỉnh model, giọng và các thông số khác để có kết quả tốt nhất.
+                </DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto pr-4">
+              <div className="grid grid-cols-1 gap-4">
+                  {/* Voice Selection */}
+                  <div className="space-y-2 col-span-2">
+                    <Label>Giọng nói (Voice)</Label>
+                    <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId} disabled={isBusy || voices.length === 0}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={isLoadingVoices ? 'Đang tải...' : 'Chọn giọng nói'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {voices.map((voice) => (
+                          <SelectItem key={voice.voice_id} value={voice.voice_id}>
+                            <div className="flex items-center gap-2">
+                              <span>{voice.name}</span>
+                              <span className="text-xs text-muted-foreground capitalize">({voice.category})</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedVoiceId && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          disabled={isPreviewing || isDeletingVoice}
+                          onClick={handlePreviewVoice}
+                        >
+                          {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
+                          Nghe thử
+                        </Button>
+                         {(['cloned', 'generated'].includes(voices.find(v => v.voice_id === selectedVoiceId)?.category?.toLowerCase() || '')) && (
                           <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                            disabled={isPreviewing || isDeletingVoice}
-                            onClick={handlePreviewVoice}
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={isDeletingVoice || isPreviewing}
+                            onClick={() => setVoiceToDelete(selectedVoiceId)}
+                            title="Xóa giọng nói này"
                           >
-                            {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
-                            Nghe thử
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                           {(['cloned', 'generated'].includes(voices.find(v => v.voice_id === selectedVoiceId)?.category?.toLowerCase() || '')) && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                              disabled={isDeletingVoice || isPreviewing}
-                              onClick={() => setVoiceToDelete(selectedVoiceId)}
-                              title="Xóa giọng nói này"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Model Selection */}
-                     <div className="space-y-2">
-                        <Label>Model AI</Label>
-                        <div className="grid grid-cols-1 gap-3">
-                          {MODELS.map((model) => (
-                            <button
-                              key={model.id}
-                              onClick={() => setSelectedUIModelId(model.id)}
-                              disabled={isBusy}
-                              className={cn(
-                                "text-left p-4 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                                selectedUIModelId === model.id
-                                  ? "bg-primary/10 border-primary shadow-sm"
-                                  : "hover:bg-muted/50"
+                  {/* Model Selection */}
+                   <div className="space-y-2">
+                      <Label>Model AI</Label>
+                      <div className="grid grid-cols-1 gap-3">
+                        {MODELS.map((model) => (
+                          <button
+                            key={model.id}
+                            onClick={() => setSelectedUIModelId(model.id)}
+                            disabled={isBusy}
+                            className={cn(
+                              "text-left p-4 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                              selectedUIModelId === model.id
+                                ? "bg-primary/10 border-primary shadow-sm"
+                                : "hover:bg-muted/50"
+                            )}
+                          >
+                            <div className="flex justify-between items-start">
+                              <div>
+                                  <h4 className="font-semibold">{model.name}</h4>
+                                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
+                              </div>
+                              {selectedUIModelId === model.id && (
+                                <Check className="h-5 w-5 text-primary flex-shrink-0" />
                               )}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                    <h4 className="font-semibold">{model.name}</h4>
-                                    <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
-                                </div>
-                                {selectedUIModelId === model.id && (
-                                  <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                                )}
-                              </div>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                {model.description}
-                              </p>
-                              <div className="flex flex-wrap gap-2 mt-2">
-                                {model.tags.map((tag) => (
-                                  <Badge
-                                    key={tag}
-                                    variant={selectedUIModelId === model.id ? "default" : "secondary"}
-                                    className="text-xs"
-                                  >
-                                    {tag}
-                                  </Badge>
-                                ))}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Stability */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex justify-between items-center">
-                    <Label>Độ ổn định (Stability)</Label>
-                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {model.description}
+                            </p>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {model.tags.map((tag) => (
+                                <Badge
+                                  key={tag}
+                                  variant={selectedUIModelId === model.id ? "default" : "secondary"}
+                                  className="text-xs"
+                                >
+                                  {tag}
+                                </Badge>
+                              ))}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                   </div>
-                  <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Sáng tạo</span>
-                    <span>Ổn định</span>
-                  </div>
-                </div>
-                 {/* Similarity */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex justify-between items-center">
-                    <Label>Độ tương đồng (Clarity + Similarity)</Label>
-                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
-                  </div>
-                  <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                   <div className="flex justify-between text-[10px] text-muted-foreground">
-                    <span>Thấp</span>
-                    <span>Cao</span>
-                  </div>
-                </div>
+              </div>
 
-                 {/* Style Exaggeration */}
-                <div className="space-y-3 pt-1">
-                  <div className="flex justify-between items-center">
-                    <Label>Cường điệu hóa phong cách</Label>
-                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
-                  </div>
-                  <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                </div>
-
-                {/* Speaker Boost */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="speaker-boost" className={cn("cursor-pointer", selectedUIModelId === 'eleven_v3' && 'opacity-50')}>Tăng cường giọng nói</Label>
-                        <p className="text-[11px] text-muted-foreground">
-                            Tăng độ tương đồng với người nói gốc.
-                        </p>
-                    </div>
-                    <Switch
-                        id="speaker-boost"
-                        checked={speakerBoost}
-                        onCheckedChange={setSpeakerBoost}
-                        disabled={isBusy || selectedUIModelId === 'eleven_v3'}
-                    />
-                </div>
-                
-                {/* Language Override */}
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="lang-override" className="cursor-pointer">Ghi đè ngôn ngữ</Label>
-                        <p className="text-[11px] text-muted-foreground">
-                            Chỉ định ngôn ngữ để có kết quả tốt nhất.
-                        </p>
-                    </div>
-                    <Switch
-                        id="lang-override"
-                        checked={languageOverride}
-                        onCheckedChange={setLanguageOverride}
-                        disabled={isBusy}
-                    />
-                </div>
-
-                {languageOverride && (
-                    <div className="space-y-2 pl-4">
-                        <Label>Ngôn ngữ</Label>
-                        <Select value={selectedLanguage} onValueChange={setSelectedLanguage} disabled={isBusy}>
-                            <SelectTrigger><SelectValue/></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
-                                <SelectItem value="vi">Tiếng Việt</SelectItem>
-                                <SelectItem value="en">English</SelectItem>
-                                <SelectItem value="ko">Korean</SelectItem>
-                                <SelectItem value="ja">Japanese</SelectItem>
-                                <SelectItem value="zh">Chinese</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                )}
-              </CollapsibleContent>
-            </Collapsible>
-            
-            <Separator />
-            
-            {/* Add new voice button & Guide */}
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:text-primary"
-                onClick={() => setShowAddVoiceModal(true)}
-                disabled={isBusy || !userData?.elevenLabsApiKey}
-              >
-                <Plus className="mr-1 h-4 w-4" />
-                Thêm giọng nói mới
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-10 px-0 flex-shrink-0"
-                onClick={() => setShowGuideModal(true)}
-                title="Hướng dẫn sử dụng"
-              >
-                <BookOpen className="h-4 w-4" />
-              </Button>
-            </div>
-
-            <Separator />
-
-            <div className="space-y-2 flex-1 flex flex-col">
-              <div className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                  <Label>Kịch bản đọc mẫu</Label>
-                  <Select
-                    value={selectedTemplate}
-                    onValueChange={(val) => {
-                      setSelectedTemplate(val);
-                      const tmpl = VOICE_SCRIPT_TEMPLATES.find(t => t.id === val);
-                      if (tmpl && tmpl.id !== 'none') {
-                        setText(tmpl.prompt);
-                      } else if (tmpl && tmpl.id === 'none') {
-                        setText('');
-                      }
-                    }}
-                    disabled={isBusy}
-                  >
-                    <SelectTrigger className="w-[180px] h-8 text-xs">
-                      <SelectValue placeholder="Chọn kịch bản..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VOICE_SCRIPT_TEMPLATES.map(t => (
-                        <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Stability */}
+              <div className="space-y-3 pt-1">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted-foreground"><Label>Văn bản cần đọc</Label></span>
-                  <span className="text-xs text-muted-foreground">{text.length} ký tự</span>
+                  <Label>Độ ổn định (Stability)</Label>
+                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
                 </div>
-                <Textarea
-                  placeholder="Nhập văn bản bạn muốn chuyển thành giọng nói...&#10;Ví dụ: Xin chào, tôi là trợ lý ảo AI của bạn!"
-                  value={text}
-                  onChange={(e) => {
-                    setText(e.target.value);
-                    setSelectedTemplate('none');
-                  }}
-                  className="min-h-[160px] resize-none"
-                  disabled={isBusy}
-                />
-              </div>
-
-              {/* Tùy chỉnh & Thông tin lưu trữ */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Tiêu đề lưu trữ <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
-                  <Input
-                    placeholder="Ví dụ: Đoạn mở đầu Video"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    disabled={isBusy}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Mô tả / Ghi chú <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
-                  <Input
-                    placeholder="Ví dụ: Đọc nhấn nhá đoạn kết"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    disabled={isBusy}
-                  />
+                <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Sáng tạo</span>
+                  <span>Ổn định</span>
                 </div>
               </div>
-            </div>
-            </div>
+               {/* Similarity */}
+              <div className="space-y-3 pt-1">
+                <div className="flex justify-between items-center">
+                  <Label>Độ tương đồng (Clarity + Similarity)</Label>
+                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
+                </div>
+                <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                 <div className="flex justify-between text-[10px] text-muted-foreground">
+                  <span>Thấp</span>
+                  <span>Cao</span>
+                </div>
+              </div>
 
-            {/* Generate Button */}
-            <Button
-              onClick={handleGenerate}
-              disabled={isBusy || !text.trim() || !selectedVoiceId || !userData?.elevenLabsApiKey}
-              className="w-full"
-              size="lg"
-            >
-              {isGenerating ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Voicemail className="mr-2 h-5 w-5" />
+               {/* Style Exaggeration */}
+              <div className="space-y-3 pt-1">
+                <div className="flex justify-between items-center">
+                  <Label>Cường điệu hóa phong cách</Label>
+                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
+                </div>
+                <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+              </div>
+
+              {/* Speaker Boost */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                      <Label htmlFor="speaker-boost" className={cn("cursor-pointer", selectedUIModelId === 'eleven_v3' && 'opacity-50')}>Tăng cường giọng nói</Label>
+                      <p className="text-[11px] text-muted-foreground">
+                          Tăng độ tương đồng với người nói gốc.
+                      </p>
+                  </div>
+                  <Switch
+                      id="speaker-boost"
+                      checked={speakerBoost}
+                      onCheckedChange={setSpeakerBoost}
+                      disabled={isBusy || selectedUIModelId === 'eleven_v3'}
+                  />
+              </div>
+              
+              {/* Language Override */}
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                  <div className="space-y-0.5">
+                      <Label htmlFor="lang-override" className="cursor-pointer">Ghi đè ngôn ngữ</Label>
+                      <p className="text-[11px] text-muted-foreground">
+                          Chỉ định ngôn ngữ để có kết quả tốt nhất.
+                      </p>
+                  </div>
+                  <Switch
+                      id="lang-override"
+                      checked={languageOverride}
+                      onCheckedChange={setLanguageOverride}
+                      disabled={isBusy}
+                  />
+              </div>
+
+              {languageOverride && (
+                  <div className="space-y-2 pl-4">
+                      <Label>Ngôn ngữ</Label>
+                      <Select value={selectedLanguage} onValueChange={setSelectedLanguage} disabled={isBusy}>
+                          <SelectTrigger><SelectValue/></SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
+                              <SelectItem value="vi">Tiếng Việt</SelectItem>
+                              <SelectItem value="en">English</SelectItem>
+                              <SelectItem value="ko">Korean</SelectItem>
+                              <SelectItem value="ja">Japanese</SelectItem>
+                              <SelectItem value="zh">Chinese</SelectItem>
+                          </SelectContent>
+                      </Select>
+                  </div>
               )}
-              {isGenerating ? 'Đang tạo giọng nói...' : 'Tạo Giọng Nói'}
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+            </div>
+            <DialogFooter>
+                <Button variant="ghost" onClick={handleResetSettings} disabled={isBusy}>
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
+                </Button>
+                <Button onClick={() => setIsSettingsModalOpen(false)}>Đóng</Button>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* RIGHT PANEL - Output & History */}
-      <div className="lg:col-span-2 flex flex-col gap-6">
-        {/* Audio Player */}
-        <Card className={cn(
-          "overflow-hidden transition-all duration-500",
-          generatedAudioUrl ? "border-primary/30 shadow-lg" : ""
-        )}>
-          <CardContent className="p-6">
-            {generatedAudioUrl ? (
-              <div className="space-y-4">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="bg-gradient-to-br from-primary/20 to-primary/5 p-3 rounded-xl">
-                    <Music className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">Audio đã tạo</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {voices.find(v => v.voice_id === selectedVoiceId)?.name || 'Unknown Voice'}
-                    </p>
-                  </div>
-                </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <TabsList className="w-full max-w-md mb-6">
+          <TabsTrigger value="voice" className="flex-1 gap-2">
+            <Voicemail className="h-4 w-4" /> Tạo Giọng Nói
+          </TabsTrigger>
+          <TabsTrigger value="video" className="flex-1 gap-2">
+            <Video className="h-4 w-4" /> Tạo Video từ Ảnh
+          </TabsTrigger>
+        </TabsList>
 
-                <audio ref={audioRef} src={generatedAudioUrl} preload="metadata" />
+        <TabsContent value="voice" className="flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+            {/* LEFT PANEL - Controls */}
+            <div className="lg:col-span-1 flex flex-col">
+              <Card className="flex-1 flex flex-col">
+                <CardContent className="p-6 flex flex-col flex-1 gap-4">
+                  {!userData?.elevenLabsApiKey && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                      ⚠️ Bạn chưa thêm ElevenLabs API Key (iGen Code 2). Vui lòng thêm API key trong menu tài khoản.
+                    </div>
+                  )}
 
-                {/* Waveform-style player */}
-                <div className="bg-gradient-to-r from-muted/50 to-muted/30 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-4">
+                   {/* Settings Button */}
+                  <Button variant="outline" onClick={() => setIsSettingsModalOpen(true)} disabled={isBusy}>
+                      <Settings2 className="mr-2 h-4 w-4" />
+                      Cài đặt giọng nói
+                  </Button>
+                  
+                  <Separator />
+                  
+                  {/* Add new voice button & Guide */}
+                  <div className="flex gap-2">
                     <Button
-                      variant="default"
-                      size="icon"
-                      className="h-12 w-12 rounded-full shadow-lg"
-                      onClick={handlePlayPause}
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 border-dashed border-primary/40 text-primary hover:bg-primary/5 hover:text-primary"
+                      onClick={() => setShowAddVoiceModal(true)}
+                      disabled={isBusy || !userData?.elevenLabsApiKey}
                     >
-                      {isPlaying ? (
-                        <Pause className="h-5 w-5" />
-                      ) : (
-                        <Play className="h-5 w-5 ml-0.5" />
-                      )}
+                      <Plus className="mr-1 h-4 w-4" />
+                      Thêm giọng nói mới
                     </Button>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-10 px-0 flex-shrink-0"
+                      onClick={() => setShowGuideModal(true)}
+                      title="Hướng dẫn sử dụng"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </Button>
+                  </div>
 
-                    <div className="flex-1 space-y-1">
-                      <Slider
-                        value={[currentTime]}
-                        max={duration || 100}
-                        step={0.1}
-                        onValueChange={(vals) => {
-                          if (audioRef.current) {
-                            audioRef.current.currentTime = vals[0];
-                            setCurrentTime(vals[0]);
-                          }
+                  <Separator />
+
+                  <div className="space-y-2 flex-1 flex flex-col">
+                    <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center mb-1">
+                        <Label>Kịch bản đọc mẫu</Label>
+                        <Select
+                          value={selectedTemplate}
+                          onValueChange={(val) => {
+                            setSelectedTemplate(val);
+                            const tmpl = VOICE_SCRIPT_TEMPLATES.find(t => t.id === val);
+                            if (tmpl && tmpl.id !== 'none') {
+                              setText(tmpl.prompt);
+                            } else if (tmpl && tmpl.id === 'none') {
+                              setText('');
+                            }
+                          }}
+                          disabled={isBusy}
+                        >
+                          <SelectTrigger className="w-[180px] h-8 text-xs">
+                            <SelectValue placeholder="Chọn kịch bản..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {VOICE_SCRIPT_TEMPLATES.map(t => (
+                              <SelectItem key={t.id} value={t.id}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-muted-foreground"><Label>Văn bản cần đọc</Label></span>
+                        <span className="text-xs text-muted-foreground">{text.length} ký tự</span>
+                      </div>
+                      <Textarea
+                        placeholder="Nhập văn bản bạn muốn chuyển thành giọng nói...&#10;Ví dụ: Xin chào, tôi là trợ lý ảo AI của bạn!"
+                        value={text}
+                        onChange={(e) => {
+                          setText(e.target.value);
+                          setSelectedTemplate('none');
                         }}
-                        className="w-full"
+                        className="min-h-[160px] resize-none"
+                        disabled={isBusy}
                       />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{formatTime(currentTime)}</span>
-                        <span>{formatTime(duration)}</span>
+                    </div>
+
+                    {/* Tùy chỉnh & Thông tin lưu trữ */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Tiêu đề lưu trữ <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
+                        <Input
+                          placeholder="Ví dụ: Đoạn mở đầu Video"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          disabled={isBusy}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Mô tả / Ghi chú <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
+                        <Input
+                          placeholder="Ví dụ: Đọc nhấn nhá đoạn kết"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          disabled={isBusy}
+                        />
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <a href={generatedAudioUrl} download={`igen-voice-${Date.now()}.mp3`}>
-                    <Button variant="outline" size="sm">
-                      <Download className="mr-2 h-4 w-4" />
-                      Tải xuống
-                    </Button>
-                  </a>
-                  {isSaving && (
-                    <Button variant="ghost" size="sm" disabled>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Đang lưu...
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ) : isGenerating ? (
-              <div className="flex flex-col items-center justify-center py-12 gap-4">
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-                  <div className="relative bg-primary/10 p-6 rounded-full">
-                    <Loader2 className="h-10 w-10 animate-spin text-primary" />
                   </div>
-                </div>
-                <p className="text-muted-foreground font-medium">Đang tạo giọng nói...</p>
-                <p className="text-xs text-muted-foreground">Quá trình này mất khoảng 5-15 giây</p>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <Voicemail className="h-16 w-16 mb-4 opacity-50" />
-                <p className="font-medium">Audio sẽ xuất hiện ở đây</p>
-                <p className="text-sm">Chọn giọng nói, nhập văn bản và nhấn &quot;Tạo Giọng Nói&quot;</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* History */}
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Clock className="h-5 w-5 text-muted-foreground" />
-              <h3 className="font-semibold">Lịch sử tạo giọng nói</h3>
-              <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                {history.length}
-              </span>
+                  {/* Generate Button */}
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={isBusy || !text.trim() || !selectedVoiceId || !userData?.elevenLabsApiKey}
+                    className="w-full"
+                    size="lg"
+                  >
+                    {isGenerating ? (
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    ) : (
+                      <Voicemail className="mr-2 h-5 w-5" />
+                    )}
+                    {isGenerating ? 'Đang tạo giọng nói...' : 'Tạo Giọng Nói'}
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
 
-            {history.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                Chưa có audio nào. Hãy tạo giọng nói đầu tiên của bạn!
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
-                {history.map((item) => (
-                  <div
-                    key={item.id}
-                    className={cn(
-                      "flex items-center gap-3 p-3 rounded-lg border transition-colors",
-                      playingHistoryId === item.id ? "bg-primary/5 border-primary/30" : "hover:bg-muted/50"
-                    )}
-                  >
-                    <Button
-                      variant={playingHistoryId === item.id ? "default" : "outline"}
-                      size="icon"
-                      className="h-8 w-8 rounded-full flex-shrink-0"
-                      onClick={() => handlePlayHistory(item)}
-                    >
-                      {playingHistoryId === item.id ? (
-                        <Pause className="h-3 w-3" />
-                      ) : (
-                        <Play className="h-3 w-3 ml-0.5" />
-                      )}
-                    </Button>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate font-medium">{item.title || item.text}</p>
-                      {item.description && (
-                         <p className="text-xs text-muted-foreground truncate mb-0.5">Mô tả: {item.description}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
-                        <span>{item.voiceName}</span>
-                      </p>
+            {/* RIGHT PANEL - Output & History */}
+            <div className="lg:col-span-2 flex flex-col gap-6">
+              {/* Audio Player */}
+              <Card className={cn(
+                "overflow-hidden transition-all duration-500",
+                generatedAudioUrl ? "border-primary/30 shadow-lg" : ""
+              )}>
+                <CardContent className="p-6">
+                  {generatedAudioUrl ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-gradient-to-br from-primary/20 to-primary/5 p-3 rounded-xl">
+                          <Music className="h-6 w-6 text-primary" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-lg">Audio đã tạo</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {voices.find(v => v.voice_id === selectedVoiceId)?.name || 'Unknown Voice'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <audio ref={audioRef} src={generatedAudioUrl} preload="metadata" />
+
+                      {/* Waveform-style player */}
+                      <div className="bg-gradient-to-r from-muted/50 to-muted/30 rounded-xl p-4 space-y-3">
+                        <div className="flex items-center gap-4">
+                          <Button
+                            variant="default"
+                            size="icon"
+                            className="h-12 w-12 rounded-full shadow-lg"
+                            onClick={handlePlayPause}
+                          >
+                            {isPlaying ? (
+                              <Pause className="h-5 w-5" />
+                            ) : (
+                              <Play className="h-5 w-5 ml-0.5" />
+                            )}
+                          </Button>
+
+                          <div className="flex-1 space-y-1">
+                            <Slider
+                              value={[currentTime]}
+                              max={duration || 100}
+                              step={0.1}
+                              onValueChange={(vals) => {
+                                if (audioRef.current) {
+                                  audioRef.current.currentTime = vals[0];
+                                  setCurrentTime(vals[0]);
+                                }
+                              }}
+                              className="w-full"
+                            />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              <span>{formatTime(currentTime)}</span>
+                              <span>{formatTime(duration)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="flex gap-2">
+                        <a href={generatedAudioUrl} download={`igen-voice-${Date.now()}.mp3`}>
+                          <Button variant="outline" size="sm">
+                            <Download className="mr-2 h-4 w-4" />
+                            Tải xuống
+                          </Button>
+                        </a>
+                        {isSaving && (
+                          <Button variant="ghost" size="sm" disabled>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Đang lưu...
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex gap-1 flex-shrink-0">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                        onClick={() => handleCreateVideoFromAudio(item.audioUrl, item.text)}
-                        title="Tạo video từ audio này"
-                      >
-                        <Video className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
-                        className="h-7 w-7"
-                        onClick={() => setDownloadData({
-                          url: item.audioUrl,
-                          filename: (item.title || item.text || 'igen-voice').slice(0, 30).trim()
-                        })}
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive hover:text-destructive"
-                        onClick={() => handleDeleteHistory(item.id)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                  ) : isGenerating ? (
+                    <div className="flex flex-col items-center justify-center py-12 gap-4">
+                      <div className="relative">
+                        <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+                        <div className="relative bg-primary/10 p-6 rounded-full">
+                          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                        </div>
+                      </div>
+                      <p className="text-muted-foreground font-medium">Đang tạo giọng nói...</p>
+                      <p className="text-xs text-muted-foreground">Quá trình này mất khoảng 5-15 giây</p>
                     </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                      <Voicemail className="h-16 w-16 mb-4 opacity-50" />
+                      <p className="font-medium">Audio sẽ xuất hiện ở đây</p>
+                      <p className="text-sm">Chọn giọng nói, nhập văn bản và nhấn &quot;Tạo Giọng Nói&quot;</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* History */}
+              <Card>
+                <CardContent className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
+                    <h3 className="font-semibold">Lịch sử tạo giọng nói</h3>
+                    <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      {history.length}
+                    </span>
                   </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
 
-      <AlertDialog open={!!voiceToDelete} onOpenChange={(open) => !open && setVoiceToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Xác nhận xóa hệ thống</AlertDialogTitle>
-            <AlertDialogDescription>
-              Hành động này sẽ xóa vĩnh viễn giọng nói giả lập này khỏi hệ thống ElevenLabs và không thể khôi phục lại. Bạn có chắc chắn muốn tiếp tục?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Khước từ</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteVoice} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-              {isDeletingVoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-              Xác nhận xóa
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                  {history.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-8">
+                      Chưa có audio nào. Hãy tạo giọng nói đầu tiên của bạn!
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto pr-1">
+                      {history.map((item) => (
+                        <div
+                          key={item.id}
+                          className={cn(
+                            "flex items-center gap-3 p-3 rounded-lg border transition-colors",
+                            playingHistoryId === item.id ? "bg-primary/5 border-primary/30" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <Button
+                            variant={playingHistoryId === item.id ? "default" : "outline"}
+                            size="icon"
+                            className="h-8 w-8 rounded-full flex-shrink-0"
+                            onClick={() => handlePlayHistory(item)}
+                          >
+                            {playingHistoryId === item.id ? (
+                              <Pause className="h-3 w-3" />
+                            ) : (
+                              <Play className="h-3 w-3 ml-0.5" />
+                            )}
+                          </Button>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm truncate font-medium">{item.title || item.text}</p>
+                            {item.description && (
+                               <p className="text-xs text-muted-foreground truncate mb-0.5">Mô tả: {item.description}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5 truncate">
+                              <span>{item.voiceName}</span>
+                            </p>
+                          </div>
+                          <div className="flex gap-1 flex-shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              onClick={() => handleCreateVideoFromAudio(item.audioUrl, item.text)}
+                              title="Tạo video từ audio này"
+                            >
+                              <Video className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7"
+                              onClick={() => setDownloadData({
+                                url: item.audioUrl,
+                                filename: (item.title || item.text || 'igen-voice').slice(0, 30).trim()
+                              })}
+                            >
+                              <Download className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={() => handleDeleteHistory(item.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
 
-      <DownloadVoiceModal
-        open={!!downloadData}
-        onOpenChange={(open) => !open && setDownloadData(null)}
-        audioUrl={downloadData?.url || ''}
-        defaultFilename={downloadData?.filename || 'voice'}
-      />
+            <AlertDialog open={!!voiceToDelete} onOpenChange={(open) => !open && setVoiceToDelete(null)}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Xác nhận xóa hệ thống</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Hành động này sẽ xóa vĩnh viễn giọng nói giả lập này khỏi hệ thống ElevenLabs và không thể khôi phục lại. Bạn có chắc chắn muốn tiếp tục?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Khước từ</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteVoice} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                    {isDeletingVoice ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    Xác nhận xóa
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
-    </div>
-      </TabsContent>
+            <DownloadVoiceModal
+              open={!!downloadData}
+              onOpenChange={(open) => !open && setDownloadData(null)}
+              audioUrl={downloadData?.url || ''}
+              defaultFilename={downloadData?.filename || 'voice'}
+            />
 
-      <TabsContent value="video" className="flex-1">
-        <VideoFromImageTab
-          voices={voices}
-          selectedVoiceId={selectedVoiceId}
-          prefillAudioUrl={prefillAudioUrl}
-          prefillText={prefillText}
-          onClearPrefill={handleClearPrefill}
-        />
-      </TabsContent>
-    </Tabs>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="video" className="flex-1">
+          <VideoFromImageTab
+            voices={voices}
+            selectedVoiceId={selectedVoiceId}
+            prefillAudioUrl={prefillAudioUrl}
+            prefillText={prefillText}
+            onClearPrefill={handleClearPrefill}
+          />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
