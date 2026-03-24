@@ -273,6 +273,11 @@ const startVideoGenerationFlow = ai.defineFlow(
           payload.instances[0].image = firstFramePayload;
         }
 
+        // Add LAST frame (AFTER image)
+        if (lastFramePayload) {
+          payload.instances[0].lastFrame = lastFramePayload;
+        }
+
         console.log(`[VideoGen] Calling ${fetchUrl.split('?')[0]} (attempt ${attempt + 1})...`);
 
         // FIX #3: Add per-request timeout via AbortController
@@ -307,13 +312,15 @@ const startVideoGenerationFlow = ai.defineFlow(
                                      errMessage.toLowerCase().includes('likeness') ||
                                      errMessage.toLowerCase().includes('children') ||
                                      errMessage.toLowerCase().includes('photorealistic children');
-            if (isCelebrityError && firstFramePayload) {
+            if (isCelebrityError && (firstFramePayload || lastFramePayload)) {
               console.warn(`[VideoGen] Celebrity/children likeness detected in reference image. Retrying WITHOUT reference image (text-only mode)...`);
-              // Remove the image from the payload so Veo uses text-only
+              // Remove the images from the payload so Veo uses text-only
               delete payload.instances[0].image;
+              delete payload.instances[0].lastFrame;
               firstFramePayload = null; // Prevent re-adding on future retries
+              lastFramePayload = null;
               await new Promise(resolve => setTimeout(resolve, 1000));
-              continue; // Retry immediately without the image
+              continue; // Retry immediately without the images
             }
 
             // Check if we have extra params that could be stripped

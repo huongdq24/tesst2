@@ -264,6 +264,17 @@ export function VideoGenerationWorkspace() {
     }
   }, [videoModel, outputResolution, videoDuration, toast]);
 
+  // Effect to ensure Veo 2.0 is not used with before-after mode
+  useEffect(() => {
+    if (inputMode === 'before-after' && videoModel.includes('veo-2')) {
+      setVideoModel('veo-3.1-fast-generate-preview');
+      toast({
+        title: 'Mô hình đã thay đổi',
+        description: 'Chế độ Trước & Sau yêu cầu mô hình từ iGen Veo 3.1 trở lên.',
+      });
+    }
+  }, [inputMode, videoModel, toast]);
+
   // Reset state when starting a new generation
   const resetGenerationState = () => {
     setGeneratedVideoUrls([]);
@@ -972,7 +983,9 @@ export function VideoGenerationWorkspace() {
                   <SelectValue placeholder="Chọn mô hình video" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>
+                  {inputMode !== 'before-after' && (
+                    <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>
+                  )}
                   <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1</SelectItem>
                   <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
                 </SelectContent>
