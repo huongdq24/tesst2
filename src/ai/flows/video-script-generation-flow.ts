@@ -172,13 +172,20 @@ const videoScriptGenerationFlow = ai.defineFlow(
 
     promptParts.push({ text: input.description });
 
-    const primaryModel = input.model || 'gemini-3.1-flash-lite-preview';
-    const fallbackModels = [primaryModel, 'gemini-3.1-flash-lite-preview', 'gemini-pro'].filter(
-      (m, i, arr) => arr.indexOf(m) === i // deduplicate
+    const allAvailableModels = [
+      'gemini-3.1-pro-preview',
+      'gemini-3.1-flash-lite-preview',
+      'gemini-3-flash-preview',
+    ];
+    const primaryModel = input.model || allAvailableModels[1]; // default to flash-lite
+    
+    // Create a unique, ordered list of models to try, with the primary model first.
+    const modelsToTry = [primaryModel, ...allAvailableModels].filter(
+      (m, i, arr) => arr.indexOf(m) === i
     );
 
     let lastError: any = null;
-    for (const modelName of fallbackModels) {
+    for (const modelName of modelsToTry) {
       try {
         console.log(`[ScriptGen] Trying model: ${modelName}`);
         const { output } = await aiInstance.generate({
