@@ -37,7 +37,7 @@ const aiImageGenerationFlow = ai.defineFlow(
     // This flow now directly calls the Imagen model using the provided prompt,
     // which is the correct and more reliable pattern.
     const { media } = await ai.generate({
-      model: googleAI.model('imagen-4.0-generate-001'),
+      model: googleAI.model('imagen-4.0-generate-001' as any),
       prompt: input.promptText, // Use the original input prompt directly
       config: {
         // Pass the aspect ratio from the input to the model.
