@@ -95,15 +95,9 @@ const MODELS = [
   {
     id: 'eleven_turbo_v2_5',
     name: 'Eleven Turbo v2.5',
-    description: 'Mô hình có độ trễ cực thấp với 32 ngôn ngữ. Lý tưởng cho các trường hợp đàm thoại.',
-    tags: ['Nhanh & Rẻ'],
+    description: 'Mô hình chất lượng cao, độ trễ thấp hỗ trợ 32 ngôn ngữ. Tốt nhất cho các trường hợp cần tốc độ và hỗ trợ nhiều ngôn ngữ ngoài tiếng Anh.',
+    tags: ['50% rẻ hơn', 'Độ trễ thấp'],
     default: true,
-  },
-  {
-    id: 'eleven_multilingual_v1',
-    name: 'Eleven Multilingual v1',
-    description: 'Mô hình đa ngôn ngữ ổn định, hỗ trợ 10 ngôn ngữ, bao gồm tiếng Việt.',
-    tags: ['Ổn định'],
   },
 ];
 
