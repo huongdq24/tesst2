@@ -22,16 +22,22 @@ import {
   ChevronLeft,
   FileAudio,
   Volume2,
-  VolumeX,
   Headphones,
   MonitorSpeaker,
   AlertCircle,
   Sparkles,
   Square,
+  Wand2,
+  Gem,
+  Shuffle,
+  Lock,
+  Circle,
+  VolumeX,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
+import { Badge } from '../ui/badge';
 
 interface AddVoiceModalProps {
   open: boolean;
@@ -39,7 +45,8 @@ interface AddVoiceModalProps {
   onVoiceAdded?: (voiceId: string) => void;
 }
 
-type WizardStep = 'upload' | 'info' | 'finish';
+type VoiceCreationMode = 'design' | 'instant' | 'professional' | 'remix';
+type WizardStep = 'selection' | 'upload' | 'info' | 'finish';
 
 interface UploadedFile {
   file: File;
@@ -49,9 +56,45 @@ interface UploadedFile {
   previewUrl: string;
 }
 
+const SelectionCard = ({ icon, title, description, time, onClick, disabled, badge, disabledText }: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  time: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  badge?: React.ReactNode;
+  disabledText?: React.ReactNode;
+}) => (
+  <div
+    className={cn(
+      "p-4 rounded-lg border-2 transition-all",
+      disabled
+        ? "bg-muted/30 border-muted/40 text-muted-foreground opacity-70 cursor-not-allowed"
+        : "border-muted/40 hover:border-primary hover:bg-primary/5 cursor-pointer",
+    )}
+    onClick={!disabled ? onClick : undefined}
+  >
+    <div className="flex items-start gap-4">
+      <div className={cn("text-primary mt-1", disabled && "text-muted-foreground")}>{icon}</div>
+      <div>
+        <h4 className="font-semibold">{title}</h4>
+        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+      </div>
+    </div>
+    <div className="flex items-center justify-between mt-3">
+        <Badge variant="secondary">{time}</Badge>
+        {badge && <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">{badge}</div>}
+    </div>
+    {disabledText && <div className="mt-3 text-xs flex items-center gap-2 p-2 bg-muted rounded-md text-muted-foreground">{disabledText}</div>}
+  </div>
+);
+
+
 export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModalProps) {
   // Wizard state
-  const [currentStep, setCurrentStep] = useState<WizardStep>('upload');
+  const [currentStep, setCurrentStep] = useState<WizardStep>('selection');
+  const [creationMode, setCreationMode] = useState<VoiceCreationMode | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -74,7 +117,8 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
   useEffect(() => {
     if (!open) {
       setTimeout(() => {
-        setCurrentStep('upload');
+        setCurrentStep('selection');
+        setCreationMode(null);
         setUploadedFiles([]);
         setVoiceName('');
         setVoiceDescription('');
@@ -94,10 +138,12 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
       if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop();
       uploadedFiles.forEach(f => URL.revokeObjectURL(f.previewUrl));
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const totalDuration = uploadedFiles.reduce((sum, f) => sum + (f.duration || 0), 0);
-  const hasEnoughAudio = totalDuration >= 10;
+  const durationRequirement = creationMode === 'professional' ? 30 * 60 : 10;
+  const hasEnoughAudio = totalDuration >= durationRequirement;
 
   // File handling
   const processFile = async (file: File): Promise<UploadedFile | null> => {
@@ -278,7 +324,7 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const steps: { key: WizardStep; label: string }[] = [
+  const wizardSteps: { key: WizardStep; label: string }[] = [
     { key: 'upload', label: 'Tải lên Audio' },
     { key: 'info', label: 'Thông tin giọng nói' },
     { key: 'finish', label: 'Hoàn tất' },
@@ -296,391 +342,437 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
   };
 
   const goBack = () => {
-    if (currentStep === 'info') setCurrentStep('upload');
+    if (currentStep === 'upload') {
+        setCurrentStep('selection');
+        setCreationMode(null);
+    }
+    else if (currentStep === 'info') setCurrentStep('upload');
     else if (currentStep === 'finish') setCurrentStep('info');
   };
+
+  const renderSelectionStep = () => (
+    <div className="space-y-3">
+        <SelectionCard 
+            icon={<Wand2 className="h-5 w-5" />}
+            title="Voice Design"
+            description="Thiết kế một giọng nói hoàn toàn mới từ văn bản."
+            time="Dưới 1 phút"
+            disabled
+        />
+        <SelectionCard 
+            icon={<Sparkles className="h-5 w-5" />}
+            title="Nhân bản Giọng nói Tức thì (Instant)"
+            description="Nhân bản giọng nói của bạn chỉ với 10 giây âm thanh."
+            time="~2 phút"
+            onClick={() => {
+                setCreationMode('instant');
+                setCurrentStep('upload');
+            }}
+        />
+        <SelectionCard 
+            icon={<Gem className="h-5 w-5" />}
+            title="Nhân bản Giọng nói Chuyên nghiệp"
+            description="Tạo bản sao kỹ thuật số chân thực nhất của giọng nói của bạn. Yêu cầu ít nhất 30 phút âm thanh sạch."
+            time="~5 phút"
+            badge={<><Circle className="h-3 w-3 fill-amber-400 text-amber-400"/><span>Không có suất</span></>}
+            disabled
+            disabledText={<div className="flex items-center w-full"><Lock className="h-3.5 w-3.5 mr-2 flex-shrink-0"/><span>Đã đạt giới hạn 1 giọng. Nâng cấp để có thêm.</span><Button size="sm" className="ml-auto text-xs h-7" disabled>Đăng ký</Button></div>}
+        />
+        <SelectionCard 
+            icon={<Shuffle className="h-5 w-5" />}
+            title="Phối lại Giọng nói"
+            description="Biến đổi các giọng nói hiện có bằng văn bản để tạo ra giọng nói mới."
+            time="Dưới 1 phút"
+            disabled
+        />
+    </div>
+  );
+
+  const renderUploadStep = () => (
+    <div className="space-y-5">
+        <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
+                <VolumeX className="h-5 w-5 text-muted-foreground" />
+                <div>
+                <p className="text-xs font-semibold">Tránh tiếng ồn</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Âm thanh nền ảnh hưởng chất lượng</p>
+                </div>
+            </div>
+            <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
+                <Headphones className="h-5 w-5 text-muted-foreground" />
+                <div>
+                <p className="text-xs font-semibold">Chất lượng micro</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Dùng mic ngoài để thu tốt hơn</p>
+                </div>
+            </div>
+            <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
+                <MonitorSpeaker className="h-5 w-5 text-muted-foreground" />
+                <div>
+                <p className="text-xs font-semibold">Thiết bị nhất quán</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Không đổi micro giữa các mẫu</p>
+                </div>
+            </div>
+        </div>
+
+        <div
+        className={cn(
+            "relative flex flex-col items-center justify-center w-full min-h-[180px] border-2 border-dashed rounded-xl transition-all cursor-pointer",
+            isDragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-muted-foreground/20 hover:bg-muted/30 hover:border-muted-foreground/40"
+        )}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={() => !isRecording && fileInputRef.current?.click()}
+        >
+        <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
+        <p className="text-sm font-medium">Nhấn để tải lên hoặc kéo thả</p>
+        <p className="text-xs text-muted-foreground mt-1">File audio hoặc video, tối đa 10MB mỗi file</p>
+
+        <div className="flex items-center gap-3 mt-4">
+            <span className="text-xs text-muted-foreground">hoặc</span>
+        </div>
+
+        <Button
+            variant={isRecording ? "destructive" : "outline"}
+            size="sm"
+            className="mt-2"
+            onClick={(e) => {
+            e.stopPropagation();
+            if (isRecording) stopRecording();
+            else startRecording();
+            }}
+        >
+            {isRecording ? (
+            <>
+                <Square className="mr-2 h-3.5 w-3.5" />
+                Dừng ghi ({formatDuration(recordingDuration)})
+            </>
+            ) : (
+            <>
+                <Mic className="mr-2 h-3.5 w-3.5" />
+                Ghi âm trực tiếp
+            </>
+            )}
+        </Button>
+
+        {isRecording && (
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+            <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
+            </span>
+            <span className="text-xs font-medium text-red-600">REC</span>
+            </div>
+        )}
+
+        <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="audio/*,video/*"
+            multiple
+            onChange={handleFileChange}
+        />
+        </div>
+
+        {uploadedFiles.length > 0 && (
+        <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">File đã tải lên ({uploadedFiles.length})</Label>
+            {uploadedFiles.map((f, i) => (
+            <div
+                key={i}
+                className={cn(
+                "flex items-center gap-3 p-2.5 rounded-lg border transition-colors",
+                playingFileIndex === i ? "bg-primary/5 border-primary/30" : "hover:bg-muted/40"
+                )}
+            >
+                <Button
+                variant={playingFileIndex === i ? "default" : "outline"}
+                size="icon"
+                className="h-8 w-8 rounded-full flex-shrink-0"
+                onClick={() => togglePlayFile(i)}
+                >
+                {playingFileIndex === i ? (
+                    <Volume2 className="h-3.5 w-3.5" />
+                ) : (
+                    <FileAudio className="h-3.5 w-3.5" />
+                )}
+                </Button>
+                <div className="flex-1 min-w-0">
+                <p className="text-sm truncate">{f.name}</p>
+                <p className="text-[11px] text-muted-foreground">
+                    {formatFileSize(f.size)}
+                    {f.duration ? ` • ${formatDuration(f.duration)}` : ''}
+                </p>
+                </div>
+                <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                onClick={() => removeFile(i)}
+                title="Xóa bản thu âm/file này"
+                >
+                <Trash2 className="h-4 w-4" />
+                </Button>
+            </div>
+            ))}
+        </div>
+        )}
+
+        <div className="flex items-center gap-3">
+        <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
+            <div
+            className={cn(
+                "h-full rounded-full transition-all duration-500",
+                hasEnoughAudio ? "bg-green-500" : "bg-primary"
+            )}
+            style={{ width: `${Math.min(100, (totalDuration / durationRequirement) * 100)}%` }}
+            />
+        </div>
+        <span className={cn(
+            "text-xs font-medium whitespace-nowrap",
+            hasEnoughAudio ? "text-green-600" : "text-muted-foreground"
+        )}>
+            {hasEnoughAudio ? (
+            <span className="flex items-center gap-1">
+                <Check className="h-3.5 w-3.5" /> Đủ audio
+            </span>
+            ) : (
+            `${formatDuration(totalDuration)} / ${formatDuration(durationRequirement)} tối thiểu`
+            )}
+        </span>
+        </div>
+
+        {!hasEnoughAudio && uploadedFiles.length > 0 && (
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-800">
+                {creationMode === 'instant' 
+                    ? 'Cần ít nhất 10 giây audio. Bạn nên cung cấp ít nhất 1 phút để có chất lượng tốt nhất.'
+                    : 'Cần ít nhất 30 phút audio để nhân bản chuyên nghiệp.'}
+            </p>
+        </div>
+        )}
+    </div>
+  );
+
+  const renderInfoStep = () => (
+    <div className="space-y-5">
+        <div className="space-y-2">
+            <Label htmlFor="voice-name" className="text-sm font-semibold">
+                Tên giọng nói <span className="text-destructive">*</span>
+            </Label>
+            <Input
+            id="voice-name"
+            placeholder="Ví dụ: Giọng thương hiệu của tôi"
+            value={voiceName}
+            onChange={(e) => setVoiceName(e.target.value)}
+            className="h-11"
+            autoFocus
+            />
+            <p className="text-[11px] text-muted-foreground">Tên giúp bạn nhận diện giọng nói này.</p>
+        </div>
+
+        <div className="space-y-2">
+            <Label htmlFor="voice-desc" className="text-sm font-semibold">
+                Mô tả <span className="text-muted-foreground">(tùy chọn)</span>
+            </Label>
+            <Textarea
+            id="voice-desc"
+            placeholder="Mô tả cho giọng nói, ví dụ: Giọng nam, ấm áp, chuyên nghiệp..."
+            value={voiceDescription}
+            onChange={(e) => setVoiceDescription(e.target.value)}
+            className="min-h-[80px] resize-none"
+            />
+        </div>
+
+        <div className="space-y-2">
+            <Label className="text-sm font-semibold">Mẫu audio đã tải</Label>
+            <div className="p-3 rounded-lg bg-muted/40 space-y-1.5">
+                {uploadedFiles.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 text-sm">
+                    <FileAudio className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="truncate">{f.name}</span>
+                    <div className="flex items-center gap-2 ml-auto">
+                    <span className="text-xs text-muted-foreground">
+                        {f.duration ? formatDuration(f.duration) : '—'}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
+                        onClick={() => removeFile(i)}
+                        title="Xóa bản thu âm này"
+                    >
+                        <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                    </div>
+                </div>
+                ))}
+                <div className="border-t pt-1.5 mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+                <span>{uploadedFiles.length} file(s)</span>
+                <span>Tổng: {formatDuration(totalDuration)}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+  );
+
+  const renderFinishStep = () => (
+    <div className="space-y-5">
+        {isCreated ? (
+        <div className="flex flex-col items-center justify-center py-8 gap-4">
+            <div className="bg-green-100 p-6 rounded-full">
+                <Check className="h-12 w-12 text-green-600" />
+            </div>
+            <h3 className="text-xl font-semibold">Giọng nói đã tạo thành công!</h3>
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+            Giọng &quot;{voiceName}&quot; đã sẵn sàng sử dụng. Bạn có thể chọn giọng này trong danh sách để tạo audio.
+            </p>
+            <Button onClick={() => onOpenChange(false)} className="mt-2">
+            Đóng và sử dụng
+            </Button>
+        </div>
+        ) : (
+        <>
+            <div className="rounded-xl border-2 border-dashed border-primary/20 p-5 space-y-4">
+            <h3 className="font-semibold text-lg flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Xác nhận tạo giọng nói
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="space-y-0.5">
+                <p className="text-muted-foreground text-xs">Tên giọng nói</p>
+                <p className="font-medium">{voiceName}</p>
+                </div>
+                <div className="space-y-0.5">
+                <p className="text-muted-foreground text-xs">Mô tả</p>
+                <p className="font-medium">{voiceDescription || '—'}</p>
+                </div>
+                <div className="space-y-0.5">
+                <p className="text-muted-foreground text-xs">Số file audio</p>
+                <p className="font-medium">{uploadedFiles.length} file(s)</p>
+                </div>
+                <div className="space-y-0.5">
+                <p className="text-muted-foreground text-xs">Tổng thời lượng</p>
+                <p className="font-medium">{formatDuration(totalDuration)}</p>
+                </div>
+            </div>
+            </div>
+
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
+            <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-blue-800">
+                Nhấn &quot;Tạo giọng nói&quot; để upload mẫu audio lên ElevenLabs và tạo giọng nói AI mới.
+                Quá trình này mất khoảng 10-30 giây.
+            </p>
+            </div>
+
+            <Button
+            onClick={handleCreateVoice}
+            disabled={isCreating}
+            className="w-full"
+            size="lg"
+            >
+            {isCreating ? (
+                <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                Đang tạo giọng nói...
+                </>
+            ) : (
+                <>
+                <Sparkles className="mr-2 h-5 w-5" />
+                Tạo giọng nói
+                </>
+            )}
+            </Button>
+        </>
+        )}
+    </div>
+  );
+
+  const getWizardTitle = () => {
+    if (currentStep === 'selection') return 'Tạo giọng nói';
+    if (creationMode === 'instant') return 'Nhân bản Giọng nói Tức thì';
+    if (creationMode === 'professional') return 'Nhân bản Giọng nói Chuyên nghiệp';
+    return 'Tạo giọng nói';
+  }
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl border-white/20 p-0">
-        {/* Header with steps */}
         <div className="p-6 pb-0">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-xl">
-              <div className="bg-gradient-to-br from-primary/20 to-primary/5 p-2 rounded-xl">
-                <Sparkles className="h-5 w-5 text-primary" />
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="bg-gradient-to-br from-primary/20 to-primary/5 p-3 rounded-xl flex items-center justify-center">
+                 <Sparkles className="h-5 w-5 text-primary" />
               </div>
-              Nhân bản Giọng nói Tức thì
+              <span>{getWizardTitle()}</span>
             </DialogTitle>
           </DialogHeader>
 
-          {/* Step indicators */}
-          <div className="flex items-center mt-6 mb-2">
-            {steps.map((step, index) => {
-              const stepIndex = steps.findIndex(s => s.key === currentStep);
-              const isActive = step.key === currentStep;
-              const isDone = index < stepIndex || isCreated;
-              const isPending = index > stepIndex;
+          {currentStep !== 'selection' && (
+             <div className="flex items-center mt-6 mb-2">
+                {wizardSteps.map((step, index) => {
+                const stepIndex = wizardSteps.findIndex(s => s.key === currentStep);
+                const isActive = step.key === currentStep;
+                const isDone = index < stepIndex || isCreated;
+                const isPending = index > stepIndex;
 
-              return (
-                <div key={step.key} className="flex items-center flex-1 last:flex-none">
-                  <div className="flex flex-col items-center">
-                    <div className={cn(
-                      "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-300",
-                      isDone && "bg-primary text-white",
-                      isActive && "bg-primary/15 text-primary ring-2 ring-primary/30",
-                      isPending && "bg-muted text-muted-foreground"
-                    )}>
-                      {isDone ? <Check className="h-4 w-4" /> : index + 1}
-                    </div>
-                    <span className={cn(
-                      "text-[11px] mt-1.5 whitespace-nowrap font-medium",
-                      isActive && "text-primary",
-                      isPending && "text-muted-foreground"
-                    )}>
-                      {step.label}
-                    </span>
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div className={cn(
-                      "flex-1 h-[2px] mx-2 mt-[-16px] transition-colors",
-                      index < stepIndex ? "bg-primary" : "bg-muted"
-                    )} />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 pt-4">
-          {/* Step 1: Upload Audio */}
-          {currentStep === 'upload' && (
-            <div className="space-y-5">
-              {/* Tips */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
-                  <VolumeX className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs font-semibold">Tránh tiếng ồn</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Âm thanh nền ảnh hưởng chất lượng</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
-                  <Headphones className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs font-semibold">Chất lượng micro</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Dùng mic ngoài để thu tốt hơn</p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
-                  <MonitorSpeaker className="h-5 w-5 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs font-semibold">Thiết bị nhất quán</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Không đổi micro giữa các mẫu</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Upload area */}
-              <div
-                className={cn(
-                  "relative flex flex-col items-center justify-center w-full min-h-[180px] border-2 border-dashed rounded-xl transition-all cursor-pointer",
-                  isDragging ? "border-primary bg-primary/5 scale-[1.01]" : "border-muted-foreground/20 hover:bg-muted/30 hover:border-muted-foreground/40"
-                )}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => !isRecording && fileInputRef.current?.click()}
-              >
-                <UploadCloud className="h-8 w-8 text-muted-foreground mb-2" />
-                <p className="text-sm font-medium">Nhấn để tải lên hoặc kéo thả</p>
-                <p className="text-xs text-muted-foreground mt-1">File audio hoặc video, tối đa 10MB mỗi file</p>
-
-                <div className="flex items-center gap-3 mt-4">
-                  <span className="text-xs text-muted-foreground">hoặc</span>
-                </div>
-
-                <Button
-                  variant={isRecording ? "destructive" : "outline"}
-                  size="sm"
-                  className="mt-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isRecording) stopRecording();
-                    else startRecording();
-                  }}
-                >
-                  {isRecording ? (
-                    <>
-                      <Square className="mr-2 h-3.5 w-3.5" />
-                      Dừng ghi ({formatDuration(recordingDuration)})
-                    </>
-                  ) : (
-                    <>
-                      <Mic className="mr-2 h-3.5 w-3.5" />
-                      Ghi âm trực tiếp
-                    </>
-                  )}
-                </Button>
-
-                {isRecording && (
-                  <div className="absolute top-3 right-3 flex items-center gap-2">
-                    <span className="relative flex h-3 w-3">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                      <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500" />
-                    </span>
-                    <span className="text-xs font-medium text-red-600">REC</span>
-                  </div>
-                )}
-
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept="audio/*,video/*"
-                  multiple
-                  onChange={handleFileChange}
-                />
-              </div>
-
-              {/* Uploaded files list */}
-              {uploadedFiles.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-xs text-muted-foreground">File đã tải lên ({uploadedFiles.length})</Label>
-                  {uploadedFiles.map((f, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        "flex items-center gap-3 p-2.5 rounded-lg border transition-colors",
-                        playingFileIndex === i ? "bg-primary/5 border-primary/30" : "hover:bg-muted/40"
-                      )}
-                    >
-                      <Button
-                        variant={playingFileIndex === i ? "default" : "outline"}
-                        size="icon"
-                        className="h-8 w-8 rounded-full flex-shrink-0"
-                        onClick={() => togglePlayFile(i)}
-                      >
-                        {playingFileIndex === i ? (
-                          <Volume2 className="h-3.5 w-3.5" />
-                        ) : (
-                          <FileAudio className="h-3.5 w-3.5" />
-                        )}
-                      </Button>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm truncate">{f.name}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {formatFileSize(f.size)}
-                          {f.duration ? ` • ${formatDuration(f.duration)}` : ''}
-                        </p>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeFile(i)}
-                        title="Xóa bản thu âm/file này"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Duration progress */}
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={cn(
-                      "h-full rounded-full transition-all duration-500",
-                      hasEnoughAudio ? "bg-green-500" : "bg-primary"
-                    )}
-                    style={{ width: `${Math.min(100, (totalDuration / 10) * 100)}%` }}
-                  />
-                </div>
-                <span className={cn(
-                  "text-xs font-medium whitespace-nowrap",
-                  hasEnoughAudio ? "text-green-600" : "text-muted-foreground"
-                )}>
-                  {hasEnoughAudio ? (
-                    <span className="flex items-center gap-1">
-                      <Check className="h-3.5 w-3.5" /> Đủ audio
-                    </span>
-                  ) : (
-                    `${formatDuration(totalDuration)} / 0:10 tối thiểu`
-                  )}
-                </span>
-              </div>
-
-              {!hasEnoughAudio && uploadedFiles.length > 0 && (
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
-                  <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-xs text-amber-800">
-                    Cần ít nhất 10 giây audio. Bạn nên cung cấp ít nhất 1 phút để có chất lượng tốt nhất.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Voice Information */}
-          {currentStep === 'info' && (
-            <div className="space-y-5">
-              <div className="space-y-2">
-                <Label htmlFor="voice-name" className="text-sm font-semibold">
-                  Tên giọng nói <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="voice-name"
-                  placeholder="Ví dụ: Giọng  thương hiệu của tôi"
-                  value={voiceName}
-                  onChange={(e) => setVoiceName(e.target.value)}
-                  className="h-11"
-                  autoFocus
-                />
-                <p className="text-[11px] text-muted-foreground">Tên giúp bạn nhận diện giọng nói này.</p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="voice-desc" className="text-sm font-semibold">
-                  Mô tả <span className="text-muted-foreground">(tùy chọn)</span>
-                </Label>
-                <Textarea
-                  id="voice-desc"
-                  placeholder="Mô tả cho giọng nói, ví dụ: Giọng nam, ấm áp, chuyên nghiệp..."
-                  value={voiceDescription}
-                  onChange={(e) => setVoiceDescription(e.target.value)}
-                  className="min-h-[80px] resize-none"
-                />
-              </div>
-
-              {/* Review uploaded files */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Mẫu audio đã tải</Label>
-                <div className="p-3 rounded-lg bg-muted/40 space-y-1.5">
-                  {uploadedFiles.map((f, i) => (
-                    <div key={i} className="flex items-center gap-2 text-sm">
-                      <FileAudio className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="truncate">{f.name}</span>
-                      <div className="flex items-center gap-2 ml-auto">
-                        <span className="text-xs text-muted-foreground">
-                          {f.duration ? formatDuration(f.duration) : '—'}
+                return (
+                    <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                    <div className="flex flex-col items-center">
+                        <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all duration-300",
+                        isDone && "bg-primary text-white",
+                        isActive && "bg-primary/15 text-primary ring-2 ring-primary/30",
+                        isPending && "bg-muted text-muted-foreground"
+                        )}>
+                        {isDone ? <Check className="h-4 w-4" /> : index + 1}
+                        </div>
+                        <span className={cn(
+                        "text-[11px] mt-1.5 whitespace-nowrap font-medium",
+                        isActive && "text-primary",
+                        isPending && "text-muted-foreground"
+                        )}>
+                        {step.label}
                         </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => removeFile(i)}
-                          title="Xóa bản thu âm này"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
                     </div>
-                  ))}
-                  <div className="border-t pt-1.5 mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>{uploadedFiles.length} file(s)</span>
-                    <span>Tổng: {formatDuration(totalDuration)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Step 3: Finish */}
-          {currentStep === 'finish' && (
-            <div className="space-y-5">
-              {isCreated ? (
-                <div className="flex flex-col items-center justify-center py-8 gap-4">
-                  <div className="bg-green-100 p-6 rounded-full">
-                    <Check className="h-12 w-12 text-green-600" />
-                  </div>
-                  <h3 className="text-xl font-semibold">Giọng nói đã tạo thành công!</h3>
-                  <p className="text-sm text-muted-foreground text-center max-w-sm">
-                    Giọng &quot;{voiceName}&quot; đã sẵn sàng sử dụng. Bạn có thể chọn giọng này trong danh sách để tạo audio.
-                  </p>
-                  <Button onClick={() => onOpenChange(false)} className="mt-2">
-                    Đóng và sử dụng
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {/* Summary */}
-                  <div className="rounded-xl border-2 border-dashed border-primary/20 p-5 space-y-4">
-                    <h3 className="font-semibold text-lg flex items-center gap-2">
-                      <Sparkles className="h-5 w-5 text-primary" />
-                      Xác nhận tạo giọng nói
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="space-y-0.5">
-                        <p className="text-muted-foreground text-xs">Tên giọng nói</p>
-                        <p className="font-medium">{voiceName}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-muted-foreground text-xs">Mô tả</p>
-                        <p className="font-medium">{voiceDescription || '—'}</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-muted-foreground text-xs">Số file audio</p>
-                        <p className="font-medium">{uploadedFiles.length} file(s)</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-muted-foreground text-xs">Tổng thời lượng</p>
-                        <p className="font-medium">{formatDuration(totalDuration)}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200">
-                    <AlertCircle className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <p className="text-xs text-blue-800">
-                      Nhấn &quot;Tạo giọng nói&quot; để upload mẫu audio lên ElevenLabs và tạo giọng nói AI mới.
-                      Quá trình này mất khoảng 10-30 giây.
-                    </p>
-                  </div>
-
-                  <Button
-                    onClick={handleCreateVoice}
-                    disabled={isCreating}
-                    className="w-full"
-                    size="lg"
-                  >
-                    {isCreating ? (
-                      <>
-                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Đang tạo giọng nói...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-5 w-5" />
-                        Tạo giọng nói
-                      </>
+                    {index < wizardSteps.length - 1 && (
+                        <div className={cn(
+                        "flex-1 h-[2px] mx-2 mt-[-16px] transition-colors",
+                        index < stepIndex ? "bg-primary" : "bg-muted"
+                        )} />
                     )}
-                  </Button>
-                </>
-              )}
+                    </div>
+                );
+                })}
             </div>
           )}
         </div>
 
-        {/* Footer with navigation */}
-        {currentStep !== 'finish' || !isCreated ? (
-          <div className="flex items-center justify-between p-6 pt-0 border-t-0">
-            {currentStep !== 'upload' && currentStep !== 'finish' ? (
-              <Button variant="ghost" onClick={goBack} disabled={isCreating}>
-                <ChevronLeft className="mr-1 h-4 w-4" /> Quay lại
-              </Button>
+        <div className="p-6 pt-4">
+          {currentStep === 'selection' && renderSelectionStep()}
+          {currentStep === 'upload' && renderUploadStep()}
+          {currentStep === 'info' && renderInfoStep()}
+          {currentStep === 'finish' && renderFinishStep()}
+        </div>
+
+        {currentStep !== 'selection' && (!isCreated || currentStep !== 'finish') ? (
+            <div className="flex items-center justify-between p-6 pt-0 mt-4 border-t">
+            {currentStep !== 'upload' ? (
+                <Button variant="ghost" onClick={goBack} disabled={isCreating}>
+                    <ChevronLeft className="mr-1 h-4 w-4" /> Quay lại
+                </Button>
             ) : <div />}
 
             {currentStep !== 'finish' && (
-              <Button onClick={goNext} disabled={!canGoNext()}>
-                Tiếp theo <ChevronRight className="ml-1 h-4 w-4" />
-              </Button>
+                <Button onClick={goNext} disabled={!canGoNext()}>
+                    Tiếp theo <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
             )}
-          </div>
+            </div>
         ) : null}
       </DialogContent>
     </Dialog>
