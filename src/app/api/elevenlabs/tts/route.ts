@@ -34,10 +34,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use eleven_turbo_v2_5 as the base model because it supports
-    // auto-detection excellently AND accepts the language_code parameter if provided.
-    // It's also much faster and higher quality for mixed languages.
-    let resolvedModelId = model_id || 'eleven_turbo_v2_5';
+    // Use eleven_multilingual_v2 as the base model because it's the latest and supports most features.
+    let resolvedModelId = model_id || 'eleven_multilingual_v2';
 
     // Build request body for ElevenLabs
     const ttsBody: Record<string, any> = {
@@ -47,9 +45,15 @@ export async function POST(request: NextRequest) {
         stability: stability ?? 0.5,
         similarity_boost: similarity_boost ?? 0.75,
         style: style ?? 0.0,
-        use_speaker_boost: use_speaker_boost ?? true,
       },
     };
+
+    // Add speaker boost only if it's not the v3 model (which is identified by eleven_multilingual_v2)
+    // and the client requests it.
+    if (resolvedModelId !== 'eleven_multilingual_v2' && use_speaker_boost) {
+        ttsBody.voice_settings.use_speaker_boost = true;
+    }
+
 
     // Add language_code if provided — critical for non-English languages like Vietnamese
     if (language_code) {
@@ -59,7 +63,7 @@ export async function POST(request: NextRequest) {
     console.log('[ElevenLabs TTS] Request:', {
       voice_id,
       model_id: ttsBody.model_id,
-      language_code: language_code || 'auto',
+      language_code: language_code || 'auto-detect',
       text_length: text.length,
       voice_settings: ttsBody.voice_settings
     });

@@ -143,7 +143,7 @@ export function VoiceCloningWorkspace() {
   const [styleExaggeration, setStyleExaggeration] = useState([0.0]);
   const [speakerBoost, setSpeakerBoost] = useState(true);
   const [languageOverride, setLanguageOverride] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('vi');
+  const [selectedLanguage, setSelectedLanguage] = useState('auto');
 
 
   const VOICE_SCRIPT_TEMPLATES = [
@@ -245,7 +245,7 @@ export function VoiceCloningWorkspace() {
     // Generate dynamic preview if no url exists
     setIsPreviewing(true);
     try {
-      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_turbo_v2_5';
+      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_multilingual_v2';
       const response = await fetch('/api/elevenlabs/tts', {
         method: 'POST',
         headers: {
@@ -256,7 +256,7 @@ export function VoiceCloningWorkspace() {
           voice_id: selectedVoiceId,
           text: "Xin chào, đây là giọng nói thử nghiệm mà tôi vừa tạo thành công.",
           model_id: selectedModelApiId,
-          language_code: "vi",
+          language_code: selectedLanguage === 'auto' ? undefined : selectedLanguage,
           stability: stability[0],
           similarity_boost: similarity[0],
           style: styleExaggeration[0],
@@ -367,7 +367,7 @@ export function VoiceCloningWorkspace() {
     setGeneratedAudioUrl(null);
 
     try {
-      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_turbo_v2_5';
+      const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_multilingual_v2';
       const response = await fetch('/api/elevenlabs/tts', {
         method: 'POST',
         headers: {
@@ -378,7 +378,7 @@ export function VoiceCloningWorkspace() {
           voice_id: selectedVoiceId,
           text: text,
           model_id: selectedModelApiId,
-          language_code: languageOverride ? selectedLanguage : undefined,
+          language_code: languageOverride && selectedLanguage !== 'auto' ? selectedLanguage : undefined,
           stability: stability[0],
           similarity_boost: similarity[0],
           style: styleExaggeration[0],
@@ -487,7 +487,7 @@ export function VoiceCloningWorkspace() {
     setStyleExaggeration([0.0]);
     setSpeakerBoost(true);
     setLanguageOverride(false);
-    setSelectedLanguage('vi');
+    setSelectedLanguage('auto');
     toast({ title: 'Đã reset cài đặt giọng nói' });
   };
 
@@ -672,7 +672,7 @@ export function VoiceCloningWorkspace() {
                 {/* Speaker Boost */}
                 <div className="flex items-center justify-between rounded-lg border p-3">
                     <div className="space-y-0.5">
-                        <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
+                        <Label htmlFor="speaker-boost" className={cn("cursor-pointer", selectedUIModelId === 'eleven_v3' && 'opacity-50')}>Tăng cường giọng nói</Label>
                         <p className="text-[11px] text-muted-foreground">
                             Tăng độ tương đồng với người nói gốc.
                         </p>
@@ -707,6 +707,7 @@ export function VoiceCloningWorkspace() {
                         <Select value={selectedLanguage} onValueChange={setSelectedLanguage} disabled={isBusy}>
                             <SelectTrigger><SelectValue/></SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
                                 <SelectItem value="vi">Tiếng Việt</SelectItem>
                                 <SelectItem value="en">English</SelectItem>
                                 <SelectItem value="ko">Korean</SelectItem>
