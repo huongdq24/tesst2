@@ -64,7 +64,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 
@@ -89,14 +89,14 @@ interface GeneratedVoice {
 const MODELS = [
   {
     id: 'eleven_v3',
-    apiId: 'eleven_v3',
+    apiId: 'eleven_multilingual_v2',
     name: 'iGen Audio v3',
     description: 'Model tổng hợp giọng nói giàu cảm xúc và biểu cảm nhất của chúng tôi.',
     tags: ['Cảm xúc cao', '70+ Ngôn ngữ'],
   },
   {
     id: 'eleven_flash_v2.5',
-    apiId: 'eleven_flash_v2_5',
+    apiId: 'eleven_turbo_v2_5',
     name: 'iGen Audio Flash v2.5',
     description: 'Model có độ trễ cực thấp hỗ trợ 32 ngôn ngữ. Lý tưởng cho các trường hợp sử dụng đàm thoại.',
     tags: ['Rẻ hơn 50%'],
@@ -322,7 +322,7 @@ export function VoiceCloningWorkspace() {
         model_id: selectedModelApiId,
       };
 
-      if (selectedModelApiId !== 'eleven_v3') {
+      if (selectedModelApiId !== 'eleven_multilingual_v2') {
         body.stability = stability[0];
         body.similarity_boost = similarity[0];
         body.style = styleExaggeration[0];
@@ -508,6 +508,7 @@ export function VoiceCloningWorkspace() {
                           <div className="flex justify-between items-start">
                             <div>
                                 <h4 className="font-semibold text-sm">{model.name}</h4>
+                                <p className="text-xs text-muted-foreground mt-0.5">API ID: {model.apiId}</p>
                             </div>
                             {selectedUIModelId === model.id && (
                               <Check className="h-4 w-4 text-primary flex-shrink-0" />
