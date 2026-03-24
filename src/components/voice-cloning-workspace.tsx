@@ -22,6 +22,8 @@ import {
   Check,
   Settings2,
   RotateCcw,
+  ChevronLeft,
+  Search,
 } from 'lucide-react';
 import { AddVoiceModal } from '@/components/modals/add-voice-modal';
 import { useToast } from '@/hooks/use-toast';
@@ -74,7 +76,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-
+import { ScrollArea } from './ui/scroll-area';
 
 interface Voice {
   voice_id: string;
@@ -82,6 +84,7 @@ interface Voice {
   category: string;
   preview_url?: string;
   labels?: Record<string, string>;
+  description?: string;
 }
 
 interface GeneratedVoice {
@@ -129,7 +132,6 @@ export function VoiceCloningWorkspace() {
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
   const [selectedUIModelId, setSelectedUIModelId] = useState('eleven_v3');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
-  const [isPreviewing, setIsPreviewing] = useState(false);
   const [isDeletingVoice, setIsDeletingVoice] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedAudioUrl, setGeneratedAudioUrl] = useState<string | null>(null);
@@ -145,9 +147,12 @@ export function VoiceCloningWorkspace() {
   const [similarity, setSimilarity] = useState([0.75]);
   const [styleExaggeration, setStyleExaggeration] = useState([0.0]);
   const [speakerBoost, setSpeakerBoost] = useState(true);
-  const [languageOverride, setLanguageOverride] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('auto');
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  // New state for settings modal view
+  const [settingsView, setSettingsView] = useState<'main' | 'voices'>('main');
+  const [voiceSearchTerm, setVoiceSearchTerm] = useState('');
+  const [previewingVoiceId, setPreviewingVoiceId] = useState<string | null>(null);
 
 
   const VOICE_SCRIPT_TEMPLATES = [
@@ -185,6 +190,14 @@ export function VoiceCloningWorkspace() {
   const { t } = useI18n();
   const { user, userData } = useAuth();
 
+  // Reset settings view when modal is closed
+  useEffect(() => {
+    if (!isSettingsModalOpen) {
+      setSettingsView('main');
+      setVoiceSearchTerm('');
+    }
+  }, [isSettingsModalOpen]);
+
   // Load ElevenLabs voices
   const loadVoices = async () => {
     if (!userData?.elevenLabsApiKey) {
@@ -206,16 +219,11 @@ export function VoiceCloningWorkspace() {
 
       const data = await response.json();
       
-      const filteredVoices = (data.voices || []).filter((v: any) => {
-        if (['cloned', 'generated'].includes(v.category?.toLowerCase() || '')) {
-          if (v.labels?.userId && v.labels.userId !== user?.uid) return false;
-        }
-        return true;
-      });
+      const allVoices = data.voices || [];
 
-      setVoices(filteredVoices);
-      if (filteredVoices.length > 0 && !selectedVoiceId) {
-        setSelectedVoiceId(filteredVoices[0].voice_id);
+      setVoices(allVoices);
+      if (allVoices.length > 0 && !selectedVoiceId) {
+        setSelectedVoiceId(allVoices[0].voice_id);
       }
     } catch (error: any) {
       console.error('[VoiceCloning] Load voices error:', error);
@@ -236,18 +244,20 @@ export function VoiceCloningWorkspace() {
     }
   }, [userData?.elevenLabsApiKey]);
 
-  const handlePreviewVoice = async () => {
-    const voice = voices.find(v => v.voice_id === selectedVoiceId);
-    if (!voice) return;
+  const handlePreviewVoiceFromList = async (e: React.MouseEvent, voiceToPreview: Voice) => {
+    e.stopPropagation();
+    if (previewingVoiceId === voiceToPreview.voice_id) return;
 
-    if (voice.preview_url) {
-      const audio = new Audio(voice.preview_url);
+    if (voiceToPreview.preview_url) {
+      const audio = new Audio(voiceToPreview.preview_url);
+      setPreviewingVoiceId(voiceToPreview.voice_id);
       audio.play();
+      audio.onended = () => setPreviewingVoiceId(null);
+      audio.onerror = () => setPreviewingVoiceId(null);
       return;
     }
 
-    // Generate dynamic preview if no url exists
-    setIsPreviewing(true);
+    setPreviewingVoiceId(voiceToPreview.voice_id);
     try {
       const selectedModelApiId = MODELS.find(m => m.id === selectedUIModelId)?.apiId || 'eleven_multilingual_v2';
       const response = await fetch('/api/elevenlabs/tts', {
@@ -257,14 +267,9 @@ export function VoiceCloningWorkspace() {
           'x-elevenlabs-api-key': userData?.elevenLabsApiKey || '',
         },
         body: JSON.stringify({
-          voice_id: selectedVoiceId,
-          text: "Xin chào, đây là giọng nói thử nghiệm mà tôi vừa tạo thành công.",
+          voice_id: voiceToPreview.voice_id,
+          text: "Xin chào, đây là giọng nói thử nghiệm.",
           model_id: selectedModelApiId,
-          language_code: selectedLanguage === 'auto' ? undefined : selectedLanguage,
-          stability: stability[0],
-          similarity_boost: similarity[0],
-          style: styleExaggeration[0],
-          use_speaker_boost: speakerBoost && selectedUIModelId !== 'eleven_v3',
         }),
       });
       if (!response.ok) throw new Error('Preview error');
@@ -272,12 +277,20 @@ export function VoiceCloningWorkspace() {
       const url = URL.createObjectURL(blob);
       const audio = new Audio(url);
       audio.play();
+      audio.onended = () => {
+        setPreviewingVoiceId(null);
+        URL.revokeObjectURL(url);
+      };
+      audio.onerror = () => {
+        setPreviewingVoiceId(null);
+        URL.revokeObjectURL(url);
+      };
     } catch(err) {
        toast({ title: 'Lỗi', description: 'Không thể tạo bản nghe thử ngay lúc này', variant: 'destructive'});
-    } finally {
-      setIsPreviewing(false);
+       setPreviewingVoiceId(null);
     }
   };
+
 
   const handleDeleteVoice = async () => {
     if (!voiceToDelete) return;
@@ -382,7 +395,6 @@ export function VoiceCloningWorkspace() {
           voice_id: selectedVoiceId,
           text: text,
           model_id: selectedModelApiId,
-          language_code: languageOverride && selectedLanguage !== 'auto' ? selectedLanguage : undefined,
           stability: stability[0],
           similarity_boost: similarity[0],
           style: styleExaggeration[0],
@@ -490,8 +502,6 @@ export function VoiceCloningWorkspace() {
     setSimilarity([0.75]);
     setStyleExaggeration([0.0]);
     setSpeakerBoost(true);
-    setLanguageOverride(false);
-    setSelectedLanguage('auto');
     toast({ title: 'Đã reset cài đặt giọng nói' });
   };
 
@@ -503,6 +513,15 @@ export function VoiceCloningWorkspace() {
     setSelectedVoiceId(voiceId);
   };
 
+  const selectedVoice = voices.find(v => v.voice_id === selectedVoiceId);
+
+  const myVoices = voices.filter(v => ['cloned', 'generated'].includes(v.category) && v.labels?.userId === user?.uid);
+  const libraryVoices = voices.filter(v => !myVoices.some(myVoice => myVoice.voice_id === v.voice_id));
+  
+  const filteredMyVoices = myVoices.filter(v => v.name.toLowerCase().includes(voiceSearchTerm.toLowerCase()));
+  const filteredLibraryVoices = libraryVoices.filter(v => v.name.toLowerCase().includes(voiceSearchTerm.toLowerCase()));
+
+
   return (
     <>
       <AddVoiceModal
@@ -512,197 +531,214 @@ export function VoiceCloningWorkspace() {
       />
       <VoiceGuideModal open={showGuideModal} onOpenChange={setShowGuideModal} />
       <Dialog open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
-        <DialogContent className="sm:max-w-2xl">
-            <DialogHeader>
-                <DialogTitle>Cài đặt giọng nói nâng cao</DialogTitle>
-                <DialogDescription>
-                    Tinh chỉnh model, giọng và các thông số khác để có kết quả tốt nhất.
-                </DialogDescription>
-            </DialogHeader>
-            <div className="py-4 space-y-4 max-h-[60vh] overflow-y-auto pr-4">
-              <div className="grid grid-cols-1 gap-4">
-                  {/* Voice Selection */}
-                  <div className="space-y-2 col-span-2">
-                    <Label>Giọng nói (Voice)</Label>
-                    <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId} disabled={isBusy || voices.length === 0}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingVoices ? 'Đang tải...' : 'Chọn giọng nói'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {voices.map((voice) => (
-                          <SelectItem key={voice.voice_id} value={voice.voice_id}>
-                            <div className="flex items-center gap-2">
-                              <span>{voice.name}</span>
-                              <span className="text-xs text-muted-foreground capitalize">({voice.category})</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedVoiceId && (
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="flex-1"
-                          disabled={isPreviewing || isDeletingVoice}
-                          onClick={handlePreviewVoice}
+        <DialogContent className="sm:max-w-2xl p-0" onPointerDownOutside={(e) => e.preventDefault()}>
+          {settingsView === 'main' && (
+            <>
+              <DialogHeader className="p-6 pb-4">
+                  <DialogTitle>Cài đặt giọng nói nâng cao</DialogTitle>
+                  <DialogDescription>
+                      Tinh chỉnh model, giọng và các thông số khác để có kết quả tốt nhất.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="px-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div className="space-y-2">
+                  <Label>Giọng nói (Voice)</Label>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left h-auto min-h-10"
+                    onClick={() => setSettingsView('voices')}
+                  >
+                    {selectedVoice ? (
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+                          <Music className="h-3.5 w-3.5" />
+                        </span>
+                        <span>{selectedVoice.name}</span>
+                        <span className="text-xs text-muted-foreground">({selectedVoice.category})</span>
+                      </div>
+                    ) : 'Chọn một giọng nói'}
+                  </Button>
+                </div>
+                {/* Model Selection */}
+                 <div className="space-y-2">
+                    <Label>Model AI</Label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {MODELS.map((model) => (
+                        <button
+                          key={model.id}
+                          onClick={() => setSelectedUIModelId(model.id)}
+                          disabled={isBusy}
+                          className={cn(
+                            "text-left p-4 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                            selectedUIModelId === model.id
+                              ? "bg-primary/10 border-primary shadow-sm"
+                              : "hover:bg-muted/50"
+                          )}
                         >
-                          {isPreviewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Volume2 className="mr-2 h-4 w-4" />}
-                          Nghe thử
-                        </Button>
-                         {(['cloned', 'generated'].includes(voices.find(v => v.voice_id === selectedVoiceId)?.category?.toLowerCase() || '')) && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            disabled={isDeletingVoice || isPreviewing}
-                            onClick={() => setVoiceToDelete(selectedVoiceId)}
-                            title="Xóa giọng nói này"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Model Selection */}
-                   <div className="space-y-2">
-                      <Label>Model AI</Label>
-                      <div className="grid grid-cols-1 gap-3">
-                        {MODELS.map((model) => (
-                          <button
-                            key={model.id}
-                            onClick={() => setSelectedUIModelId(model.id)}
-                            disabled={isBusy}
-                            className={cn(
-                              "text-left p-4 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                              selectedUIModelId === model.id
-                                ? "bg-primary/10 border-primary shadow-sm"
-                                : "hover:bg-muted/50"
+                          <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="font-semibold">{model.name}</h4>
+                                <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
+                            </div>
+                            {selectedUIModelId === model.id && (
+                              <Check className="h-5 w-5 text-primary flex-shrink-0" />
                             )}
-                          >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                  <h4 className="font-semibold">{model.name}</h4>
-                                  <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
-                              </div>
-                              {selectedUIModelId === model.id && (
-                                <Check className="h-5 w-5 text-primary flex-shrink-0" />
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {model.description}
-                            </p>
-                            <div className="flex flex-wrap gap-2 mt-2">
-                              {model.tags.map((tag) => (
-                                <Badge
-                                  key={tag}
-                                  variant={selectedUIModelId === model.id ? "default" : "secondary"}
-                                  className="text-xs"
-                                >
-                                  {tag}
-                                </Badge>
-                              ))}
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                  </div>
-              </div>
-
-              {/* Stability */}
-              <div className="space-y-3 pt-1">
-                <div className="flex justify-between items-center">
-                  <Label>Độ ổn định (Stability)</Label>
-                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
-                </div>
-                <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>Sáng tạo</span>
-                  <span>Ổn định</span>
-                </div>
-              </div>
-               {/* Similarity */}
-              <div className="space-y-3 pt-1">
-                <div className="flex justify-between items-center">
-                  <Label>Độ tương đồng (Clarity + Similarity)</Label>
-                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
-                </div>
-                <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                 <div className="flex justify-between text-[10px] text-muted-foreground">
-                  <span>Thấp</span>
-                  <span>Cao</span>
-                </div>
-              </div>
-
-               {/* Style Exaggeration */}
-              <div className="space-y-3 pt-1">
-                <div className="flex justify-between items-center">
-                  <Label>Cường điệu hóa phong cách</Label>
-                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
-                </div>
-                <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-              </div>
-
-              {/* Speaker Boost - Conditionally rendered */}
-              {selectedUIModelId !== 'eleven_v3' && (
-                <div className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                        <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
-                        <p className="text-[11px] text-muted-foreground">
-                            Tăng độ tương đồng với người nói gốc.
-                        </p>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {model.description}
+                          </p>
+                          <div className="flex flex-wrap gap-2 mt-2">
+                            {model.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant={selectedUIModelId === model.id ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </button>
+                      ))}
                     </div>
-                    <Switch
-                        id="speaker-boost"
-                        checked={speakerBoost}
-                        onCheckedChange={setSpeakerBoost}
-                        disabled={isBusy}
-                    />
                 </div>
-              )}
-              
-              {/* Language Override */}
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                  <div className="space-y-0.5">
-                      <Label htmlFor="lang-override" className="cursor-pointer">Ghi đè ngôn ngữ</Label>
-                      <p className="text-[11px] text-muted-foreground">
-                          Chỉ định ngôn ngữ để có kết quả tốt nhất.
-                      </p>
+                {/* Stability */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex justify-between items-center">
+                    <Label>Độ ổn định (Stability)</Label>
+                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
                   </div>
-                  <Switch
-                      id="lang-override"
-                      checked={languageOverride}
-                      onCheckedChange={setLanguageOverride}
-                      disabled={isBusy}
+                  <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Sáng tạo</span>
+                    <span>Ổn định</span>
+                  </div>
+                </div>
+                 {/* Similarity */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex justify-between items-center">
+                    <Label>Độ tương đồng (Clarity + Similarity)</Label>
+                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
+                  </div>
+                  <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                   <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>Thấp</span>
+                    <span>Cao</span>
+                  </div>
+                </div>
+
+                 {/* Style Exaggeration */}
+                <div className="space-y-3 pt-1">
+                  <div className="flex justify-between items-center">
+                    <Label>Cường điệu hóa phong cách</Label>
+                    <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
+                  </div>
+                  <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                </div>
+
+                {/* Speaker Boost - Conditionally rendered */}
+                {selectedUIModelId !== 'eleven_v3' && (
+                  <div className="flex items-center justify-between rounded-lg border p-3">
+                      <div className="space-y-0.5">
+                          <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
+                          <p className="text-[11px] text-muted-foreground">
+                              Tăng độ tương đồng với người nói gốc.
+                          </p>
+                      </div>
+                      <Switch
+                          id="speaker-boost"
+                          checked={speakerBoost}
+                          onCheckedChange={setSpeakerBoost}
+                          disabled={isBusy}
+                      />
+                  </div>
+                )}
+              </div>
+              <DialogFooter className="p-6 pt-4 border-t">
+                  <Button variant="ghost" onClick={handleResetSettings} disabled={isBusy}>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
+                  </Button>
+                  <Button onClick={() => setIsSettingsModalOpen(false)}>Đóng</Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {settingsView === 'voices' && (
+             <div className="flex flex-col h-[80vh]">
+              <div className="p-6 pb-4 border-b">
+                 <Button variant="ghost" size="sm" onClick={() => setSettingsView('main')} className="mb-2 -ml-2">
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Quay lại Cài đặt
+                  </Button>
+                <DialogTitle>Chọn một giọng nói</DialogTitle>
+                 <div className="relative mt-4">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input 
+                    placeholder="Tìm kiếm giọng nói..." 
+                    className="pl-10"
+                    value={voiceSearchTerm}
+                    onChange={(e) => setVoiceSearchTerm(e.target.value)}
                   />
+                 </div>
               </div>
 
-              {languageOverride && (
-                  <div className="space-y-2 pl-4">
-                      <Label>Ngôn ngữ</Label>
-                      <Select value={selectedLanguage} onValueChange={setSelectedLanguage} disabled={isBusy}>
-                          <SelectTrigger><SelectValue/></SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
-                              <SelectItem value="vi">Tiếng Việt</SelectItem>
-                              <SelectItem value="en">English</SelectItem>
-                              <SelectItem value="ko">Korean</SelectItem>
-                              <SelectItem value="ja">Japanese</SelectItem>
-                              <SelectItem value="zh">Chinese</SelectItem>
-                          </SelectContent>
-                      </Select>
-                  </div>
-              )}
+               <Tabs defaultValue="my-voices" className="flex-1 flex flex-col min-h-0">
+                  <TabsList className="grid w-full grid-cols-2 rounded-none border-b">
+                    <TabsTrigger value="my-voices">Giọng của tôi ({myVoices.length})</TabsTrigger>
+                    <TabsTrigger value="library">Thư viện ({libraryVoices.length})</TabsTrigger>
+                  </TabsList>
+                  <ScrollArea className="flex-1">
+                    <TabsContent value="my-voices" className="p-4 space-y-2">
+                       {isLoadingVoices ? <Loader2 className="mx-auto my-8 h-6 w-6 animate-spin" /> : filteredMyVoices.length > 0 ? filteredMyVoices.map(voice => (
+                        <div key={voice.voice_id} 
+                          className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors", selectedVoiceId === voice.voice_id ? "bg-primary/10" : "hover:bg-muted")}
+                          onClick={() => {
+                            setSelectedVoiceId(voice.voice_id);
+                            setSettingsView('main');
+                          }}
+                        >
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                              <Voicemail className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-semibold text-sm">{voice.name}</p>
+                                <p className="text-xs text-muted-foreground">{voice.description || "Giọng đã nhân bản"}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => handlePreviewVoiceFromList(e, voice)}>
+                              {previewingVoiceId === voice.voice_id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Play className="h-4 w-4"/>}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); setVoiceToDelete(voice.voice_id); }}>
+                              <Trash2 className="h-4 w-4"/>
+                            </Button>
+                        </div>
+                       )) : <p className="text-center text-sm text-muted-foreground py-8">Không có giọng nói nào.</p>}
+                    </TabsContent>
+                    <TabsContent value="library" className="p-4 space-y-2">
+                       {isLoadingVoices ? <Loader2 className="mx-auto my-8 h-6 w-6 animate-spin" /> : filteredLibraryVoices.length > 0 ? filteredLibraryVoices.map(voice => (
+                        <div key={voice.voice_id}
+                          className={cn("flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors", selectedVoiceId === voice.voice_id ? "bg-primary/10" : "hover:bg-muted")}
+                           onClick={() => {
+                            setSelectedVoiceId(voice.voice_id);
+                            setSettingsView('main');
+                          }}
+                        >
+                            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600">
+                              <Music className="h-4 w-4" />
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-semibold text-sm">{voice.name}</p>
+                                <p className="text-xs text-muted-foreground capitalize">{voice.category}</p>
+                            </div>
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => handlePreviewVoiceFromList(e, voice)}>
+                              {previewingVoiceId === voice.voice_id ? <Loader2 className="h-4 w-4 animate-spin"/> : <Play className="h-4 w-4"/>}
+                            </Button>
+                        </div>
+                       )) : <p className="text-center text-sm text-muted-foreground py-8">Không có giọng nói nào trong thư viện.</p>}
+                    </TabsContent>
+                  </ScrollArea>
+                </Tabs>
             </div>
-            <DialogFooter>
-                <Button variant="ghost" onClick={handleResetSettings} disabled={isBusy}>
-                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset
-                </Button>
-                <Button onClick={() => setIsSettingsModalOpen(false)}>Đóng</Button>
-            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 
