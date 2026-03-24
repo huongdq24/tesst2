@@ -64,7 +64,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 interface Voice {
@@ -88,24 +89,24 @@ interface GeneratedVoice {
 const MODELS = [
   {
     id: 'eleven_v3',
-    apiId: 'eleven_multilingual_v2',
-    name: 'Eleven v3',
-    description: 'Our most emotionally rich, expressive speech synthesis model',
+    apiId: 'eleven_v3',
+    name: 'iGen Audio v3',
+    description: 'Model tổng hợp giọng nói giàu cảm xúc và biểu cảm nhất của chúng tôi.',
     tags: ['Cảm xúc cao', '70+ Ngôn ngữ'],
   },
   {
     id: 'eleven_flash_v2.5',
-    apiId: 'eleven_turbo_v2_5',
-    name: 'Eleven Flash v2.5',
-    description: 'Our ultra low latency model in 32 languages. Ideal for conversational use cases.',
-    tags: ['50% cheaper'],
+    apiId: 'eleven_flash_v2_5',
+    name: 'iGen Audio Flash v2.5',
+    description: 'Model có độ trễ cực thấp hỗ trợ 32 ngôn ngữ. Lý tưởng cho các trường hợp sử dụng đàm thoại.',
+    tags: ['Rẻ hơn 50%'],
   },
   {
     id: 'eleven_turbo_v2.5',
     apiId: 'eleven_turbo_v2_5',
-    name: 'Eleven Turbo v2.5',
-    description: 'Our high quality, low latency model in 32 languages. Best for developer use cases where speed matters and you need non-English languages.',
-    tags: ['50% cheaper'],
+    name: 'iGen Audio Turbo v2.5',
+    description: 'Model chất lượng cao, độ trễ thấp hỗ trợ 32 ngôn ngữ. Tốt nhất cho các trường hợp sử dụng khi tốc độ là yếu tố quan trọng.',
+    tags: ['Rẻ hơn 50%'],
   },
 ];
 
@@ -129,13 +130,15 @@ export function VoiceCloningWorkspace() {
   const [duration, setDuration] = useState(0);
 
   // New settings states
-  const [isSettingsOpen, setIsSettingsOpen] = useState(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<'main' | 'voices'>('main');
   const [stability, setStability] = useState([0.5]);
   const [similarity, setSimilarity] = useState([0.75]);
   const [styleExaggeration, setStyleExaggeration] = useState([0.0]);
   const [speakerBoost, setSpeakerBoost] = useState(true);
   const [languageOverride, setLanguageOverride] = useState(false);
   const [language, setLanguage] = useState('auto');
+  const [voiceSearchTerm, setVoiceSearchTerm] = useState("");
 
 
   const VOICE_SCRIPT_TEMPLATES = [
@@ -317,14 +320,19 @@ export function VoiceCloningWorkspace() {
         voice_id: selectedVoiceId,
         text: text,
         model_id: selectedModelApiId,
-        stability: stability[0],
-        language_code: languageOverride && language !== 'auto' ? language : undefined,
       };
 
-      if (selectedUIModelId !== 'eleven_v3') {
+      if (selectedModelApiId !== 'eleven_v3') {
+        body.stability = stability[0];
         body.similarity_boost = similarity[0];
         body.style = styleExaggeration[0];
         body.use_speaker_boost = speakerBoost;
+      } else {
+        body.stability = stability[0];
+      }
+
+      if(languageOverride && language !== 'auto') {
+        body.language_code = language;
       }
       
       const response = await fetch('/api/elevenlabs/tts', {
@@ -449,6 +457,11 @@ export function VoiceCloningWorkspace() {
     setSelectedVoiceId(voiceId);
   };
 
+  const myVoices = voices.filter(v => v.category === 'cloned');
+  const libraryVoices = voices.filter(v => v.category !== 'cloned');
+  const filteredMyVoices = myVoices.filter(v => v.name.toLowerCase().includes(voiceSearchTerm.toLowerCase()));
+  const filteredLibraryVoices = libraryVoices.filter(v => v.name.toLowerCase().includes(voiceSearchTerm.toLowerCase()));
+
 
   return (
     <>
@@ -458,6 +471,246 @@ export function VoiceCloningWorkspace() {
         onVoiceAdded={handleVoiceAdded}
       />
       <VoiceGuideModal open={showGuideModal} onOpenChange={setShowGuideModal} />
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Cài đặt giọng nói nâng cao</DialogTitle>
+            <DialogDescription>
+              Tinh chỉnh model, giọng và các thông số khác để có kết quả tốt nhất.
+            </DialogDescription>
+          </DialogHeader>
+
+          {settingsView === 'main' ? (
+             <div className="grid gap-6 py-4">
+                <div className="space-y-2">
+                  <Label>Giọng nói (Voice)</Label>
+                  <Button variant="outline" className="w-full justify-between" onClick={() => setSettingsView('voices')}>
+                    <span>{voices.find(v => v.voice_id === selectedVoiceId)?.name || 'Chọn một giọng'}</span>
+                    <Play className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                    <Label>Model AI</Label>
+                    <div className="grid grid-cols-1 gap-3">
+                      {MODELS.map((model) => (
+                        <button
+                          key={model.id}
+                          onClick={() => setSelectedUIModelId(model.id)}
+                          disabled={isBusy}
+                          className={cn(
+                            "text-left p-3 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                            selectedUIModelId === model.id
+                              ? "bg-primary/10 border-primary shadow-sm"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex justify-between items-start">
+                            <div>
+                                <h4 className="font-semibold text-sm">{model.name}</h4>
+                            </div>
+                            {selectedUIModelId === model.id && (
+                              <Check className="h-4 w-4 text-primary flex-shrink-0" />
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1.5">
+                            {model.description}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5 mt-2">
+                            {model.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant={selectedUIModelId === model.id ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                </div>
+
+                {selectedUIModelId === 'eleven_v3' ? (
+                  // UI for eleven_v3
+                  <div className="space-y-4">
+                     <div className="space-y-3 pt-1">
+                      <div className="flex justify-between items-center">
+                        <Label>Stability</Label>
+                        <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
+                      </div>
+                      <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>Creative</span>
+                        <span>Robust</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                          <Label htmlFor="language-override" className="cursor-pointer">Language Override</Label>
+                      </div>
+                      <Switch
+                          id="language-override"
+                          checked={languageOverride}
+                          onCheckedChange={setLanguageOverride}
+                          disabled={isBusy}
+                      />
+                    </div>
+                    {languageOverride && (
+                      <div className="pl-4">
+                          <Select value={language} onValueChange={setLanguage as any} disabled={isBusy}>
+                              <SelectTrigger>
+                                  <SelectValue placeholder="Select language" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                  <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
+                                  <SelectItem value="vi">Tiếng Việt</SelectItem>
+                                  <SelectItem value="en">English</SelectItem>
+                              </SelectContent>
+                          </Select>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  // UI for other models
+                  <div className="space-y-4">
+                     <div className="space-y-3 pt-1">
+                        <div className="flex justify-between items-center">
+                          <Label>Độ ổn định (Stability)</Label>
+                          <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
+                        </div>
+                        <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Sáng tạo</span>
+                          <span>Ổn định</span>
+                        </div>
+                      </div>
+                      <div className="space-y-3 pt-1">
+                        <div className="flex justify-between items-center">
+                          <Label>Độ tương đồng (Clarity + Similarity)</Label>
+                          <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
+                        </div>
+                        <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          <span>Thấp</span>
+                          <span>Cao</span>
+                        </div>
+                      </div>
+                      <div className="space-y-3 pt-1">
+                        <div className="flex justify-between items-center">
+                          <Label>Cường điệu hóa phong cách</Label>
+                          <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
+                        </div>
+                        <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
+                      </div>
+                      { selectedUIModelId !== 'eleven_v3' &&
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                          <div className="space-y-0.5">
+                              <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
+                              <p className="text-xs text-muted-foreground">
+                                  Tăng độ tương đồng với người nói gốc.
+                              </p>
+                          </div>
+                          <Switch
+                              id="speaker-boost"
+                              checked={speakerBoost}
+                              onCheckedChange={setSpeakerBoost}
+                              disabled={isBusy}
+                          />
+                      </div>
+                      }
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="language-override-detailed" className="cursor-pointer">Ghi đè ngôn ngữ</Label>
+                          <p className="text-xs text-muted-foreground">Chỉ định ngôn ngữ để có kết quả tốt nhất.</p>
+                        </div>
+                        <Switch
+                            id="language-override-detailed"
+                            checked={languageOverride}
+                            onCheckedChange={setLanguageOverride}
+                            disabled={isBusy}
+                        />
+                      </div>
+                      {languageOverride && (
+                          <div className="space-y-2 pl-4">
+                              <Select value={language} onValueChange={(value) => setLanguage(value as any)} disabled={isBusy}>
+                                  <SelectTrigger><SelectValue placeholder="Chọn một ngôn ngữ..." /></SelectTrigger>
+                                  <SelectContent>
+                                      <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
+                                      <SelectItem value="vi">Tiếng Việt</SelectItem>
+                                      <SelectItem value="en">English (United States)</SelectItem>
+                                  </SelectContent>
+                              </Select>
+                          </div>
+                      )}
+                  </div>
+                )}
+            </div>
+          ) : (
+             <div className="py-4">
+                <Input 
+                  placeholder="Tìm kiếm giọng nói..." 
+                  value={voiceSearchTerm}
+                  onChange={(e) => setVoiceSearchTerm(e.target.value)}
+                  className="mb-4"
+                />
+                <Tabs defaultValue="my-voices">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="my-voices">Giọng của tôi ({myVoices.length})</TabsTrigger>
+                    <TabsTrigger value="library">Thư viện ({libraryVoices.length})</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="my-voices" className="mt-4">
+                    <ScrollArea className="h-72">
+                      <div className="space-y-2 pr-4">
+                        {filteredMyVoices.map(voice => (
+                           <div key={voice.voice_id} className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted">
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { /* play preview */ }}>
+                                <Play className="h-4 w-4"/>
+                              </Button>
+                              <div className="flex-1 cursor-pointer" onClick={() => {setSelectedVoiceId(voice.voice_id); setSettingsView('main');}}>
+                                  <p className="font-medium text-sm">{voice.name}</p>
+                                  <p className="text-xs text-muted-foreground">{voice.labels?.description || 'Giọng đã nhân bản'}</p>
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setVoiceToDelete(voice.voice_id)}>
+                                <Trash2 className="h-4 w-4"/>
+                              </Button>
+                           </div>
+                        ))}
+                         {filteredMyVoices.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Không tìm thấy giọng nào.</p>}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                   <TabsContent value="library" className="mt-4">
+                     <ScrollArea className="h-72">
+                      <div className="space-y-2 pr-4">
+                         {filteredLibraryVoices.map(voice => (
+                           <div key={voice.voice_id} className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted" onClick={() => {setSelectedVoiceId(voice.voice_id); setSettingsView('main');}}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); /* play preview */ }}>
+                                <Play className="h-4 w-4"/>
+                              </Button>
+                              <div className="flex-1 cursor-pointer">
+                                  <p className="font-medium text-sm">{voice.name}</p>
+                                  <p className="text-xs text-muted-foreground">{voice.labels?.description || 'Giọng có sẵn'}</p>
+                              </div>
+                           </div>
+                        ))}
+                         {filteredLibraryVoices.length === 0 && <p className="text-sm text-muted-foreground text-center py-8">Không tìm thấy giọng nào.</p>}
+                      </div>
+                    </ScrollArea>
+                  </TabsContent>
+                </Tabs>
+             </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleResetSettings}> Reset</Button>
+            <DialogClose asChild>
+              <Button>Đóng</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
         <TabsList className="w-full max-w-md mb-6">
           <TabsTrigger value="voice" className="flex-1 gap-2">
@@ -481,229 +734,18 @@ export function VoiceCloningWorkspace() {
                   )}
 
                   <div className="space-y-2">
-                    <Label>Chọn giọng nói</Label>
-                    <Select value={selectedVoiceId} onValueChange={setSelectedVoiceId} disabled={isBusy || voices.length === 0}>
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingVoices ? 'Đang tải...' : 'Chọn một giọng nói'} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {voices.map((voice) => (
-                          <SelectItem key={voice.voice_id} value={voice.voice_id}>
-                            {voice.name} ({voice.category})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex-1"
-                        disabled={!selectedVoiceId}
-                        onClick={() => {
-                          const voice = voices.find(v => v.voice_id === selectedVoiceId);
-                          if (voice?.preview_url) new Audio(voice.preview_url).play();
-                        }}
-                      >
-                        <Play className="mr-2 h-4 w-4" />
-                        Nghe thử giọng
-                      </Button>
-                       <Button
-                        variant="destructive"
-                        size="sm"
-                        className="flex-1"
-                        disabled={!selectedVoiceId || !voices.find(v => v.voice_id === selectedVoiceId)?.category.includes('cloned')}
-                        onClick={() => setVoiceToDelete(selectedVoiceId)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Xóa giọng
+                    <div className="flex items-center justify-between">
+                      <Label>Giọng nói đã chọn</Label>
+                      <Button variant="outline" size="sm" onClick={() => setIsSettingsOpen(true)} disabled={isBusy}>
+                        <Settings2 className="mr-2 h-4 w-4" />
+                        Cài đặt
                       </Button>
                     </div>
+                    <div className="p-3 rounded-lg border bg-muted/30">
+                       <p className="font-semibold">{voices.find(v => v.voice_id === selectedVoiceId)?.name || 'Chưa chọn giọng'}</p>
+                       <p className="text-xs text-muted-foreground">{MODELS.find(m => m.id === selectedUIModelId)?.name || 'Chưa chọn model'}</p>
+                    </div>
                   </div>
-                  
-                  <Separator />
-                  
-                  <Collapsible open={isSettingsOpen} onOpenChange={setIsSettingsOpen} className="space-y-2">
-                    <CollapsibleTrigger asChild>
-                      <Button variant="ghost" className="-ml-3">
-                        <Settings2 className="mr-2 h-4 w-4" />
-                        Cài đặt giọng nói
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-6 pt-4">
-                       <div className="rounded-lg border p-4 space-y-4">
-                        {/* Model Selection */}
-                        <div className="space-y-2">
-                          <Label>Model AI</Label>
-                           <div className="grid grid-cols-1 gap-3">
-                            {MODELS.map((model) => (
-                              <button
-                                key={model.id}
-                                onClick={() => setSelectedUIModelId(model.id)}
-                                disabled={isBusy}
-                                className={cn(
-                                  "text-left p-3 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                                  selectedUIModelId === model.id
-                                    ? "bg-primary/10 border-primary shadow-sm"
-                                    : "hover:bg-muted/50"
-                                )}
-                              >
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                      <h4 className="font-semibold text-sm">{model.name}</h4>
-                                      <p className="text-[11px] text-muted-foreground font-mono mt-0.5">API ID: {model.apiId}</p>
-                                  </div>
-                                  {selectedUIModelId === model.id && (
-                                    <Check className="h-4 w-4 text-primary flex-shrink-0" />
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1.5">
-                                  {model.description}
-                                </p>
-                                <div className="flex flex-wrap gap-1.5 mt-2">
-                                  {model.tags.map((tag) => (
-                                    <Badge
-                                      key={tag}
-                                      variant={selectedUIModelId === model.id ? "default" : "secondary"}
-                                      className="text-xs"
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Conditional Settings Panel */}
-                        <div className="mt-4">
-                          {selectedUIModelId === 'eleven_v3' ? (
-                            // Simplified UI for Eleven v3
-                            <div className="space-y-4">
-                              <div className="space-y-3 pt-1">
-                                <div className="flex justify-between items-center">
-                                  <Label>Stability</Label>
-                                </div>
-                                <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                                <div className="flex justify-between text-xs text-muted-foreground">
-                                  <span>Creative</span>
-                                  <span>Robust</span>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <div className="space-y-0.5">
-                                    <Label htmlFor="language-override" className="cursor-pointer">Language Override</Label>
-                                </div>
-                                <Switch
-                                    id="language-override"
-                                    checked={languageOverride}
-                                    onCheckedChange={setLanguageOverride}
-                                    disabled={isBusy}
-                                />
-                              </div>
-                              {languageOverride && (
-                                <div className="pl-4">
-                                    <Select value={language} onValueChange={setLanguage as any} disabled={isBusy}>
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select language" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
-                                            <SelectItem value="vi">Tiếng Việt</SelectItem>
-                                            <SelectItem value="en">English</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                              )}
-                            </div>
-                          ) : (
-                            // Detailed UI for other models
-                            <div className="space-y-4">
-                              {/* Stability */}
-                              <div className="space-y-3 pt-1">
-                                <div className="flex justify-between items-center">
-                                  <Label>Độ ổn định (Stability)</Label>
-                                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{stability[0].toFixed(2)}</span>
-                                </div>
-                                <Slider value={stability} onValueChange={setStability} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                                <div className="flex justify-between text-[10px] text-muted-foreground">
-                                  <span>Sáng tạo</span>
-                                  <span>Ổn định</span>
-                                </div>
-                              </div>
-                              {/* Similarity */}
-                              <div className="space-y-3 pt-1">
-                                <div className="flex justify-between items-center">
-                                  <Label>Độ tương đồng (Clarity + Similarity)</Label>
-                                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{similarity[0].toFixed(2)}</span>
-                                </div>
-                                <Slider value={similarity} onValueChange={setSimilarity} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                                 <div className="flex justify-between text-[10px] text-muted-foreground">
-                                  <span>Thấp</span>
-                                  <span>Cao</span>
-                                </div>
-                              </div>
-                              {/* Style Exaggeration */}
-                              <div className="space-y-3 pt-1">
-                                <div className="flex justify-between items-center">
-                                  <Label>Cường điệu hóa phong cách</Label>
-                                  <span className="text-xs font-medium bg-muted px-2 py-0.5 rounded-full">{styleExaggeration[0].toFixed(2)}</span>
-                                </div>
-                                <Slider value={styleExaggeration} onValueChange={setStyleExaggeration} max={1} min={0} step={0.01} disabled={isBusy} className="py-1"/>
-                              </div>
-                              {/* Speaker Boost */}
-                               <div className="flex items-center justify-between rounded-lg border p-3">
-                                  <div className="space-y-0.5">
-                                      <Label htmlFor="speaker-boost" className="cursor-pointer">Tăng cường giọng nói</Label>
-                                      <p className="text-[11px] text-muted-foreground">
-                                          Tăng độ tương đồng với người nói gốc.
-                                      </p>
-                                  </div>
-                                  <Switch
-                                      id="speaker-boost"
-                                      checked={speakerBoost}
-                                      onCheckedChange={setSpeakerBoost}
-                                      disabled={isBusy}
-                                  />
-                              </div>
-                               {/* Language override switch */}
-                               <div className="flex items-center justify-between rounded-lg border p-3">
-                                <div className="space-y-0.5">
-                                  <Label htmlFor="language-override-detailed" className="cursor-pointer">Ghi đè ngôn ngữ</Label>
-                                  <p className="text-[11px] text-muted-foreground">Chỉ định ngôn ngữ để có kết quả tốt nhất.</p>
-                                </div>
-                                <Switch
-                                    id="language-override-detailed"
-                                    checked={languageOverride}
-                                    onCheckedChange={setLanguageOverride}
-                                    disabled={isBusy}
-                                />
-                              </div>
-                              {languageOverride && (
-                                  <div className="space-y-2 pl-4">
-                                      <Select value={language} onValueChange={(value) => setLanguage(value as any)} disabled={isBusy}>
-                                          <SelectTrigger><SelectValue placeholder="Chọn một ngôn ngữ..." /></SelectTrigger>
-                                          <SelectContent>
-                                              <SelectItem value="auto">Đa ngôn ngữ (Tự động)</SelectItem>
-                                              <SelectItem value="vi">Tiếng Việt</SelectItem>
-                                              <SelectItem value="en">English (United States)</SelectItem>
-                                          </SelectContent>
-                                      </Select>
-                                  </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-
-                         <div className="flex justify-end">
-                            <Button variant="ghost" onClick={handleResetSettings} disabled={isBusy}>
-                                <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Reset values
-                            </Button>
-                         </div>
-                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
                   
                   {/* Add new voice button & Guide */}
                   <div className="flex gap-2">
