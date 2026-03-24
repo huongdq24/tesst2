@@ -33,11 +33,15 @@ import {
   Lock,
   Circle,
   VolumeX,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { Badge } from '../ui/badge';
+import { Progress } from '../ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 interface AddVoiceModalProps {
   open: boolean;
@@ -54,6 +58,12 @@ interface UploadedFile {
   size: number;
   duration?: number;
   previewUrl: string;
+}
+
+interface VoiceLabel {
+  id: number;
+  key: string;
+  value: string;
 }
 
 const SelectionCard = ({ icon, title, description, time, onClick, disabled, badge, disabledText }: {
@@ -101,6 +111,12 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [voiceName, setVoiceName] = useState('');
   const [voiceDescription, setVoiceDescription] = useState('');
+  const [language, setLanguage] = useState('vi');
+  const [labels, setLabels] = useState<VoiceLabel[]>([
+    { id: 1, key: 'accent', value: 'northern' },
+    { id: 2, key: 'gender', value: 'male' },
+    { id: 3, key: 'age', value: 'middle_aged' },
+  ]);
   const [isCreating, setIsCreating] = useState(false);
   const [isCreated, setIsCreated] = useState(false);
   const [playingFileIndex, setPlayingFileIndex] = useState<number | null>(null);
@@ -122,6 +138,12 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
         setUploadedFiles([]);
         setVoiceName('');
         setVoiceDescription('');
+        setLanguage('vi');
+        setLabels([
+            { id: 1, key: 'accent', value: 'northern' },
+            { id: 2, key: 'gender', value: 'male' },
+            { id: 3, key: 'age', value: 'middle_aged' },
+        ]);
         setIsCreating(false);
         setIsCreated(false);
         setIsRecording(false);
@@ -151,14 +173,13 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
       toast({ variant: 'destructive', title: 'Định dạng không hỗ trợ', description: 'Vui lòng tải lên file audio hoặc video.' });
       return null;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      toast({ variant: 'destructive', title: 'File quá lớn', description: 'Mỗi file tối đa 10MB.' });
+    if (file.size > 100 * 1024 * 1024) { // Increased to 100MB for Pro
+      toast({ variant: 'destructive', title: 'File quá lớn', description: 'Mỗi file tối đa 100MB.' });
       return null;
     }
 
     const previewUrl = URL.createObjectURL(file);
 
-    // Get duration
     const duration = await new Promise<number>((resolve) => {
       const audio = new Audio(previewUrl);
       audio.addEventListener('loadedmetadata', () => resolve(audio.duration));
@@ -166,13 +187,7 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
       setTimeout(() => resolve(0), 3000);
     });
 
-    return {
-      file,
-      name: file.name,
-      size: file.size,
-      duration,
-      previewUrl,
-    };
+    return { file, name: file.name, size: file.size, duration, previewUrl, };
   };
 
   const handleFileUpload = async (files: FileList | File[]) => {
@@ -262,6 +277,18 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
     setPlayingFileIndex(index);
   };
 
+  const handleAddLabel = () => {
+    setLabels([...labels, { id: Date.now(), key: '', value: '' }]);
+  };
+  
+  const handleRemoveLabel = (id: number) => {
+    setLabels(labels.filter(label => label.id !== id));
+  };
+  
+  const handleLabelChange = (id: number, field: 'key' | 'value', newValue: string) => {
+    setLabels(labels.map(label => label.id === id ? { ...label, [field]: newValue } : label));
+  };
+
   // Create voice
   const handleCreateVoice = async () => {
     if (!userData?.elevenLabsApiKey) {
@@ -281,6 +308,15 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
       if (user?.uid) {
         formData.append('userId', user.uid);
       }
+      
+      // Convert labels array to JSON object string for the API
+      const labelsObject = labels.reduce((acc, label) => {
+        if (label.key && label.value) {
+          acc[label.key] = label.value;
+        }
+        return acc;
+      }, {} as Record<string, string>);
+      formData.append('labels', JSON.stringify(labelsObject));
 
       for (const uploaded of uploadedFiles) {
         formData.append('files', uploaded.file);
@@ -313,9 +349,14 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
   };
 
   const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    let timeString = '';
+    if (hrs > 0) timeString += `${hrs}h `;
+    if (mins > 0) timeString += `${mins}m `;
+    if (secs > 0 || timeString === '') timeString += `${secs}s`;
+    return timeString.trim();
   };
 
   const formatFileSize = (bytes: number) => {
@@ -324,21 +365,36 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const wizardSteps: { key: WizardStep; label: string }[] = [
+  const wizardStepsInstant: { key: WizardStep; label: string }[] = [
     { key: 'upload', label: 'Tải lên Audio' },
     { key: 'info', label: 'Thông tin giọng nói' },
     { key: 'finish', label: 'Hoàn tất' },
   ];
+  
+  const wizardStepsProfessional: { key: WizardStep; label: string }[] = [
+    { key: 'upload', label: 'Tải lên & Cài đặt' },
+    { key: 'finish', label: 'Xác nhận & Tạo' },
+  ];
 
   const canGoNext = () => {
-    if (currentStep === 'upload') return uploadedFiles.length > 0;
-    if (currentStep === 'info') return voiceName.trim().length > 0;
+    if (currentStep === 'upload') {
+        if (creationMode === 'professional') {
+            return hasEnoughAudio && voiceName.trim().length > 0;
+        }
+        return uploadedFiles.length > 0 && hasEnoughAudio;
+    }
+    if (currentStep === 'info') {
+      return voiceName.trim().length > 0;
+    }
     return false;
   };
 
   const goNext = () => {
-    if (currentStep === 'upload') setCurrentStep('info');
-    else if (currentStep === 'info') setCurrentStep('finish');
+    if (currentStep === 'upload') {
+      creationMode === 'professional' ? setCurrentStep('finish') : setCurrentStep('info');
+    } else if (currentStep === 'info') {
+      setCurrentStep('finish');
+    }
   };
 
   const goBack = () => {
@@ -347,7 +403,9 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
         setCreationMode(null);
     }
     else if (currentStep === 'info') setCurrentStep('upload');
-    else if (currentStep === 'finish') setCurrentStep('info');
+    else if (currentStep === 'finish') {
+        creationMode === 'professional' ? setCurrentStep('upload') : setCurrentStep('info');
+    }
   };
 
   const renderSelectionStep = () => (
@@ -373,10 +431,11 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
             icon={<Gem className="h-5 w-5" />}
             title="Nhân bản Giọng nói Chuyên nghiệp"
             description="Tạo bản sao kỹ thuật số chân thực nhất của giọng nói của bạn. Yêu cầu ít nhất 30 phút âm thanh sạch."
-            time="~5 phút"
-            badge={<><Circle className="h-3 w-3 fill-amber-400 text-amber-400"/><span>Không có suất</span></>}
-            disabled
-            disabledText={<div className="flex items-center w-full"><Lock className="h-3.5 w-3.5 mr-2 flex-shrink-0"/><span>Đã đạt giới hạn 1 giọng. Nâng cấp để có thêm.</span><Button size="sm" className="ml-auto text-xs h-7" disabled>Đăng ký</Button></div>}
+            time="~4 giờ"
+            onClick={() => {
+              setCreationMode('professional');
+              setCurrentStep('upload');
+            }}
         />
         <SelectionCard 
             icon={<Shuffle className="h-5 w-5" />}
@@ -388,7 +447,7 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
     </div>
   );
 
-  const renderUploadStep = () => (
+  const renderInstantUploadStep = () => (
     <div className="space-y-5">
         <div className="grid grid-cols-3 gap-3">
             <div className="flex flex-col items-center text-center gap-2 p-3 rounded-xl bg-muted/40">
@@ -547,14 +606,102 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
         <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200">
             <AlertCircle className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
             <p className="text-xs text-amber-800">
-                {creationMode === 'instant' 
-                    ? 'Cần ít nhất 10 giây audio. Bạn nên cung cấp ít nhất 1 phút để có chất lượng tốt nhất.'
-                    : 'Cần ít nhất 30 phút audio để nhân bản chuyên nghiệp.'}
+                Cần ít nhất 10 giây audio. Bạn nên cung cấp ít nhất 1 phút để có chất lượng tốt nhất.
             </p>
         </div>
         )}
     </div>
   );
+
+  const renderProfessionalUploadStep = () => {
+    const totalSize = uploadedFiles.reduce((sum, f) => sum + f.size, 0);
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Column */}
+            <div className="space-y-4">
+                <div>
+                    <Label htmlFor="voice-name-pro">Voice name</Label>
+                    <Input id="voice-name-pro" value={voiceName} onChange={e => setVoiceName(e.target.value)} placeholder="e.g. My Professional Voice" />
+                    <p className="text-xs text-muted-foreground mt-1">This is how your voice will appear in the Voice Library.</p>
+                </div>
+
+                <div>
+                    <Label htmlFor="voice-language-pro">Language used in audio samples</Label>
+                    <Select value={language} onValueChange={setLanguage}>
+                        <SelectTrigger id="voice-language-pro"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="vi">Vietnamese</SelectItem>
+                            <SelectItem value="en">English</SelectItem>
+                            <SelectItem value="zh">Chinese</SelectItem>
+                        </SelectContent>
+                    </Select>
+                     <p className="text-xs text-muted-foreground mt-1">This will allow us to process the audio correctly.</p>
+                </div>
+
+                <div>
+                    <Label htmlFor="voice-desc-pro">Description</Label>
+                    <Textarea id="voice-desc-pro" value={voiceDescription} onChange={e => setVoiceDescription(e.target.value)} placeholder="e.g. A deep and resonant voice for storytelling" className="min-h-[80px]" />
+                     <p className="text-xs text-muted-foreground mt-1">This description will show up in the Voice Library.</p>
+                </div>
+                
+                <div className="space-y-2">
+                    <Label>Labels</Label>
+                    {labels.map((label) => (
+                         <div key={label.id} className="flex items-center gap-2">
+                             <Input value={label.key} onChange={e => handleLabelChange(label.id, 'key', e.target.value)} placeholder="Label (e.g. accent)"/>
+                             <Input value={label.value} onChange={e => handleLabelChange(label.id, 'value', e.target.value)} placeholder="Value (e.g. northern)"/>
+                             <Button variant="ghost" size="icon" onClick={() => handleRemoveLabel(label.id)}><Minus className="h-4 w-4"/></Button>
+                         </div>
+                    ))}
+                    <Button variant="outline" size="sm" onClick={handleAddLabel}><Plus className="mr-2 h-4 w-4" /> Add label</Button>
+                </div>
+            </div>
+
+            {/* Right Column */}
+            <div className="space-y-4">
+                <div className="flex flex-col items-center">
+                    <p className="text-sm text-muted-foreground mb-2">Total Audio Uploaded</p>
+                    <Progress value={(totalDuration / (30 * 60)) * 100} className="w-full h-3" />
+                    <div className="flex justify-between w-full text-xs text-muted-foreground mt-1">
+                        <span>0 min</span>
+                        <span>{formatDuration(totalDuration)} / 30 min recommended</span>
+                        <span>2 hrs+</span>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}><UploadCloud className="mr-2 h-4 w-4" /> Upload samples</Button>
+                    <Button variant="outline" onClick={startRecording} disabled={isRecording}><Mic className="mr-2 h-4 w-4" /> Record yourself</Button>
+                </div>
+
+                <div className="space-y-2">
+                    <Label className="text-xs">Your samples ({uploadedFiles.length}) - {formatFileSize(totalSize)}</Label>
+                    <div className="max-h-64 overflow-y-auto space-y-2 pr-2">
+                        {uploadedFiles.map((f, i) => (
+                           <div key={i} className="flex items-center gap-3 p-2.5 rounded-lg border hover:bg-muted/40">
+                               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full" onClick={() => togglePlayFile(i)}>
+                                   {playingFileIndex === i ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 ml-1" />}
+                               </Button>
+                               <div className="flex-1 min-w-0">
+                                   <p className="text-sm font-medium truncate">{f.name}</p>
+                                   <p className="text-[11px] text-muted-foreground">
+                                       {f.duration ? `${formatDuration(f.duration)} • ` : ''}{formatFileSize(f.size)} • File upload
+                                   </p>
+                               </div>
+                               <div className="flex items-center">
+                                   <Button variant="ghost" size="icon" className="h-7 w-7"><Download className="h-4 w-4"/></Button>
+                                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeFile(i)}><Trash2 className="h-4 w-4"/></Button>
+                               </div>
+                           </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+            <input ref={fileInputRef} type="file" className="hidden" accept="audio/*,video/*" multiple onChange={handleFileChange} />
+        </div>
+    )
+  }
 
   const renderInfoStep = () => (
     <div className="space-y-5">
@@ -701,7 +848,10 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[640px] max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl border-white/20 p-0">
+      <DialogContent className={cn(
+          "max-h-[90vh] overflow-y-auto bg-white/95 backdrop-blur-xl border-white/20 p-0",
+          creationMode === 'professional' && currentStep === 'upload' ? "sm:max-w-4xl" : "sm:max-w-2xl"
+      )}>
         <div className="p-6 pb-0">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-3 text-xl">
@@ -714,7 +864,8 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
 
           {currentStep !== 'selection' && (
              <div className="flex items-center mt-6 mb-2">
-                {wizardSteps.map((step, index) => {
+                {(creationMode === 'professional' ? wizardStepsProfessional : wizardStepsInstant).map((step, index) => {
+                const wizardSteps = creationMode === 'professional' ? wizardStepsProfessional : wizardStepsInstant;
                 const stepIndex = wizardSteps.findIndex(s => s.key === currentStep);
                 const isActive = step.key === currentStep;
                 const isDone = index < stepIndex || isCreated;
@@ -732,7 +883,7 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
                         {isDone ? <Check className="h-4 w-4" /> : index + 1}
                         </div>
                         <span className={cn(
-                        "text-[11px] mt-1.5 whitespace-nowrap font-medium",
+                        "text-[11px] mt-1.5 whitespace-nowrap font-medium text-center",
                         isActive && "text-primary",
                         isPending && "text-muted-foreground"
                         )}>
@@ -754,18 +905,17 @@ export function AddVoiceModal({ open, onOpenChange, onVoiceAdded }: AddVoiceModa
 
         <div className="p-6 pt-4">
           {currentStep === 'selection' && renderSelectionStep()}
-          {currentStep === 'upload' && renderUploadStep()}
+          {currentStep === 'upload' && creationMode === 'instant' && renderInstantUploadStep()}
+          {currentStep === 'upload' && creationMode === 'professional' && renderProfessionalUploadStep()}
           {currentStep === 'info' && renderInfoStep()}
           {currentStep === 'finish' && renderFinishStep()}
         </div>
 
         {currentStep !== 'selection' && (!isCreated || currentStep !== 'finish') ? (
-            <div className="flex items-center justify-between p-6 pt-0 mt-4 border-t">
-            {currentStep !== 'upload' ? (
-                <Button variant="ghost" onClick={goBack} disabled={isCreating}>
-                    <ChevronLeft className="mr-1 h-4 w-4" /> Quay lại
-                </Button>
-            ) : <div />}
+            <div className="flex items-center justify-between p-6 pt-0 mt-4 border-t sticky bottom-0 bg-background/80 backdrop-blur-sm">
+            <Button variant="ghost" onClick={goBack} disabled={isCreating}>
+                <ChevronLeft className="mr-1 h-4 w-4" /> Quay lại
+            </Button>
 
             {currentStep !== 'finish' && (
                 <Button onClick={goNext} disabled={!canGoNext()}>
