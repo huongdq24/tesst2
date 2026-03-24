@@ -88,9 +88,9 @@ interface GeneratedVoice {
 const MODELS = [
   {
     id: 'eleven_multilingual_v2',
-    name: 'Eleven Multilingual v2',
-    description: 'Mô hình sống động, giàu cảm xúc với hơn 29 ngôn ngữ. Tốt nhất cho lồng tiếng, sách nói, hậu kỳ.',
-    tags: ['Chất lượng cao'],
+    name: 'Eleven v3',
+    description: 'Mô hình biểu cảm nhất. Hỗ trợ 70+ ngôn ngữ. Yêu cầu kỹ thuật prompt cao hơn các model trước.',
+    tags: ['Cảm xúc cao', '70+ Ngôn ngữ'],
   },
   {
     id: 'eleven_turbo_v2_5',
