@@ -65,7 +65,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Badge } from '@/components/ui/badge';
 import {
   Collapsible,
   CollapsibleContent,
@@ -95,10 +95,10 @@ interface GeneratedVoice {
 
 const MODELS = [
   {
-    id: 'eleven_v3', // Unique UI ID
+    id: 'eleven_v3',
     apiId: 'eleven_multilingual_v2',
     name: 'Eleven v3',
-    description: 'The most expressive model. Supports 70+ languages. Requires more prompt engineering than our previous models.',
+    description: 'Our most emotionally rich, expressive speech synthesis model',
     tags: ['Cảm xúc cao', '70+ Ngôn ngữ'],
   },
   {
@@ -114,7 +114,6 @@ const MODELS = [
     name: 'Eleven Turbo v2.5',
     description: 'Our high quality, low latency model in 32 languages. Best for developer use cases where speed matters and you need non-English languages.',
     tags: ['50% cheaper'],
-    default: true,
   },
 ];
 
@@ -125,7 +124,7 @@ export function VoiceCloningWorkspace() {
   const [description, setDescription] = useState('');
   const [voices, setVoices] = useState<Voice[]>([]);
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
-  const [selectedUIModelId, setSelectedUIModelId] = useState('eleven_turbo_v2.5');
+  const [selectedUIModelId, setSelectedUIModelId] = useState('eleven_v3');
   const [isLoadingVoices, setIsLoadingVoices] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isDeletingVoice, setIsDeletingVoice] = useState(false);
@@ -544,7 +543,7 @@ export function VoiceCloningWorkspace() {
                 </Button>
               </div>
               <CollapsibleContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                     {/* Voice Selection */}
                     <div className="space-y-2 col-span-2">
                       <Label>Giọng nói (Voice)</Label>
@@ -592,18 +591,44 @@ export function VoiceCloningWorkspace() {
                     </div>
 
                     {/* Model Selection */}
-                     <div className="space-y-2 col-span-2">
+                     <div className="space-y-2">
                         <Label>Model AI</Label>
-                        <Select value={selectedUIModelId} onValueChange={setSelectedUIModelId} disabled={isBusy}>
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {MODELS.map(model => (
-                                    <SelectItem key={model.id} value={model.id}>{model.name}</SelectItem>
+                        <div className="grid grid-cols-1 gap-3">
+                          {MODELS.map((model) => (
+                            <button
+                              key={model.id}
+                              onClick={() => setSelectedUIModelId(model.id)}
+                              disabled={isBusy}
+                              className={cn(
+                                "text-left p-4 rounded-lg border transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                                selectedUIModelId === model.id
+                                  ? "bg-primary/10 border-primary shadow-sm"
+                                  : "hover:bg-muted/50"
+                              )}
+                            >
+                              <div className="flex justify-between items-center">
+                                <h4 className="font-semibold">{model.name}</h4>
+                                {selectedUIModelId === model.id && (
+                                  <Check className="h-5 w-5 text-primary" />
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-1">
+                                {model.description}
+                              </p>
+                              <div className="flex gap-2 mt-2">
+                                {model.tags.map((tag) => (
+                                  <Badge
+                                    key={tag}
+                                    variant={selectedUIModelId === model.id ? "default" : "secondary"}
+                                    className="text-xs"
+                                  >
+                                    {tag}
+                                  </Badge>
                                 ))}
-                            </SelectContent>
-                        </Select>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
                     </div>
                 </div>
 
