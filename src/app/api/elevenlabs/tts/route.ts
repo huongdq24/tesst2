@@ -34,29 +34,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Use eleven_multilingual_v2 as the base model because it's the latest and supports most features.
     let resolvedModelId = model_id || 'eleven_multilingual_v2';
 
-    // Build request body for ElevenLabs
+    // Build voice_settings object conditionally
+    const voice_settings: Record<string, any> = {
+      stability: stability ?? 0.5,
+    };
+
+    if (similarity_boost !== undefined) {
+        voice_settings.similarity_boost = similarity_boost;
+    }
+    if (style !== undefined) {
+        voice_settings.style = style;
+    }
+    // Speaker Boost is not available for the Eleven v3 model (eleven_multilingual_v2)
+    if (resolvedModelId !== 'eleven_multilingual_v2' && use_speaker_boost !== undefined) {
+        voice_settings.use_speaker_boost = use_speaker_boost;
+    }
+
+    // Build the main request body for ElevenLabs
     const ttsBody: Record<string, any> = {
       text,
       model_id: resolvedModelId,
-      voice_settings: {
-        stability: stability ?? 0.5,
-        similarity_boost: similarity_boost ?? 0.75,
-        style: style ?? 0.0,
-      },
+      voice_settings,
     };
 
-    // Add speaker boost only if it's not the v3 model (which is identified by eleven_multilingual_v2)
-    // and the client requests it.
-    if (resolvedModelId !== 'eleven_multilingual_v2' && use_speaker_boost) {
-        ttsBody.voice_settings.use_speaker_boost = true;
-    }
-
-
-    // Add language_code if provided — critical for non-English languages like Vietnamese
-    if (language_code) {
+    // Add language_code if provided and not 'auto'
+    if (language_code && language_code !== 'auto') {
       ttsBody.language_code = language_code;
     }
 
