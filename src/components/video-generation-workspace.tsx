@@ -92,6 +92,7 @@ export function VideoGenerationWorkspace() {
   const isSafetyBypassModeRef = useRef(false);
   
   useEffect(() => { promptRef.current = prompt; }, [prompt]);
+  const [extendingVideoUrl, setExtendingVideoUrl] = useState<string | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
   useEffect(() => { videoModelRef.current = videoModel; }, [videoModel]);
   useEffect(() => { aspectRatioRef.current = aspectRatio; }, [aspectRatio]);
@@ -127,10 +128,19 @@ export function VideoGenerationWorkspace() {
       await uploadBytes(videoRef, blob);
       const downloadURL = await getDownloadURL(videoRef);
 
+      let geminiFileUri = null;
+      if (videoUrl.includes('generativelanguage.googleapis.com')) {
+        const match = videoUrl.match(/(https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-zA-Z0-9]+)/);
+        if (match) {
+          geminiFileUri = match[1];
+        }
+      }
+
       await addDoc(collection(firestore, 'generatedVideos'), {
         ownerId: currentUser.uid,
         prompt: promptRef.current,
         videoUrl: downloadURL,
+        geminiFileUri: geminiFileUri,
         aspectRatio: aspectRatioRef.current,
         modelName: videoModelRef.current,
         createdAt: serverTimestamp(),
@@ -283,6 +293,7 @@ export function VideoGenerationWorkspace() {
     setErrorDetails(null);
     pollingErrorsRef.current = 0;
     setElapsedTime(0);
+    setExtendingVideoUrl(null);
     stopTimer();
     cleanupPolling();
   };
@@ -443,6 +454,7 @@ export function VideoGenerationWorkspace() {
       const result = await startVideoGeneration({
         textPrompt: finalPrompt,
         referenceImageUris: referenceImages,
+        referenceVideoUri: extendingVideoUrl || undefined,
         afterImageUri: (inputMode === 'before-after' && afterImageUrl) ? afterImageUrl : undefined,
         aspectRatio: aspectRatio,
         modelName: videoModel,
@@ -497,6 +509,23 @@ export function VideoGenerationWorkspace() {
 
   // Wire up the ref
   handleGenerateRef.current = handleGenerate;
+
+  const activateExtendMode = async (videoUrlToExtend: string) => {
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để mở rộng video.' });
+      return;
+    }
+    
+    setExtendingVideoUrl(videoUrlToExtend);
+    
+    // Smooth scroll to the top of the page (prompt input area)
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    
+    toast({ 
+      title: 'Đã bật chế độ Nối tiếp (Mở rộng)', 
+      description: 'Vui lòng nhập diễn biến mới cho đoạn video tiếp theo, sau đó bấm Tạo video.' 
+    });
+  };
 
   const handleFilesUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -660,6 +689,7 @@ export function VideoGenerationWorkspace() {
         open={isLibraryOpen}
         onOpenChange={setIsLibraryOpen}
         onImageSelect={handleImageSelectFromLibrary}
+        onVideoExtend={activateExtendMode}
       />
       {/* Hidden file inputs for Before/After mode */}
       <input ref={beforeFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'before')} disabled={isBusy} />
@@ -672,6 +702,24 @@ export function VideoGenerationWorkspace() {
                 ⚠️ Bạn chưa thêm Gemini API Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo video.
               </div>
             )}
+            
+            {extendingVideoUrl && (
+              <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-lg p-3 flex items-center justify-between gap-3 shadow-sm mb-2">
+                 <div className="flex items-center gap-3 w-full">
+                   <div className="h-10 w-16 bg-black rounded overflow-hidden flex-shrink-0">
+                     <video src={extendingVideoUrl} className="w-full h-full object-cover" muted />
+                   </div>
+                   <div className="flex-1 text-sm">
+                      <strong className="text-sky-700 dark:text-sky-300 font-semibold">Đang Mở rộng Video</strong><br/>
+                      <span className="text-muted-foreground text-xs line-clamp-2">Nhập lại kịch bản bên dưới để tránh video bị lặp lại hành động cũ.</span>
+                   </div>
+                 </div>
+                 <Button variant="ghost" size="sm" onClick={() => setExtendingVideoUrl(null)} className="h-8 hover:bg-destructive/20 hover:text-destructive shrink-0">
+                    Hủy
+                 </Button>
+              </div>
+            )}
+
             {/* === INPUT MODE TABS === */}
             <div className="space-y-2">
               <Label>Chế độ đầu vào</Label>
@@ -1136,8 +1184,23 @@ export function VideoGenerationWorkspace() {
               <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10 aspect-video">
                 <video src={videoUrl} controls className="w-full h-full object-contain" />
                 <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {!videoModel.includes('veo-2') && (
+                    <Button 
+                      variant="secondary" 
+                      size="sm"
+                      className="flex items-center gap-1 bg-black/60 text-white hover:bg-black/80 border-none" 
+                      title="Mở rộng video thêm 8s (Nối tiếp video)"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        activateExtendMode(videoUrl);
+                      }}
+                    >
+                      <Wand2 className="h-4 w-4" />
+                      Mở rộng
+                    </Button>
+                  )}
                   <a href={videoUrl} download={`igen-video-${Date.now()}-${index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
-                    <Button variant="secondary" size="icon" title="Tải video xuống">
+                    <Button variant="secondary" size="icon" className="bg-black/60 text-white hover:bg-black/80 border-none" title="Tải video xuống">
                       <Download className="h-5 w-5" />
                     </Button>
                   </a>

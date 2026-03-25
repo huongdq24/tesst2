@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/fire
 import { firestore, storage } from '@/lib/firebase/config';
 import { ref, deleteObject } from 'firebase/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2, Wand2 } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/contexts/i18n-context';
@@ -32,15 +32,17 @@ interface MediaRecord {
   prompt?: string;
   createdAt: any;
   collectionName: 'generatedImages' | 'inputImages' | 'generatedVideos';
+  geminiFileUri?: string;
 }
 
 interface ImageLibraryModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onImageSelect: (imageUrl: string) => void;
+  onVideoExtend?: (videoUrl: string) => void;
 }
 
-export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLibraryModalProps) {
+export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoExtend }: ImageLibraryModalProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
@@ -87,7 +89,7 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
           // 3. Map results to a common format
           const generatedImagesList: MediaRecord[] = generatedImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl, type: 'image', collectionName: 'generatedImages' } as MediaRecord));
           const inputImagesList: MediaRecord[] = inputImagesSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().imageUrl, type: 'image', collectionName: 'inputImages' } as MediaRecord));
-          const generatedVideosList: MediaRecord[] = generatedVideosSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().videoUrl, type: 'video', collectionName: 'generatedVideos' } as MediaRecord));
+          const generatedVideosList: MediaRecord[] = generatedVideosSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id, url: doc.data().videoUrl, type: 'video', collectionName: 'generatedVideos', geminiFileUri: doc.data().geminiFileUri } as MediaRecord));
 
           // 4. Combine and sort
           const combinedList = [...generatedImagesList, ...inputImagesList, ...generatedVideosList];
@@ -338,6 +340,23 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect }: ImageLi
                 onClick={(e) => promptDelete(e, item)}
               >
                 <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+
+            {/* Extend Video button */}
+            {!isSelectMode && item.type === 'video' && onVideoExtend && (
+              <Button
+                variant="secondary"
+                size="icon"
+                title="Mở rộng video thêm 8s"
+                className="absolute top-2 right-10 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVideoExtend(item.geminiFileUri || item.url);
+                  onOpenChange(false);
+                }}
+              >
+                <Wand2 className="h-4 w-4" />
               </Button>
             )}
 
