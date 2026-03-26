@@ -37,7 +37,7 @@ export function VideoGenerationWorkspace() {
     { id: 'event_highlight', label: '🎉 Recap Sự kiện', prompt: 'Video tổng hợp khoảnh khắc ấn tượng nhất tại sự kiện [TÊN SỰ KIỆN], góc quay đa dạng, người tham gia vui mừng, không khí cực kỳ sôi động' },
   ];
 
-  
+
   const BA_VIDEO_TEMPLATES = [
     { id: 'none', label: 'Tùy chỉnh (Tự nhập)', prompt: '' },
     { id: 'interior', label: '🛋️ Nội thất', prompt: 'Video chuyển đổi mượt mà từ căn phòng thô ráp sang một không gian tuyệt đẹp, đầy đủ nội thất sang trọng với ánh sáng ấm áp.' },
@@ -110,7 +110,7 @@ export function VideoGenerationWorkspace() {
   const handleGenerateRef = useRef<((isAutoBypass?: boolean) => Promise<void>) | null>(null);
   const editingClipIndexRef = useRef<number | null>(null);
   const isSafetyBypassModeRef = useRef(false);
-  
+
   useEffect(() => { promptRef.current = prompt; }, [prompt]);
   const [extendingVideoUrl, setExtendingVideoUrl] = useState<string | null>(null);
   useEffect(() => { userRef.current = user; }, [user]);
@@ -207,7 +207,7 @@ export function VideoGenerationWorkspace() {
             }
 
             if (result.error) {
-              setErrorDetails(result.error);
+              setErrorDetails(result.error || null);
               toast({
                 variant: 'default',
                 title: "⚠️ Video tạo thành công (có cảnh báo)",
@@ -222,25 +222,25 @@ export function VideoGenerationWorkspace() {
             const errorMsg = result.error || "Đã xảy ra lỗi không xác định.";
 
             // === AUTO-BYPASS LRO SAFETY ERROR ===
-            const isCelebrityError = errorMsg.toLowerCase().includes('celebrity') || 
-                                     errorMsg.toLowerCase().includes('likeness') ||
-                                     errorMsg.toLowerCase().includes('children') ||
-                                     errorMsg.toLowerCase().includes('bộ lọc an toàn');
-            
+            const isCelebrityError = errorMsg.toLowerCase().includes('celebrity') ||
+              errorMsg.toLowerCase().includes('likeness') ||
+              errorMsg.toLowerCase().includes('children') ||
+              errorMsg.toLowerCase().includes('bộ lọc an toàn');
+
             if (isCelebrityError && !isSafetyBypassModeRef.current && (inputImageUrls.length > 0 || inputMode === 'before-after')) {
-               console.warn(`[VideoGen Poll] Detected RAI safety block. Auto-retrying without reference image...`);
-               isSafetyBypassModeRef.current = true;
-               toast({ 
-                 title: "Vượt qua bộ lọc an toàn...", 
-                 description: "Đang tự động khởi tạo lại video chỉ dựa trên kịch bản chữ (bỏ qua ảnh gốc).", 
-                 defaultOpen: true
-               });
-               cleanupPolling();
-               setOperationName(null);
-               if (handleGenerateRef.current) {
-                 handleGenerateRef.current(true);
-               }
-               return; // Skip normal failure flow
+              console.warn(`[VideoGen Poll] Detected RAI safety block. Auto-retrying without reference image...`);
+              isSafetyBypassModeRef.current = true;
+              toast({
+                title: "Vượt qua bộ lọc an toàn...",
+                description: "Đang tự động khởi tạo lại video chỉ dựa trên kịch bản chữ (bỏ qua ảnh gốc).",
+                defaultOpen: true
+              });
+              cleanupPolling();
+              setOperationName(null);
+              if (handleGenerateRef.current) {
+                handleGenerateRef.current(true);
+              }
+              return; // Skip normal failure flow
             }
 
             setJobStatus('failed');
@@ -260,16 +260,16 @@ export function VideoGenerationWorkspace() {
           const newErrorCount = pollingErrorsRef.current;
 
           if (newErrorCount >= MAX_POLLING_ERRORS) {
-             setJobStatus('failed');
-             stopTimer();
-             const errorMsg = "Mất kết nối đến máy chủ sau nhiều lần thử. Vui lòng kiểm tra lại sau hoặc thử làm mới trang.";
-             setErrorDetails(errorMsg);
-             toast({ variant: 'destructive', title: "Lỗi kết nối", description: errorMsg });
-             cleanupPolling();
-             setOperationName(null);
+            setJobStatus('failed');
+            stopTimer();
+            const errorMsg = "Mất kết nối đến máy chủ sau nhiều lần thử. Vui lòng kiểm tra lại sau hoặc thử làm mới trang.";
+            setErrorDetails(errorMsg);
+            toast({ variant: 'destructive', title: "Lỗi kết nối", description: errorMsg });
+            cleanupPolling();
+            setOperationName(null);
           } else {
-             // Just show a small warning and continue polling
-             toast({ variant: 'default', title: `Kết nối không ổn định (lỗi ${newErrorCount}/${MAX_POLLING_ERRORS})`, description: "Đang thử kết nối lại..." });
+            // Just show a small warning and continue polling
+            toast({ variant: 'default', title: `Kết nối không ổn định (lỗi ${newErrorCount}/${MAX_POLLING_ERRORS})`, description: "Đang thử kết nối lại..." });
           }
         }
       }, 15000); // Poll every 15 seconds
@@ -282,7 +282,7 @@ export function VideoGenerationWorkspace() {
   // Effect to adjust settings based on the selected video model and resolution
   useEffect(() => {
     const isVeo2 = videoModel.includes('veo-2');
-    
+
     if (isVeo2) {
       // For Veo 2, ensure duration is valid. Resolution is not configurable by user.
       if (!['5', '6', '8'].includes(videoDuration)) {
@@ -298,7 +298,7 @@ export function VideoGenerationWorkspace() {
             description: 'Độ phân giải 1080p và 4k yêu cầu thời lượng video là 8 giây.',
           });
         }
-      } 
+      }
       // If duration is not valid for Veo 3, reset it.
       else if (!['4', '6', '8'].includes(videoDuration)) {
         setVideoDuration('8');
@@ -427,7 +427,7 @@ export function VideoGenerationWorkspace() {
   const handleGenerate = async (bypassParam?: boolean | any) => {
     // If triggered by a real user button click, bypassParam is an Event object, not true.
     const isAutoBypass = bypassParam === true;
-    
+
     if (!isAutoBypass) {
       isSafetyBypassModeRef.current = false;
     }
@@ -552,23 +552,23 @@ export function VideoGenerationWorkspace() {
     setBeforeImageUrl(null);
     setAfterImageUrl(null);
     setSelectedTemplate('none');
-    
+
     // Veo 2 does not support native extension, force fall-forward to Veo 3.1 Fast
     if (videoModel.includes('veo-2')) {
       setVideoModel('veo-3.1-fast-generate-preview');
     }
   };
 
-    const handleEditorSubmit = async (params: VideoEditorSubmitParams) => {
+  const handleEditorSubmit = async (params: VideoEditorSubmitParams) => {
     if (!editorClipUrl || !user || !userData?.geminiApiKey) return;
-    
+
     // Find index of the clip being edited
     const editIndex = videoProject.findIndex(c => c.url === editorClipUrl);
     const isEditMode = params.tool !== 'extend';
 
     let finalPrompt = params.prompt;
     if (params.selection && (params.tool === 'insert' || params.tool === 'remove')) {
-      finalPrompt += ` [Apply to region: x=${Math.round(params.selection.relativeX*100)}%, y=${Math.round(params.selection.relativeY*100)}%, w=${Math.round(params.selection.relativeW*100)}%, h=${Math.round(params.selection.relativeH*100)}%]`;
+      finalPrompt += ` [Apply to region: x=${Math.round(params.selection.relativeX * 100)}%, y=${Math.round(params.selection.relativeY * 100)}%, w=${Math.round(params.selection.relativeW * 100)}%, h=${Math.round(params.selection.relativeH * 100)}%]`;
     }
     if (params.tool === 'camera' && params.cameraPrompt) {
       finalPrompt += ` [Camera: ${params.cameraPrompt}]`;
@@ -576,7 +576,7 @@ export function VideoGenerationWorkspace() {
 
     resetWorkspaceForExtend();
     setPrompt(finalPrompt);
-    
+
     if (isEditMode) {
       editingClipIndexRef.current = editIndex !== -1 ? editIndex : null;
       setExtendingVideoUrl(null);
@@ -584,13 +584,13 @@ export function VideoGenerationWorkspace() {
       editingClipIndexRef.current = null;
       setExtendingVideoUrl(editorClipUrl);
     }
-    
+
     setEditorClipUrl(null);
     setJobStatus('processing');
     setElapsedTime(0);
     setErrorDetails(null);
     setIsSaving(false);
-    
+
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => setElapsedTime(prev => prev + 1), 1000);
 
@@ -615,7 +615,7 @@ export function VideoGenerationWorkspace() {
       } else if (result.status === 'failed') {
         setJobStatus('failed');
         stopTimer();
-        setErrorDetails(result.error);
+        setErrorDetails(result.error || null);
         toast({ variant: 'destructive', title: "Lỗi tạo video", description: result.error });
       }
     } catch (e: any) {
@@ -630,17 +630,17 @@ export function VideoGenerationWorkspace() {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để mở rộng video.' });
       return;
     }
-    
+
     resetWorkspaceForExtend();
     setPrompt('');
     setExtendingVideoUrl(videoUrlToExtend);
-    
+
     // Smooth scroll to the top of the page (prompt input area)
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    
-    toast({ 
-      title: 'Đã bật chế độ Nối tiếp (Mở rộng)', 
-      description: 'Vui lòng nhập diễn biến mới cho đoạn video tiếp theo, sau đó bấm Tạo video.' 
+
+    toast({
+      title: 'Đã bật chế độ Nối tiếp (Mở rộng)',
+      description: 'Vui lòng nhập diễn biến mới cho đoạn video tiếp theo, sau đó bấm Tạo video.'
     });
   };
 
@@ -664,7 +664,7 @@ export function VideoGenerationWorkspace() {
 
     if (filesToUpload.length === 0) return;
     setIsUploading(true);
-    
+
     try {
       const uploadPromises = filesToUpload.map(async (file) => {
         const fileName = `input-${Date.now()}-${file.name}`;
@@ -693,7 +693,7 @@ export function VideoGenerationWorkspace() {
       setIsUploading(false);
     }
   };
-  
+
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setIsDragging(true);
@@ -712,11 +712,11 @@ export function VideoGenerationWorkspace() {
 
   const handleFileChange = (event: ChangeEvent<HTMLInputElement>) => {
     handleFilesUpload(event.target.files);
-    if(event.target) {
+    if (event.target) {
       event.target.value = '';
     }
   };
-  
+
   const handleRemoveImage = (urlToRemove: string) => {
     setInputImageUrls((prevUrls) => prevUrls.filter((url) => url !== urlToRemove));
   };
@@ -724,7 +724,7 @@ export function VideoGenerationWorkspace() {
   const handleImageSelectFromLibrary = (imageUrl: string) => {
     handleImageSelectFromLibraryBA(imageUrl);
   };
-  
+
   const handleGenerateScript = async () => {
     if (!scriptDescription.trim()) {
       return;
@@ -745,7 +745,7 @@ export function VideoGenerationWorkspace() {
         if (afterImageUrl) beforeAfterImages.push(afterImageUrl);
         if (beforeImageUrl) beforeAfterImages.push(beforeImageUrl);
         imageUrisForScript = beforeAfterImages.length > 0 ? beforeAfterImages : undefined;
-        
+
         // Enhance description for before/after context - emphasize matching after image
         if (beforeImageUrl && afterImageUrl) {
           enhancedDescription = [
@@ -787,7 +787,7 @@ export function VideoGenerationWorkspace() {
       setIsGeneratingScript(false);
     }
   };
-  
+
   const handleCopy = () => {
     if (!prompt) return;
     navigator.clipboard.writeText(prompt);
@@ -796,625 +796,445 @@ export function VideoGenerationWorkspace() {
       description: t('toast.copy.success.description'),
     });
   };
-  
+
   const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isUploadingBefore || isUploadingAfter || isSaving;
   const isGenerateDisabled = isBusy || (inputMode === 'standard' && !prompt.trim()) || (inputMode === 'before-after' && (!beforeImageUrl || !afterImageUrl));
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+    <div className="flex flex-col flex-1 min-h-[calc(100vh-140px)] relative bg-white dark:bg-zinc-950 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-xl">
       <ImageLibraryModal
         open={isLibraryOpen}
         onOpenChange={setIsLibraryOpen}
-        onImageSelect={handleImageSelectFromLibrary}
+        onImageSelect={(url) => { if (libraryTarget === 'standard') setInputImageUrls(p => [...p, url]); else if (libraryTarget === 'before') setBeforeImageUrl(url); else setAfterImageUrl(url); setIsLibraryOpen(false); }}
         onVideoExtend={activateExtendMode}
       />
-      {/* Hidden file inputs for Before/After mode */}
       <input ref={beforeFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'before')} disabled={isBusy} />
       <input ref={afterFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'after')} disabled={isBusy} />
-      <div className="lg:col-span-1 flex flex-col">
-        <Card className="flex-1 flex flex-col">
-          <CardContent className="p-6 flex flex-col flex-1 gap-4">
-            {!userData?.geminiApiKey && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                ⚠️ Bạn chưa thêm Gemini API Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo video.
-              </div>
-            )}
+      <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
 
-            {/* === INPUT MODE TABS === */}
-            <div className="space-y-2">
-              <Tabs value={inputMode} onValueChange={(v) => setInputMode(v as InputMode)} className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="standard" className="text-xs">
-                    <Video className="mr-1.5 h-3.5 w-3.5" />
-                    Tiêu chuẩn
-                  </TabsTrigger>
-                  <TabsTrigger value="before-after" className="text-xs">
-                    <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
-                    Trước & Sau
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* ======= STANDARD MODE (REDESIGNED 3-STEP FLOW) ======= */}
-                <TabsContent value="standard" className="mt-4 space-y-4">
-
-                  {/* --- Extend Mode Banner --- */}
-                  {extendingVideoUrl && (
-                    <div className="bg-sky-50 dark:bg-sky-950/30 border border-sky-200 dark:border-sky-800 rounded-xl p-3 flex items-center gap-3 shadow-sm animate-in fade-in slide-in-from-top-2">
-                       <div className="h-12 w-20 bg-black rounded-lg overflow-hidden flex-shrink-0 ring-2 ring-sky-400">
-                         <video src={extendingVideoUrl} className="w-full h-full object-cover" muted />
-                       </div>
-                       <div className="flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <div className="h-2 w-2 bg-sky-500 rounded-full animate-pulse" />
-                            <strong className="text-sky-700 dark:text-sky-300 font-semibold text-sm">🔗 Nối tiếp video này</strong>
-                          </div>
-                          <span className="text-muted-foreground text-xs">Nhập kịch bản mới cho đoạn tiếp theo</span>
-                       </div>
-                       <Button variant="ghost" size="sm" onClick={() => setExtendingVideoUrl(null)} className="h-7 px-2 hover:bg-destructive/20 hover:text-destructive shrink-0 text-xs">
-                          ✕ Hủy
-                       </Button>
-                    </div>
-                  )}
-
-                  {/* --- STEP 1: Describe your video idea --- */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">1</div>
-                      <Label className="font-semibold text-sm">Mô tả ý tưởng video</Label>
-                    </div>
-                    
-                    {/* Template chips */}
-                    <div className="flex flex-wrap gap-1.5">
-                      {VIDEO_TEMPLATES.filter(t => t.id !== 'none').map(tmpl => (
-                        <button
-                          key={tmpl.id}
-                          onClick={() => { setSelectedTemplate(tmpl.id); setScriptDescription(tmpl.prompt); }}
-                          disabled={isBusy}
-                          className={cn(
-                            "px-2.5 py-1 rounded-full text-xs border transition-all hover:shadow-sm",
-                            selectedTemplate === tmpl.id 
-                              ? "bg-primary text-primary-foreground border-primary" 
-                              : "bg-background hover:bg-muted border-border"
-                          )}
-                        >
-                          {tmpl.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <Textarea
-                      id="script-description"
-                      placeholder="Mô tả video bạn muốn tạo. VD: Cô gái mặc áo dài bước đi trên phố cổ Hội An, giọng nói miền Bắc..."
-                      value={scriptDescription}
-                      onChange={(e) => { setScriptDescription(e.target.value); setSelectedTemplate('none'); }}
-                      rows={3}
-                      disabled={isBusy}
-                      className="resize-none text-sm"
-                    />
-                    
-                    {/* Collapsible image upload */}
-                    <button 
-                      onClick={() => setShowImageUpload(!showImageUpload)}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      <Paperclip className="h-3.5 w-3.5" />
-                      <span>Đính kèm ảnh tham chiếu</span>
-                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showImageUpload && "rotate-180")} />
-                    </button>
-                    
-                    {showImageUpload && (
-                      <div className="space-y-2 animate-in fade-in slide-in-from-top-1">
-                        <div className="flex justify-end">
-                          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }} disabled={isBusy}>
-                            <Images className="mr-1 h-3 w-3" /> Thư viện
-                          </Button>
-                        </div>
-                        <div
-                          className={cn(
-                            'relative flex flex-col items-center justify-center w-full min-h-20 p-2 border-2 border-dashed rounded-lg transition-colors',
-                            isDragging ? 'border-primary bg-primary/10' : 'hover:bg-muted'
-                          )}
-                          onDragOver={handleDragOver}
-                          onDragLeave={handleDragLeave}
-                          onDrop={handleDrop}
-                        >
-                          {isUploading ? (
-                            <div className="flex flex-col items-center justify-center text-muted-foreground">
-                              <Loader2 className="w-6 h-6 animate-spin" />
-                              <p className="text-xs mt-1">{t('workspace.image.uploading')}</p>
-                            </div>
-                          ) : inputImageUrls.length > 0 ? (
-                            <div className="grid grid-cols-4 gap-1.5 w-full">
-                              {inputImageUrls.map((url) => (
-                                <div key={url} className="relative aspect-square">
-                                  <Image src={url} alt="ref" fill style={{ objectFit: 'contain' }} className="rounded p-0.5 bg-white" />
-                                  <Button variant="destructive" size="icon" className="absolute -top-1 -right-1 h-5 w-5 rounded-full z-10" onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}>
-                                    <X className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              ))}
-                              <div className="flex aspect-square flex-col items-center justify-center rounded border border-dashed text-muted-foreground hover:bg-muted/50 cursor-pointer text-xs" onClick={() => fileInputRef.current?.click()}>
-                                <Plus className="w-4 h-4" />
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col items-center justify-center text-muted-foreground text-center cursor-pointer py-2" onClick={() => fileInputRef.current?.click()}>
-                              <UploadCloud className="w-6 h-6 mb-1" />
-                              <p className="text-xs">Kéo thả hoặc nhấp để tải ảnh</p>
-                            </div>
-                          )}
-                          <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </TabsContent>
-
-
-
-                {/* === BEFORE & AFTER MODE === */}
-                <TabsContent value="before-after" className="mt-3 space-y-3">
-                  <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg p-2.5 text-xs text-blue-700 dark:text-blue-300">
-                    💡 Tải lên ảnh <strong>TRƯỚC</strong> (trạng thái ban đầu) và ảnh <strong>SAU</strong> (trạng thái hoàn thiện). AI sẽ tạo video chuyển đổi mượt mà giữa 2 trạng thái.
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    {/* BEFORE Image */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold text-orange-600 dark:text-orange-400">📷 Ảnh TRƯỚC</Label>
-                        <Button
-                          variant="ghost" size="sm" className="h-6 px-2 text-xs"
-                          onClick={() => { setLibraryTarget('before'); setIsLibraryOpen(true); }}
-                          disabled={isBusy}
-                        >
-                          <Images className="mr-1 h-3 w-3" /> Thư viện
-                        </Button>
-                      </div>
-                      <div
-                        className={cn(
-                          'relative flex flex-col items-center justify-center w-full aspect-[4/3] border-2 border-dashed rounded-lg transition-all cursor-pointer overflow-hidden',
-                          isDraggingBefore ? 'border-orange-500 bg-orange-500/10 scale-[1.02]' : 'border-orange-300 dark:border-orange-700 hover:bg-orange-50 dark:hover:bg-orange-950/20',
-                          beforeImageUrl && 'border-solid border-orange-400'
-                        )}
-                        onDragOver={(e) => handleBeforeAfterDragOver(e, 'before')}
-                        onDragLeave={(e) => handleBeforeAfterDragLeave(e, 'before')}
-                        onDrop={(e) => handleBeforeAfterDrop(e, 'before')}
-                        onClick={() => !beforeImageUrl && beforeFileInputRef.current?.click()}
-                      >
-                        {isUploadingBefore ? (
-                          <div className="flex flex-col items-center justify-center text-muted-foreground">
-                            <Loader2 className="w-6 h-6 animate-spin" />
-                            <p className="text-xs mt-1.5">Đang tải...</p>
-                          </div>
-                        ) : beforeImageUrl ? (
-                          <>
-                            <Image src={beforeImageUrl} alt="Before" fill style={{ objectFit: 'cover' }} className="rounded-md" />
-                            <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center">
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:!opacity-100 z-10"
-                                style={{ opacity: undefined }}
-                                onClick={(e) => { e.stopPropagation(); setBeforeImageUrl(null); }}
-                                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                                onMouseLeave={(e) => (e.currentTarget.style.opacity = '')}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-orange-600/80 to-transparent p-1.5">
-                              <span className="text-[10px] font-bold text-white uppercase tracking-wider">Trước</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-orange-500/70 dark:text-orange-400/50">
-                            <ImagePlus className="w-7 h-7 mb-1" />
-                            <p className="text-[10px] font-medium">Ảnh ban đầu</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* AFTER Image */}
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">🎯 Ảnh SAU</Label>
-                        <Button
-                          variant="ghost" size="sm" className="h-6 px-2 text-xs"
-                          onClick={() => { setLibraryTarget('after'); setIsLibraryOpen(true); }}
-                          disabled={isBusy}
-                        >
-                          <Images className="mr-1 h-3 w-3" /> Thư viện
-                        </Button>
-                      </div>
-                      <div
-                        className={cn(
-                          'relative flex flex-col items-center justify-center w-full aspect-[4/3] border-2 border-dashed rounded-lg transition-all cursor-pointer overflow-hidden',
-                          isDraggingAfter ? 'border-emerald-500 bg-emerald-500/10 scale-[1.02]' : 'border-emerald-300 dark:border-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/20',
-                          afterImageUrl && 'border-solid border-emerald-400'
-                        )}
-                        onDragOver={(e) => handleBeforeAfterDragOver(e, 'after')}
-                        onDragLeave={(e) => handleBeforeAfterDragLeave(e, 'after')}
-                        onDrop={(e) => handleBeforeAfterDrop(e, 'after')}
-                        onClick={() => !afterImageUrl && afterFileInputRef.current?.click()}
-                      >
-                        {isUploadingAfter ? (
-                          <div className="flex flex-col items-center justify-center text-muted-foreground">
-                            <Loader2 className="w-6 h-6 animate-spin" />
-                            <p className="text-xs mt-1.5">Đang tải...</p>
-                          </div>
-                        ) : afterImageUrl ? (
-                          <>
-                            <Image src={afterImageUrl} alt="After" fill style={{ objectFit: 'cover' }} className="rounded-md" />
-                            <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center">
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full opacity-0 group-hover:opacity-100 hover:!opacity-100 z-10"
-                                style={{ opacity: undefined }}
-                                onClick={(e) => { e.stopPropagation(); setAfterImageUrl(null); }}
-                                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                                onMouseLeave={(e) => (e.currentTarget.style.opacity = '')}
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-emerald-600/80 to-transparent p-1.5">
-                              <span className="text-[10px] font-bold text-white uppercase tracking-wider">Sau</span>
-                            </div>
-                          </>
-                        ) : (
-                          <div className="flex flex-col items-center justify-center text-emerald-500/70 dark:text-emerald-400/50">
-                            <ImagePlus className="w-7 h-7 mb-1" />
-                            <p className="text-[10px] font-medium">Ảnh hoàn thiện</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Arrow indicator between images */}
-                  {beforeImageUrl && afterImageUrl && (
-                    <div className="flex items-center justify-center gap-2 py-1">
-                      <div className="h-px flex-1 bg-gradient-to-r from-orange-400 to-transparent" />
-                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-                        <span className="text-orange-500">TRƯỚC</span>
-                        <ArrowRight className="h-4 w-4 text-primary animate-pulse" />
-                        <span className="text-emerald-500">SAU</span>
-                      </div>
-                      <div className="h-px flex-1 bg-gradient-to-l from-emerald-400 to-transparent" />
-                    </div>
-                  )}
-                
-                  {/* Before & After Idea / Prompt */}
-                  <div className="space-y-3 pt-2">
-                    <Label className="font-semibold text-xs">Mô tả hướng chuyển đổi (Tùy chọn)</Label>
-                    <div className="flex flex-wrap gap-1.5">
-                      {BA_VIDEO_TEMPLATES.filter(t => t.id !== 'none').map(tmpl => (
-                        <button
-                          key={tmpl.id}
-                          onClick={(e) => { e.preventDefault(); setSelectedTemplate(tmpl.id); setScriptDescription(tmpl.prompt); }}
-                          disabled={isBusy}
-                          className={cn(
-                            "px-2.5 py-1 rounded-full text-[10px] xl:text-xs border transition-all hover:shadow-sm",
-                            selectedTemplate === tmpl.id 
-                              ? "bg-primary text-primary-foreground border-primary shadow-sm" 
-                              : "bg-background hover:bg-muted border-border text-muted-foreground"
-                          )}
-                        >
-                          {tmpl.label}
-                        </button>
-                      ))}
-                    </div>
-                    <Textarea
-                      placeholder="Gợi ý ngữ cảnh cho AI. VD: Căn phòng biến đổi phong cách Vintage, màu trầm ấm..."
-                      value={scriptDescription}
-                      onChange={(e) => { setScriptDescription(e.target.value); setSelectedTemplate('none'); }}
-                      rows={2}
-                      disabled={isBusy}
-                      className="resize-none text-xs"
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
-
-              <div className="space-y-5 pt-4">
-                <Separator />
-
-
-                  {/* --- STEP 2: AI Generate Script --- */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">2</div>
-                      <Label className="font-semibold text-sm">AI Tạo kịch bản</Label>
-                    </div>
-                    
-                    <Button
-                      onClick={handleGenerateScript}
-                      disabled={isGeneratingScript || !scriptDescription.trim()}
-                      className="w-full bg-gradient-to-r from-violet-600 to-blue-600 hover:from-violet-700 hover:to-blue-700 text-white shadow-sm"
-                    >
-                      {isGeneratingScript ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Wand2 className="mr-2 h-4 w-4" />
-                      )}
-                      ✨ Tạo kịch bản AI
-                    </Button>
-
-                    {/* Motion analysis results */}
-                    {motionAnalysis && cameraMovement && (
-                      <div className="text-xs p-2.5 bg-violet-50 dark:bg-violet-950/20 rounded-lg space-y-1 border border-violet-200 dark:border-violet-800">
-                        <p><strong>🎬 Chuyển động:</strong> {motionAnalysis}</p>
-                        <p><strong>📷 Camera:</strong> <span className="text-violet-600 dark:text-violet-400 font-medium">{cameraMovement}</span></p>
-                      </div>
-                    )}
-
-                    {/* AI Script output */}
-                    {prompt && (
-                      <div className="relative bg-muted/50 rounded-lg border p-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs font-medium text-muted-foreground">Kịch bản AI</span>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsEditingScript(!isEditingScript)} title={isEditingScript ? "Xong" : "Chỉnh sửa"}>
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={handleCopy} disabled={!prompt} title="Sao chép">
-                              <Copy className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                        {isEditingScript ? (
-                          <Textarea
-                            value={prompt}
-                            onChange={(e) => setPrompt(e.target.value)}
-                            disabled={isBusy}
-                            className="resize-none text-xs min-h-[80px]"
-                          />
-                        ) : (
-                          <p className="text-xs text-foreground/80 leading-relaxed line-clamp-5">{prompt}</p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  
-                  <Separator />
-
-                  {/* --- STEP 3: Generate Video --- */}
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold shrink-0">3</div>
-                      <Label className="font-semibold text-sm">Tạo Video</Label>
-                    </div>
-                    
-                    {/* Collapsible Advanced Settings */}
-                    <button 
-                      onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
-                      className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-                    >
-                      <span>⚙️ Cài đặt nâng cao</span>
-                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showAdvancedSettings && "rotate-180")} />
-                      {!showAdvancedSettings && (
-                        <span className="text-[10px] text-muted-foreground/60 ml-auto">{videoModel.includes('veo-2') ? 'Veo 2.0' : videoModel.includes('fast') ? 'Veo 3.1 Fast' : 'Veo 3.1'} • {aspectRatio === '16:9' ? 'Ngang' : 'Dọc'} • {videoDuration}s</span>
-                      )}
-                    </button>
-
-                    {showAdvancedSettings && (
-                      <div className="space-y-3 p-3 bg-muted/30 rounded-lg border animate-in fade-in slide-in-from-top-1">
-                        {/* Script Model */}
-                        <div className="space-y-1">
-                          <Label className="text-xs">Mô hình tạo kịch bản</Label>
-                          <Select value={scriptModel} onValueChange={setScriptModel} disabled={isBusy}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="gemini-3.1-pro-preview">iGen-3.1-pro-preview</SelectItem>
-                              <SelectItem value="gemini-3.1-flash-lite-preview">iGen-3.1-flash-lite-preview</SelectItem>
-                              <SelectItem value="gemini-3-flash-preview">iGen-3-flash-preview</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Video Model */}
-                        <div className="space-y-1">
-                          <Label className="text-xs">Mô hình tạo video</Label>
-                          <Select value={videoModel} onValueChange={setVideoModel} disabled={isBusy}>
-                            <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              {inputMode !== 'before-after' && <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0</SelectItem>}
-                              <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1</SelectItem>
-                              <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {/* Aspect Ratio & Duration */}
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <Label className="text-xs">Tỷ lệ khung hình</Label>
-                            <Select value={aspectRatio} onValueChange={(v) => setAspectRatio(v as '16:9' | '9:16')} disabled={isBusy}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="16:9">{t('feature.videoGeneration.horizontal')}</SelectItem>
-                                <SelectItem value="9:16">{t('feature.videoGeneration.vertical')}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Thời lượng</Label>
-                            <Select value={videoDuration} onValueChange={setVideoDuration} disabled={isBusy || (!videoModel.includes('veo-2') && (outputResolution === '1080p' || outputResolution === '4k'))}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {videoModel.includes('veo-2') ? (<><SelectItem value="5">5s</SelectItem><SelectItem value="6">6s</SelectItem><SelectItem value="8">8s</SelectItem></>) 
-                                : (<><SelectItem value="4">4s</SelectItem><SelectItem value="6">6s</SelectItem><SelectItem value="8">8s</SelectItem></>)}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        {/* Resolution (Veo 3 only) */}
-                        {!videoModel.includes('veo-2') && (
-                          <div className="space-y-1">
-                            <Label className="text-xs">Độ phân giải</Label>
-                            <Select value={outputResolution} onValueChange={setOutputResolution} disabled={isBusy}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="720p">720p</SelectItem>
-                                <SelectItem value="1080p">1080p</SelectItem>
-                                <SelectItem value="4k">4k</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Main Generate Button */}
-                    <Button 
-                      onClick={handleGenerate} 
-                      disabled={isGenerateDisabled} 
-                      className="w-full h-11 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-md text-sm font-semibold"
-                    >
-                      {jobStatus === 'processing' ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Video className="mr-2 h-4 w-4" />
-                      )}
-                      🎬 {extendingVideoUrl ? 'Nối tiếp Video' : t('workspace.video.generateButton.label')}
-                    </Button>
-                  </div>
+      {/* --- ERROR / LOADING OVERLAY --- */}
+      {(jobStatus === 'processing' || errorDetails) && (
+        <div className="absolute inset-0 z-50 bg-white/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          {jobStatus === 'processing' ? (
+            <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-teal-100 dark:border-teal-900/30 text-zinc-900 dark:text-white shadow-2xl">
+              <Loader2 className="h-12 w-12 animate-spin text-teal-500" />
+              <p className="text-sm font-medium">{t('workspace.video.loadingMessage') || 'Đang tạo video...'}</p>
+              <div className="text-xs font-mono text-teal-700 bg-teal-50 px-3 py-1 rounded-full">{elapsedTime}s</div>
+              {isSaving && <p className="text-xs text-teal-600">Đang lưu video...</p>}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-red-50 dark:bg-red-950/80 border border-red-200 dark:border-red-500/30 text-zinc-900 dark:text-white max-w-lg text-center shadow-2xl">
+              <X className="h-12 w-12 text-red-500" />
+              <p className="font-semibold text-lg">Đã xảy ra lỗi</p>
+              <p className="text-sm text-red-600 dark:text-red-200/80 whitespace-pre-wrap">{errorDetails}</p>
+              <div className="flex gap-2 mt-4">
+                <Button variant="outline" className="bg-white hover:bg-zinc-100" onClick={() => setErrorDetails(null)}>Đóng</Button>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleGenerateRef.current?.(false)} disabled={(!prompt.trim() && inputMode === 'standard')}>Thử lại</Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      </div>
-      <div className="lg:col-span-2 bg-muted/50 rounded-lg flex flex-col min-h-[400px] lg:min-h-0 p-4 gap-4">
-        {/* Error Details Panel */}
-        {errorDetails && jobStatus !== 'processing' && (
-          <div className={cn(
-            "w-full max-w-2xl rounded-lg p-4 text-sm border mx-auto",
-            jobStatus === 'failed'
-              ? "bg-red-50 border-red-200 text-red-800 dark:bg-red-950/30 dark:border-red-800 dark:text-red-200"
-              : "bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-950/30 dark:border-amber-800 dark:text-amber-200"
-          )}>
-            <div className="flex items-start gap-2">
-              <span className="text-lg flex-shrink-0">
-                {jobStatus === 'failed' ? '❌' : '⚠️'}
-              </span>
-              <div className="flex-1">
-                <p className="font-semibold mb-1">
-                  {jobStatus === 'failed' ? 'Chi tiết lỗi tạo video' : 'Cảnh báo'}
-                </p>
-                <p className="whitespace-pre-wrap break-words">{errorDetails}</p>
-                {jobStatus === 'failed' && (
-                  <Button variant="outline" size="sm" className="mt-3" onClick={handleGenerate} disabled={!prompt.trim()}>
-                    🔄 Thử lại
-                  </Button>
-                )}
+          )}
+        </div>
+      )}
+
+      {/* --- MAIN CANVAS (GALLERY) --- */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-40 w-full scrollbar-thin rounded-xl">
+        {videoProject.length > 0 ? (
+          <div className="flex flex-col gap-6">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                <Video className="h-4 w-4 text-white" />
               </div>
-              <Button variant="ghost" size="icon" className="flex-shrink-0 h-6 w-6" onClick={() => setErrorDetails(null)}>
-                <X className="h-4 w-4" />
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Dự án hiện tại</h2>
+              <span className="text-xs font-medium text-teal-700 dark:text-teal-200 bg-teal-100 dark:bg-teal-500/20 px-2.5 py-1 rounded-full border border-teal-200 dark:border-teal-500/20">{videoProject.length} clips</span>
+
+              <Button variant="ghost" size="sm" className="ml-auto text-zinc-500 hover:text-teal-600 hover:bg-teal-50 rounded-full px-4 border border-transparent" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); }}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" /> Dự án mới
               </Button>
             </div>
-          </div>
-        )}
 
-        {/* Loading state */}
-        {jobStatus === 'processing' ? (
-          <div className="flex flex-col items-center justify-center gap-4 text-muted-foreground flex-1">
-            <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            <p className="mt-4 text-center">{t('workspace.video.loadingMessage')}</p>
-            <div className="flex items-center gap-2 font-mono text-lg">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-              <span>{elapsedTime}s</span>
-            </div>
-            {isSaving && <p className="text-xs text-muted-foreground">Đang lưu video...</p>}
-          </div>
-        ) : videoProject.length > 0 ? (
-          /* ======= VIDEO PROJECT TIMELINE ======= */
-          <div className="flex flex-col gap-4 flex-1">
-            {/* Project Header */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold">📽️ Dự án Video</span>
-                <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                  {videoProject.length} clip{videoProject.length > 1 ? 's' : ''} • {videoProject.reduce((sum, c) => sum + parseInt(c.duration), 0)}s
-                </span>
-              </div>
-              {videoProject.length > 0 && (
-                <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); }}>
-                  Dự án mới
-                </Button>
-              )}
-            </div>
-
-            {/* Timeline Strip */}
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {videoProject.map((clip, index) => (
-                <div key={index} className="flex items-center gap-1 shrink-0">
-                  <div 
-                    className="relative group rounded-xl overflow-hidden border-2 border-border hover:border-primary transition-colors bg-black w-[200px] aspect-video shadow-md cursor-pointer"
+                <div key={index} className="group flex flex-col gap-2">
+                  <div
+                    className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-teal-500/50 transition-all cursor-pointer shadow-md hover:shadow-teal-900/10"
                     onClick={() => setEditorClipUrl(clip.url)}
                   >
-                    <video src={clip.url} className="w-full h-full object-contain pointer-events-none" />
-                    {/* Duration badge */}
-                    <div className="absolute top-2 left-2 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">
-                      Clip {index + 1} • {clip.duration}
-                    </div>
-                    {/* Action overlay */}
-                    <div className="absolute bottom-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <a href={clip.url} download={`igen-clip-${index + 1}.mp4`} target="_blank" rel="noopener noreferrer">
-                        <Button variant="secondary" size="icon" className="h-7 w-7 bg-black/60 text-white hover:bg-black/80 border-none" title="Tải xuống">
-                          <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </a>
+                    <video src={clip.url} className="w-full h-full object-cover rounded-xl group-hover:scale-[1.03] transition-transform duration-700 ease-out" />
+
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 rounded-xl pointer-events-none">
+                      <div className="flex justify-between items-start pointer-events-auto">
+                        <span className="bg-white/90 dark:bg-black/60 text-teal-700 dark:text-white/90 text-[10px] uppercase font-bold px-2.5 py-1 rounded shadow-sm">
+                          Clip {index + 1}
+                        </span>
+                        <a href={clip.url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
+                          <Button variant="ghost" size="icon" className="h-7 w-7 bg-white/40 hover:bg-white/80 text-zinc-900 rounded-full backdrop-blur-sm">
+                            <Download className="h-3 w-3" />
+                          </Button>
+                        </a>
+                      </div>
+
+                      <div className="self-center pointer-events-auto" onClick={(e) => { e.stopPropagation(); setEditorClipUrl(clip.url); }}>
+                        <div className="h-12 w-12 rounded-full bg-white/40 backdrop-blur-md flex items-center justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300 shadow-xl shadow-black/20 hover:bg-white/60 hover:scale-110">
+                          <Play className="h-5 w-5 text-zinc-900 ml-1" />
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] font-medium text-white line-clamp-1 translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75 drop-shadow-md">{clip.duration}</p>
                     </div>
                   </div>
-                  {/* Arrow connector between clips */}
-                  {index < videoProject.length - 1 && (
-                    <div className="flex flex-col items-center text-muted-foreground shrink-0">
-                      <ArrowRight className="h-4 w-4 text-primary" />
-                    </div>
+
+                  {!videoModel.includes('veo-2') && index === videoProject.length - 1 && (
+                    <Button
+                      variant="outline"
+                      className="w-full border-dashed border-zinc-300 dark:border-white/20 bg-transparent hover:bg-teal-50 hover:text-teal-700 text-zinc-500 h-9 text-xs rounded-xl transition-colors"
+                      onClick={() => activateExtendMode(clip.url)}
+                    >
+                      <Plus className="mr-2 h-3 w-3" /> Tạo cảnh nối tiếp
+                    </Button>
                   )}
                 </div>
               ))}
-              
-              {/* "Add next clip" button on the timeline (only for Veo 3) */}
-              {!videoModel.includes('veo-2') && videoProject.length > 0 && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                  <button
-                    onClick={() => {
-                      const lastClip = videoProject[videoProject.length - 1];
-                      activateExtendMode(lastClip.url);
-                    }}
-                    className="flex flex-col items-center justify-center w-[120px] aspect-video rounded-xl border-2 border-dashed border-primary/40 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
-                  >
-                    <Plus className="h-6 w-6 text-primary/60 group-hover:text-primary transition-colors" />
-                    <span className="text-[10px] font-medium text-primary/60 group-hover:text-primary mt-1">Nối tiếp</span>
-                  </button>
-                </div>
-              )}
+            </div>
+          </div>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto text-center space-y-6 animate-in fade-in zoom-in-95 duration-700">
+            <div className="relative group cursor-default">
+              <div className="absolute inset-0 bg-teal-400/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+              <div className="relative h-24 w-24 bg-gradient-to-br from-teal-50 to-cyan-100 dark:from-teal-900/30 dark:to-cyan-900/30 rounded-full flex items-center justify-center border border-teal-200 dark:border-teal-800 shadow-xl shadow-teal-500/10">
+                <Wand2 className="h-10 w-10 text-teal-500 animate-pulse" />
+              </div>
+            </div>
+            <div>
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-cyan-500">iGen +</h1>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">Không gian làm việc vô cực. Chỉ cần mô tả ý tưởng, AI sẽ kết xuất video chuẩn điện ảnh với độ phân giải lên đến 4k.</p>
             </div>
 
-            {/* Saving indicator */}
-            {isSaving && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Đang lưu video vào thư viện...</span>
-              </div>
-            )}
-          </div>
-        ) : jobStatus !== 'failed' && (
-          <div className="text-center text-muted-foreground flex-1 flex flex-col items-center justify-center">
-            <Video className="h-16 w-16 mx-auto mb-4 opacity-30" />
-            <p className="text-sm">{t('workspace.video.outputPlaceholder')}</p>
-            <p className="text-xs text-muted-foreground/60 mt-1">Các video sẽ hiển thị dạng dự án theo từng clip</p>
+            {/* TEMPLATES GRID IN EMPTY STATE */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full mt-8 max-w-2xl px-4">
+              {VIDEO_TEMPLATES.filter(t => t.id !== 'none').slice(0, 6).map(tmpl => (
+                <div
+                  key={tmpl.id}
+                  onClick={() => { setInputMode('standard'); setSelectedTemplate(tmpl.id); setScriptDescription(tmpl.prompt); }}
+                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 hover:border-teal-400/50 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-3 sm:p-4 rounded-xl cursor-pointer text-left transition-all duration-300 group shadow-sm hover:shadow-md"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">{tmpl.label}</p>
+                    <ArrowRight className="h-3 w-3 text-zinc-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all" />
+                  </div>
+                  <p className="text-[11px] text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-400 line-clamp-2 leading-relaxed">{tmpl.prompt}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
 
-      <VideoEditorModal 
+      {/* --- EXTEND ALERT --- */}
+      {extendingVideoUrl && (
+        <div className="absolute bottom-[110px] left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-200 dark:border-teal-800 rounded-2xl p-2.5 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
+          <div className="h-10 w-16 bg-zinc-100 rounded-lg overflow-hidden ring-1 ring-black/5 relative group">
+            <video src={extendingVideoUrl} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <div className="text-sm">
+            <div className="flex items-center gap-2 mb-0.5">
+              <div className="h-1.5 w-1.5 bg-teal-500 rounded-full animate-pulse"></div>
+              <span className="font-semibold text-teal-700 dark:text-teal-400 text-xs uppercase tracking-wider">Đang nối tiếp clip</span>
+            </div>
+            <span className="text-zinc-500 dark:text-zinc-400 text-[11px]">Cảnh tiếp theo diễn ra thế nào?</span>
+          </div>
+          <Button variant="ghost" size="icon" onClick={() => { setExtendingVideoUrl(null); editingClipIndexRef.current = null; }} className="h-8 w-8 text-zinc-400 hover:text-zinc-700 rounded-full hover:bg-zinc-100 ml-2">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
+
+      {/* --- FLOATING BOTTOM INPUT BAR --- */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-white via-white/90 dark:from-black dark:via-black/90 to-transparent pointer-events-none flex justify-center z-40 pt-16">
+        <div className="w-full max-w-4xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-zinc-200 dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto flex flex-col overflow-visible transition-all">
+
+          {/* AI Script Output Popover Content (If active) */}
+          {prompt && inputMode === 'standard' && (
+            <div className="px-4 py-3 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5 flex flex-col gap-2 rounded-t-2xl backdrop-blur-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-teal-600 dark:text-teal-400 bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded text-center">✨ Kịch bản AI / Prompt</span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={() => setIsEditingScript(!isEditingScript)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={handleCopy}><Copy className="h-3 w-3" /></Button>
+                </div>
+              </div>
+              {isEditingScript ? (
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-xs bg-white dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-300 min-h-[60px] rounded-lg focus-visible:ring-teal-500/30 p-2.5" />
+              ) : (
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-h-[80px] overflow-y-auto scrollbar-thin font-medium">{prompt}</p>
+              )}
+            </div>
+          )}
+
+          {/* Before & After Upload Area (Expands if B/A mode) */}
+          {inputMode === 'before-after' && (
+            <div className="p-4 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950/20 flex gap-4 rounded-t-2xl items-center justify-center overflow-x-auto scrollbar-none min-h-[160px]">
+              <div
+                className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
+                  beforeImageUrl ? "border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-orange-300 flex-1 min-h-[120px] flex items-center justify-center"
+                )}
+              >
+                {isUploadingBefore ? <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                  : beforeImageUrl ? (
+                    <div className="relative flex">
+                      <img src={beforeImageUrl} alt="B" className="max-h-[350px] w-auto block object-contain transition-opacity" />
+                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
+                        <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setBeforeImageUrl(null); }}><X className="h-4 w-4" /></Button>
+                      </div>
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">TRƯỚC</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
+                      <div
+                        className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
+                        onClick={() => !beforeImageUrl && beforeFileInputRef.current?.click()}
+                        title="Tải ảnh từ thiết bị"
+                      >
+                        <UploadCloud className="h-6 w-6 text-orange-400/70 mb-1.5" />
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Trước</span>
+                      </div>
+                      <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); setLibraryTarget('before'); setIsLibraryOpen(true); }}
+                        className="text-[10px] font-semibold text-orange-500 h-7 w-full rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                      >
+                        Mở thư viện
+                      </Button>
+                    </div>
+                  )}
+              </div>
+
+              <div className="flex items-center text-zinc-400 shrink-0 px-1">
+                <div className="h-8 w-8 rounded-full bg-zinc-100 dark:bg-black/40 flex items-center justify-center shadow-inner">
+                  <ArrowRight className="h-4 w-4" />
+                </div>
+              </div>
+
+              <div
+                className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
+                  afterImageUrl ? "border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-teal-300 flex-1 min-h-[120px] flex items-center justify-center"
+                )}
+              >
+                {isUploadingAfter ? <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
+                  : afterImageUrl ? (
+                    <div className="relative flex">
+                      <img src={afterImageUrl} alt="A" className="max-h-[350px] w-auto block object-contain transition-opacity" />
+                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
+                        <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setAfterImageUrl(null); }}><X className="h-4 w-4" /></Button>
+                      </div>
+                      <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/70 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">SAU</span>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
+                      <div
+                        className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
+                        onClick={() => !afterImageUrl && afterFileInputRef.current?.click()}
+                        title="Tải ảnh từ thiết bị"
+                      >
+                        <UploadCloud className="h-6 w-6 text-teal-500/60 mb-1.5" />
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Sau</span>
+                      </div>
+                      <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); setLibraryTarget('after'); setIsLibraryOpen(true); }}
+                        className="text-[10px] font-semibold text-teal-600 h-7 w-full rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                      >
+                        Mở thư viện
+                      </Button>
+                    </div>
+                  )}
+              </div>
+            </div>
+          )}
+
+          {/* Main Input Row */}
+          <div className="p-2 sm:p-2.5 flex items-end gap-2 relative">
+
+            {/* Left Action Button (Toggle popover for attachments / mode) */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-11 w-11 shrink-0 rounded-xl transition-all", showImageUpload ? "bg-teal-50 text-teal-600 dark:bg-white/10 dark:text-white" : "hover:bg-zinc-100 text-zinc-500 bg-zinc-50 dark:bg-black/30")}
+              onClick={() => setShowImageUpload(!showImageUpload)}
+            >
+              <Plus className={cn("h-5 w-5 transition-transform duration-300", showImageUpload && "rotate-45")} />
+            </Button>
+
+            {/* Attachment Popover */}
+            {showImageUpload && (
+              <div className="absolute bottom-[110%] left-0 mb-1 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl w-[280px] animate-in slide-in-from-bottom-2 z-50">
+                <div className="flex items-center gap-2 mb-3 bg-zinc-100 dark:bg-black/40 p-1 rounded-lg">
+                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'standard' ? "bg-white text-teal-600 shadow-sm" : "text-zinc-500 hover:text-teal-600")} onClick={() => { setInputMode('standard'); }}>
+                    Tiêu chuẩn
+                  </Button>
+                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'before-after' ? "bg-white text-teal-600 shadow-sm" : "text-zinc-500 hover:text-teal-600")} onClick={() => { setInputMode('before-after'); }}>
+                    Trước Sau
+                  </Button>
+                </div>
+
+                {inputMode === 'standard' && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ảnh tham chiếu</p>
+                      <Button variant="link" size="sm" className="h-5 text-[10px] text-teal-500 px-0" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }}>Mở thư viện</Button>
+                    </div>
+                    {inputImageUrls.length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {inputImageUrls.map(url => (
+                          <div key={url} className="relative h-14 w-14 shrink-0 rounded-lg bg-zinc-100 overflow-hidden border border-zinc-200 group">
+                            <Image src={url} alt="ref" fill className="object-cover" />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer" onClick={(e) => { e.stopPropagation(); handleRemoveImage(url); }}><X className="h-4 w-4 text-white" /></div>
+                          </div>
+                        ))}
+                        <div className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 text-zinc-400 transition-colors" onClick={() => fileInputRef.current?.click()}><Plus className="h-4 w-4" /></div>
+                      </div>
+                    ) : (
+                      <div className="h-20 w-full rounded-xl border border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 text-zinc-400 hover:text-teal-600 transition-colors" onClick={() => fileInputRef.current?.click()}>
+                        <UploadCloud className="h-6 w-6 mb-1 opacity-70" />
+                        <span className="text-[10px] font-medium">Tải ảnh tham chiếu</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Input Field */}
+            <div className="flex-1 bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl relative flex items-center focus-within:ring-1 focus-within:ring-teal-400/50 transition-all shadow-inner">
+              <Textarea
+                value={scriptDescription}
+                onChange={(e) => setScriptDescription(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (scriptDescription.trim() && !isGeneratingScript) handleGenerateScript();
+                  }
+                }}
+                placeholder={inputMode === 'standard' ? "Bạn muốn tạo gì? (Bấm ✨ AI sẽ viết kịch bản giúp bạn)" : "Tùy chọn: Nhập thêm yêu cầu chuyển đổi (VD: Phong cách Vintage...)"}
+                className="resize-none border-0 bg-transparent shadow-none text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 min-h-[44px] py-3 pl-3 pr-10 focus-visible:ring-0 focus-visible:ring-offset-0 scrollbar-none"
+                rows={1}
+                disabled={isBusy}
+              />
+
+              {/* AI Magic Wand inside the input */}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleGenerateScript}
+                disabled={isBusy || !scriptDescription.trim() || isGeneratingScript}
+                className={cn("absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg transition-all", isGeneratingScript ? "bg-teal-50 text-teal-500" : "hover:bg-zinc-200 text-zinc-400 hover:text-teal-500", (!scriptDescription.trim() && "opacity-50 grayscale"))}
+                title="Viết kịch bản bằng AI"
+              >
+                {isGeneratingScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {/* Settings Popover Toggle */}
+            <div className="relative group/settings">
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn("h-11 px-3 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all gap-1.5 hidden sm:flex bg-white hover:bg-zinc-50 text-zinc-600 hover:text-teal-600 shadow-sm")}
+                onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              >
+                <span className="text-xs font-semibold">{videoDuration}s</span>
+                <div className="h-3 w-px bg-zinc-300 rounded"></div>
+                <span className="text-[10px]">{aspectRatio === '16:9' ? 'L' : 'P'}</span>
+              </Button>
+
+              <Button
+                variant="outline"
+                size="icon"
+                className={cn("h-11 w-11 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all sm:hidden bg-white shadow-sm hover:text-teal-600 text-zinc-600", showAdvancedSettings ? "bg-zinc-100" : "")}
+                onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
+              >
+                <span className="text-xs font-bold">⚙️</span>
+              </Button>
+
+              {showAdvancedSettings && (
+                <div className="absolute right-0 bottom-[110%] mb-1 bg-white dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl w-[300px] p-4 animate-in slide-in-from-bottom-2 z-50 origin-bottom-right">
+                  <p className="text-[10px] font-bold text-zinc-400 mb-3 uppercase tracking-wider">Thông số Video</p>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-zinc-500">KHUNG HÌNH</Label>
+                        <Select value={aspectRatio} onValueChange={(v) => setAspectRatio(v as '16:9' | '9:16')}>
+                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
+                            <SelectItem value="16:9">Ngang 16:9</SelectItem>
+                            <SelectItem value="9:16">Dọc 9:16</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-[10px] text-zinc-500">ĐỘ PHÂN GIẢI</Label>
+                        <Select value={outputResolution} onValueChange={setOutputResolution} disabled={videoModel.includes('veo-2')}>
+                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
+                            <SelectItem value="720p">720p</SelectItem>
+                            <SelectItem value="1080p">1080p</SelectItem>
+                            <SelectItem value="4k">4k HDR</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-zinc-500">THỜI LƯỢNG MẶC ĐỊNH</Label>
+                      <Select value={videoDuration} onValueChange={setVideoDuration}>
+                        <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
+                          <SelectItem value="4">4 Giây (Tiết kiệm)</SelectItem>
+                          <SelectItem value="6">6 Giây (Tiêu chuẩn)</SelectItem>
+                          <SelectItem value="8">8 Giây (Tối đa)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] text-zinc-500">CỐT LÕI AI</Label>
+                      <Select value={videoModel} onValueChange={setVideoModel}>
+                        <SelectTrigger className="h-9 text-xs bg-teal-50 dark:bg-black/40 border-teal-200 dark:border-white/10 text-teal-700 dark:text-teal-300 rounded-lg font-medium"><SelectValue /></SelectTrigger>
+                        <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
+                          <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
+                          <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
+                          <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0 Legacy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* SEND BUTTON */}
+            <Button
+              className={cn("h-11 w-11 sm:w-auto px-0 sm:px-5 shrink-0 rounded-xl font-bold shadow-md transition-all focus:ring-2 ring-teal-500/50 ring-offset-2 ring-offset-white active:scale-95",
+                isGenerateDisabled ? "bg-zinc-100 text-zinc-400" : "bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-teal-500/20 hover:shadow-lg hover:shadow-teal-500/40"
+              )}
+              onClick={() => handleGenerateRef.current?.(false)}
+              disabled={isGenerateDisabled}
+            >
+              {isBusy ? <Loader2 className="h-5 w-5 sm:h-4 sm:w-4 animate-spin text-white" /> : (
+                <>
+                  <Video className="h-5 w-5 sm:hidden" />
+                  <span className="hidden sm:inline">Tạo Video</span>
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <VideoEditorModal
         clipUrl={editorClipUrl || ''}
         isOpen={!!editorClipUrl}
         onClose={() => setEditorClipUrl(null)}
