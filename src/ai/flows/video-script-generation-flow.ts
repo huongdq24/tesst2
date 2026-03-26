@@ -197,7 +197,9 @@ const videoScriptGenerationFlow = ai.defineFlow(
     for (const modelName of modelsToTry) {
       try {
         console.log(`[ScriptGen] Trying model: ${modelName}`);
-        const { output } = await aiInstance.generate({
+        
+        // Add a 25-second timeout to prevent Hanging API calls (e.g. 5 minutes default timeout)
+        const generatePromise = aiInstance.generate({
           model: googleAI.model(modelName as any),
           prompt: promptParts,
           system: systemPrompt,
@@ -210,6 +212,12 @@ const videoScriptGenerationFlow = ai.defineFlow(
           },
         });
 
+        const timeoutPromise = new Promise<{ output: any }>((_, reject) => {
+          setTimeout(() => reject(new Error('Generation timeout after 25 seconds')), 25000);
+        });
+
+        const { output } = await Promise.race([generatePromise, timeoutPromise]);
+
         if (!output) {
           throw new Error(`[ScriptGen] Model ${modelName} returned empty output.`);
         }
@@ -217,7 +225,7 @@ const videoScriptGenerationFlow = ai.defineFlow(
         return output;
       } catch (err: any) {
         lastError = err;
-        console.warn(`[ScriptGen] Model ${modelName} failed: ${err.message}. Trying next fallback...`);
+        console.warn(`[ScriptGen] Model ${modelName} failed: ${err.message || 'Unknown error'}. Trying next fallback...`);
       }
     }
 
