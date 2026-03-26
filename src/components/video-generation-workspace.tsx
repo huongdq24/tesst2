@@ -117,6 +117,12 @@ export function VideoGenerationWorkspace() {
   useEffect(() => { videoModelRef.current = videoModel; }, [videoModel]);
   useEffect(() => { aspectRatioRef.current = aspectRatio; }, [aspectRatio]);
 
+  useEffect(() => {
+    if (inputMode === 'before-after' && videoModel === 'veo-2.0-generate-001') {
+      setVideoModel('veo-3.1-fast-generate-preview');
+    }
+  }, [inputMode, videoModel]);
+
   const cleanupPolling = () => {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
@@ -952,25 +958,6 @@ export function VideoGenerationWorkspace() {
       <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6 bg-gradient-to-t from-white via-white/90 dark:from-black dark:via-black/90 to-transparent pointer-events-none flex justify-center z-40 pt-16">
         <div className="w-full max-w-4xl bg-white/90 dark:bg-zinc-900/90 backdrop-blur-2xl border border-zinc-200 dark:border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.5)] rounded-2xl pointer-events-auto flex flex-col overflow-visible transition-all">
 
-          {/* AI Script Output Popover Content (If active) */}
-          {prompt && inputMode === 'standard' && (
-            <div className="px-4 py-3 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5 flex flex-col gap-2 rounded-t-2xl backdrop-blur-md">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-teal-600 dark:text-teal-400 bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded text-center">✨ Kịch bản AI / Prompt</span>
-                </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={() => setIsEditingScript(!isEditingScript)}><Pencil className="h-3 w-3" /></Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={handleCopy}><Copy className="h-3 w-3" /></Button>
-                </div>
-              </div>
-              {isEditingScript ? (
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-xs bg-white dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-300 min-h-[60px] rounded-lg focus-visible:ring-teal-500/30 p-2.5" />
-              ) : (
-                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-h-[80px] overflow-y-auto scrollbar-thin font-medium">{prompt}</p>
-              )}
-            </div>
-          )}
 
           {/* Before & After Upload Area (Expands if B/A mode) */}
           {inputMode === 'before-after' && (
@@ -1057,6 +1044,26 @@ export function VideoGenerationWorkspace() {
             </div>
           )}
 
+          {/* AI Script Output Popover Content (If active) */}
+          {prompt && (
+            <div className={cn("px-4 py-3 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-2 backdrop-blur-md", inputMode === 'standard' ? "rounded-t-2xl" : "border-t border-zinc-200 dark:border-white/10")}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-teal-600 dark:text-teal-400 bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded text-center">✨ Kịch bản AI / Prompt</span>
+                </div>
+                <div className="flex gap-1">
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={() => setIsEditingScript(!isEditingScript)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={handleCopy}><Copy className="h-3 w-3" /></Button>
+                </div>
+              </div>
+              {isEditingScript ? (
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-xs bg-white dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-300 min-h-[60px] max-h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 rounded-lg focus-visible:ring-teal-500/30 p-2.5" />
+              ) : (
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 font-medium">{prompt}</p>
+              )}
+            </div>
+          )}
+
           {/* Main Input Row */}
           <div className="p-2 sm:p-2.5 flex items-end gap-2 relative">
 
@@ -1121,8 +1128,8 @@ export function VideoGenerationWorkspace() {
                   }
                 }}
                 placeholder={inputMode === 'standard' ? "Bạn muốn tạo gì? (Bấm ✨ AI sẽ viết kịch bản giúp bạn)" : "Tùy chọn: Nhập thêm yêu cầu chuyển đổi (VD: Phong cách Vintage...)"}
-                className="resize-none border-0 bg-transparent shadow-none text-sm text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 min-h-[44px] py-3 pl-3 pr-10 focus-visible:ring-0 focus-visible:ring-offset-0 scrollbar-none"
-                rows={1}
+                className="resize-none border-0 bg-transparent shadow-none text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 min-h-[44px] max-h-[150px] overflow-y-auto py-3 pl-3 pr-10 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-zinc-200 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full"
+                rows={scriptDescription.length > 80 ? 3 : 1}
                 disabled={isBusy}
               />
 
@@ -1206,7 +1213,9 @@ export function VideoGenerationWorkspace() {
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                           <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
                           <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
-                          <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0 Legacy</SelectItem>
+                          {inputMode !== 'before-after' && (
+                            <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0 Legacy</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
