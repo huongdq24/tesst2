@@ -4,7 +4,7 @@ import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download, ArrowRight, ImagePlus, ChevronDown, Play, Pencil, Paperclip, Plus } from 'lucide-react';
+import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download, ArrowRight, ImagePlus, ChevronDown, ChevronUp, Play, Pencil, Paperclip, Plus, Heart } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { startVideoGeneration } from '@/app/actions/video-generation';
 import { checkVideoStatus } from '@/app/actions/check-video-status';
@@ -22,6 +22,7 @@ import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { VideoEditorModal, type VideoEditorSubmitParams } from '@/components/modals/video-editor-modal';
+import { generateWizardQuestion, compileWizardPrompt } from '@/ai/flows/interactive-prompt-wizard-flow';
 
 // Input mode types
 type InputMode = 'standard' | 'before-after';
@@ -68,20 +69,36 @@ export function VideoGenerationWorkspace() {
   // New UI states for redesigned interface
   type VideoClip = { url: string; duration: string; geminiFileUri?: string | null };
   const [videoProject, setVideoProject] = useState<VideoClip[]>([]);
+  const [activeTab, setActiveTab] = useState<'all' | 'images' | 'videos' | 'favorites'>('all');
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
   const [showImageUpload, setShowImageUpload] = useState(false);
   const [isEditingScript, setIsEditingScript] = useState(false);
   const [editorClipUrl, setEditorClipUrl] = useState<string | null>(null);
 
+  // Wizard state
+  type WizardQA = { question: string; answer: string };
+  const [wizardActive, setWizardActive] = useState(false);
+  const [wizardTemplate, setWizardTemplate] = useState<{ id: string; label: string } | null>(null);
+  const [wizardAnswers, setWizardAnswers] = useState<WizardQA[]>([]);
+  const [wizardCurrentQuestion, setWizardCurrentQuestion] = useState<{ question: string; options: string[]; isDone: boolean; allowImageUpload?: boolean; imageUploadHint?: string } | null>(null);
+  const [wizardLoading, setWizardLoading] = useState(false);
+  const [wizardCustomInput, setWizardCustomInput] = useState('');
+  const [wizardStepImage, setWizardStepImage] = useState<string | null>(null);
+  const [wizardUploadingImage, setWizardUploadingImage] = useState(false);
+  const wizardFileInputRef = useRef<HTMLInputElement>(null);
+
   // Before & After mode states
   const [inputMode, setInputMode] = useState<InputMode>('standard');
+  const [isBeforeAfterCollapsed, setIsBeforeAfterCollapsed] = useState(false);
   const [beforeImageUrl, setBeforeImageUrl] = useState<string | null>(null);
   const [afterImageUrl, setAfterImageUrl] = useState<string | null>(null);
   const [isUploadingBefore, setIsUploadingBefore] = useState(false);
   const [isUploadingAfter, setIsUploadingAfter] = useState(false);
   const [isDraggingBefore, setIsDraggingBefore] = useState(false);
   const [isDraggingAfter, setIsDraggingAfter] = useState(false);
-  const [libraryTarget, setLibraryTarget] = useState<'standard' | 'before' | 'after'>('standard');
+  const [libraryTarget, setLibraryTarget] = useState<'standard' | 'before' | 'after' | 'wizard'>('standard');
 
   // Elapsed time counter (like image workspace)
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -430,7 +447,7 @@ export function VideoGenerationWorkspace() {
     }
   };
 
-  const handleGenerate = async (bypassParam?: boolean | any) => {
+  const handleGenerate = async (bypassParam?: boolean | any, customPrompt?: string) => {
     // If triggered by a real user button click, bypassParam is an Event object, not true.
     const isAutoBypass = bypassParam === true;
 
@@ -438,7 +455,7 @@ export function VideoGenerationWorkspace() {
       isSafetyBypassModeRef.current = false;
     }
 
-    if (inputMode === 'standard' && !prompt.trim()) {
+    if (inputMode === 'standard' && !prompt.trim() && !scriptDescription.trim() && !customPrompt?.trim()) {
       toast({ variant: 'destructive', title: t('toast.video.noPrompt.title'), description: t('toast.video.noPrompt.description') });
       return;
     }
@@ -473,9 +490,15 @@ export function VideoGenerationWorkspace() {
     }, 1000);
     toast({ title: "Bắt đầu tạo video...", description: "Quá trình này có thể mất vài phút." });
 
+    // Smooth scroll to the current project area
+    const mainCanvas = document.getElementById('main-canvas');
+    if (mainCanvas) mainCanvas.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+
     // Build reference images and prompt based on input mode
     let referenceImages: string[] | undefined;
-    let finalPrompt = prompt;
+    // Priority: customPrompt > prompt (AI script) > scriptDescription (user typed)
+    let finalPrompt = customPrompt || prompt.trim() || scriptDescription.trim();
 
     if (isAutoBypass === true) {
       referenceImages = undefined; // Strip images to bypass filter
@@ -803,96 +826,307 @@ export function VideoGenerationWorkspace() {
     });
   };
 
+  // ─── WIZARD HANDLERS ────────────────────────────────────────────────────────
+  const startWizard = async (tmpl: { id: string; label: string; prompt: string }) => {
+    setInputMode('standard');
+    setSelectedTemplate(tmpl.id);
+    setWizardActive(true);
+    setWizardTemplate({ id: tmpl.id, label: tmpl.label });
+    setWizardAnswers([]);
+    setWizardCurrentQuestion(null);
+    setWizardCustomInput('');
+    setWizardStepImage(null);
+    setWizardLoading(true);
+
+    try {
+      const result = await generateWizardQuestion({
+        templateId: tmpl.id,
+        templateLabel: tmpl.label,
+        previousAnswers: [],
+        imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
+        videoDuration,
+        aspectRatio,
+        isExtending: !!extendingVideoUrl,
+        apiKey: userData?.geminiApiKey,
+      });
+      setWizardCurrentQuestion(result);
+    } catch (err: any) {
+      console.error('[Wizard] Start error:', err);
+      toast({ variant: 'destructive', title: 'Lỗi khởi tạo wizard', description: err.message });
+      setWizardActive(false);
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleWizardAnswer = async (answer: string) => {
+    if (!wizardTemplate || !wizardCurrentQuestion) return;
+
+    const newAnswers = [...wizardAnswers, { question: wizardCurrentQuestion.question, answer }];
+    setWizardAnswers(newAnswers);
+    setWizardCustomInput('');
+    setWizardStepImage(null);
+    setWizardLoading(true);
+
+    try {
+      const result = await generateWizardQuestion({
+        templateId: wizardTemplate.id,
+        templateLabel: wizardTemplate.label,
+        previousAnswers: newAnswers,
+        imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
+        videoDuration,
+        aspectRatio,
+        isExtending: !!extendingVideoUrl,
+        apiKey: userData?.geminiApiKey,
+      });
+      setWizardCurrentQuestion(result);
+    } catch (err: any) {
+      console.error('[Wizard] Next question error:', err);
+      toast({ variant: 'destructive', title: 'Lỗi khi tải câu hỏi tiếp theo', description: 'Bạn có thể thử lại hoặc nhấn Hoàn tất để sử dụng các câu trả lời hiện tại.' });
+    } finally {
+      setWizardLoading(false);
+    }
+  };
+
+  const handleWizardComplete = async (answersOverride?: WizardQA[], autoGenerate = false) => {
+    if (!wizardTemplate) return;
+    const answers = answersOverride || wizardAnswers;
+    if (answers.length === 0) {
+      cancelWizard();
+      return;
+    }
+
+    setWizardLoading(true);
+    try {
+      const result = await compileWizardPrompt({
+        templateId: wizardTemplate.id,
+        templateLabel: wizardTemplate.label,
+        answers,
+        imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
+        videoDuration,
+        aspectRatio,
+        isExtending: !!extendingVideoUrl,
+        apiKey: userData?.geminiApiKey,
+      });
+      
+      const compiledPrompt = result.compiledPrompt;
+      setScriptDescription(compiledPrompt);
+      
+      if (!autoGenerate) {
+        toast({ title: '✅ Prompt đã được tạo!', description: 'Bạn có thể chỉnh sửa hoặc ấn ✨ để tạo kịch bản AI.' });
+      } else {
+        // AUTO GENERATION FLOW: Use compiled prompt directly, skip AI script optimization
+        toast({ title: '🎬 Đang tạo video...', description: 'Sử dụng prompt wizard trực tiếp.' });
+        setPrompt(compiledPrompt);
+        
+        // Start Video Generation directly with compiled prompt
+        await handleGenerate(false, compiledPrompt);
+      }
+    } catch (err: any) {
+      console.error('[Wizard] Compile error:', err);
+      // Fallback: stitch answers manually
+      const fallback = answers.map(a => `${a.answer}`).join(', ');
+      setScriptDescription(`${wizardTemplate.label}: ${fallback}`);
+    } finally {
+      setWizardActive(false);
+      setWizardLoading(false);
+      setWizardTemplate(null);
+      setWizardAnswers([]);
+      setWizardCurrentQuestion(null);
+      setWizardCustomInput('');
+      setWizardStepImage(null);
+    }
+  };
+
+  const cancelWizard = () => {
+    setWizardActive(false);
+    setWizardTemplate(null);
+    setWizardAnswers([]);
+    setWizardCurrentQuestion(null);
+    setWizardCustomInput('');
+    setWizardStepImage(null);
+    setWizardLoading(false);
+  };
+
+  const projectImages = Array.from(new Set([
+    ...inputImageUrls,
+    ...(beforeImageUrl ? [beforeImageUrl] : []),
+    ...(afterImageUrl ? [afterImageUrl] : [])
+  ]));
+
+  const toggleFavorite = (url: string) => {
+    setFavorites(prev => prev.includes(url) ? prev.filter(f => f !== url) : [...prev, url]);
+  };
+
   const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isUploadingBefore || isUploadingAfter || isSaving;
-  const isGenerateDisabled = isBusy || (inputMode === 'standard' && !prompt.trim()) || (inputMode === 'before-after' && (!beforeImageUrl || !afterImageUrl));
+  const isGenerateDisabled = isBusy || (inputMode === 'standard' && !prompt.trim() && !scriptDescription.trim()) || (inputMode === 'before-after' && (!beforeImageUrl || !afterImageUrl));
 
   return (
     <div className="flex flex-col flex-1 min-h-[calc(100vh-140px)] relative bg-white dark:bg-zinc-950 rounded-xl overflow-hidden border border-zinc-200 dark:border-zinc-800 shadow-xl">
       <ImageLibraryModal
         open={isLibraryOpen}
         onOpenChange={setIsLibraryOpen}
-        onImageSelect={(url) => { if (libraryTarget === 'standard') setInputImageUrls(p => [...p, url]); else if (libraryTarget === 'before') setBeforeImageUrl(url); else setAfterImageUrl(url); setIsLibraryOpen(false); }}
+        onImageSelect={(url) => { 
+          if (libraryTarget === 'standard') setInputImageUrls(p => [...p, url]); 
+          else if (libraryTarget === 'before') setBeforeImageUrl(url); 
+          else if (libraryTarget === 'after') setAfterImageUrl(url); 
+          else if (libraryTarget === 'wizard') {
+            setWizardStepImage(url);
+            if (!inputImageUrls.includes(url)) setInputImageUrls(prev => [...prev, url]);
+          }
+          setIsLibraryOpen(false); 
+        }}
         onVideoExtend={activateExtendMode}
       />
       <input ref={beforeFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'before')} disabled={isBusy} />
       <input ref={afterFileInputRef} type="file" className="hidden" accept="image/*" onChange={(e) => handleBeforeAfterFileChange(e, 'after')} disabled={isBusy} />
       <input ref={fileInputRef} id="image-upload-input" type="file" className="hidden" multiple onChange={handleFileChange} accept="image/*" disabled={isBusy} />
 
-      {/* --- ERROR / LOADING OVERLAY --- */}
-      {(jobStatus === 'processing' || errorDetails) && (
+      {/* --- ERROR OVERLAY --- */}
+      {errorDetails && (
         <div className="absolute inset-0 z-50 bg-white/60 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          {jobStatus === 'processing' ? (
-            <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-teal-100 dark:border-teal-900/30 text-zinc-900 dark:text-white shadow-2xl">
-              <Loader2 className="h-12 w-12 animate-spin text-teal-500" />
-              <p className="text-sm font-medium">{t('workspace.video.loadingMessage') || 'Đang tạo video...'}</p>
-              <div className="text-xs font-mono text-teal-700 bg-teal-50 px-3 py-1 rounded-full">{elapsedTime}s</div>
-              {isSaving && <p className="text-xs text-teal-600">Đang lưu video...</p>}
+          <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-red-50 dark:bg-red-950/80 border border-red-200 dark:border-red-500/30 text-zinc-900 dark:text-white max-w-lg text-center shadow-2xl">
+            <X className="h-12 w-12 text-red-500" />
+            <p className="font-semibold text-lg">Đã xảy ra lỗi</p>
+            <p className="text-sm text-red-600 dark:text-red-200/80 whitespace-pre-wrap">{errorDetails}</p>
+            <div className="flex gap-2 mt-4">
+              <Button variant="outline" className="bg-white hover:bg-zinc-100" onClick={() => setErrorDetails(null)}>Đóng</Button>
+              <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleGenerateRef.current?.(false)} disabled={(!prompt.trim() && inputMode === 'standard')}>Thử lại</Button>
             </div>
-          ) : (
-            <div className="flex flex-col items-center gap-4 p-8 rounded-2xl bg-red-50 dark:bg-red-950/80 border border-red-200 dark:border-red-500/30 text-zinc-900 dark:text-white max-w-lg text-center shadow-2xl">
-              <X className="h-12 w-12 text-red-500" />
-              <p className="font-semibold text-lg">Đã xảy ra lỗi</p>
-              <p className="text-sm text-red-600 dark:text-red-200/80 whitespace-pre-wrap">{errorDetails}</p>
-              <div className="flex gap-2 mt-4">
-                <Button variant="outline" className="bg-white hover:bg-zinc-100" onClick={() => setErrorDetails(null)}>Đóng</Button>
-                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => handleGenerateRef.current?.(false)} disabled={(!prompt.trim() && inputMode === 'standard')}>Thử lại</Button>
-              </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- IMAGE VIEWER OVERLAY --- */}
+      {viewingImage && (
+        <div className="absolute inset-0 z-[60] bg-black/95 backdrop-blur-lg flex items-center justify-center p-6 animate-in fade-in" onClick={() => setViewingImage(null)}>
+          <div className="relative max-w-5xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            <img src={viewingImage} alt="Preview" className="max-w-full max-h-full object-contain rounded-xl shadow-2xl" />
+            <div className="absolute top-4 right-4 flex gap-2">
+              <Button variant="ghost" size="icon" className="h-10 w-10 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md" onClick={() => toggleFavorite(viewingImage)}>
+                <Heart className={cn("h-5 w-5 transition-colors", favorites.includes(viewingImage) ? "fill-red-500 text-red-500" : "")} />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 bg-black/50 hover:bg-black/70 text-white rounded-full backdrop-blur-md" onClick={() => setViewingImage(null)}>
+                <X className="h-5 w-5" />
+              </Button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
       {/* --- MAIN CANVAS (GALLERY) --- */}
-      <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-40 w-full scrollbar-thin rounded-xl">
-        {videoProject.length > 0 ? (
+      <div className="flex-1 overflow-y-auto p-6 md:p-10 pb-40 w-full scrollbar-thin rounded-xl" id="main-canvas">
+        {videoProject.length > 0 || jobStatus === 'processing' || projectImages.length > 0 ? (
           <div className="flex flex-col gap-6">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
-                <Video className="h-4 w-4 text-white" />
+            <div className="flex items-center gap-3 mb-2 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                  <Video className="h-4 w-4 text-white" />
+                </div>
+                <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Dự án hiện tại</h2>
+                <span className="text-xs font-medium text-teal-700 dark:text-teal-200 bg-teal-100 dark:bg-teal-500/20 px-2.5 py-1 rounded-full border border-teal-200 dark:border-teal-500/20">{videoProject.length + projectImages.length} items</span>
               </div>
-              <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Dự án hiện tại</h2>
-              <span className="text-xs font-medium text-teal-700 dark:text-teal-200 bg-teal-100 dark:bg-teal-500/20 px-2.5 py-1 rounded-full border border-teal-200 dark:border-teal-500/20">{videoProject.length} clips</span>
 
-              <Button variant="ghost" size="sm" className="ml-auto text-zinc-500 hover:text-teal-600 hover:bg-teal-50 rounded-full px-4 border border-transparent" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); }}>
+              {/* Tabs */}
+              <div className="flex bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-lg sm:ml-4 overflow-x-auto scrollbar-none shadow-inner opacity-90 hover:opacity-100 transition-opacity">
+                <Button variant={activeTab === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('all')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'all' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Tất cả</Button>
+                <Button variant={activeTab === 'images' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('images')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'images' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Hình ảnh</Button>
+                <Button variant={activeTab === 'videos' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('videos')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'videos' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Video</Button>
+                <Button variant={activeTab === 'favorites' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('favorites')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'favorites' && "bg-white dark:bg-zinc-700 text-red-500 shadow-sm")}>
+                  <Heart className={cn("h-3 w-3 mr-1.5", activeTab === 'favorites' ? "fill-red-500" : "")} /> Yêu thích
+                </Button>
+              </div>
+
+              <Button variant="ghost" size="sm" className="ml-auto text-zinc-500 hover:text-teal-600 hover:bg-teal-50 rounded-full px-4 border border-transparent shrink-0" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); setInputImageUrls([]); setBeforeImageUrl(null); setAfterImageUrl(null); setActiveTab('all'); }}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Dự án mới
               </Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              {videoProject.map((clip, index) => (
-                <div key={index} className="group flex flex-col gap-2">
+              
+              {/* Generating Placeholder (if processing) */}
+              {jobStatus === 'processing' && (activeTab === 'all' || activeTab === 'videos') && (
+                <div className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 group cursor-wait">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/5 to-cyan-500/5 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                  <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-3" />
+                  <p className="text-sm font-medium text-teal-800 dark:text-teal-400">Đang tạo video của bạn...</p>
+                  <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 mt-2 bg-teal-50 dark:bg-teal-900/40 px-2.5 py-1 rounded-full border border-teal-100 dark:border-teal-800">{elapsedTime}s</div>
+                  {isSaving && <p className="text-[10px] text-teal-500/70 mt-1 absolute bottom-4">Đang lưu trữ dữ liệu...</p>}
+                </div>
+              )}
+
+              {/* Render Images */}
+              {(activeTab === 'all' || activeTab === 'images' || activeTab === 'favorites') && projectImages.filter(url => activeTab === 'favorites' ? favorites.includes(url) : true).map((url, index) => (
+                <div key={`img-${index}`} className="group relative w-full aspect-video rounded-xl bg-zinc-100 dark:bg-zinc-900 overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in zoom-in-95 cursor-pointer" onClick={() => setViewingImage(url)}>
+                  <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Reference" />
+                  
+                  {/* Overlay Gradient */}
+                  <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
+
+                  {/* Heart Icon */}
+                  <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-transform active:scale-95" onClick={(e) => { e.stopPropagation(); toggleFavorite(url); }}>
+                      <Heart className={cn("h-4 w-4 transition-colors", favorites.includes(url) ? "fill-red-500 text-red-500" : "")} />
+                    </Button>
+                  </div>
+                  
+                  {/* Badge */}
+                  <div className="absolute bottom-3 left-3 flex gap-1.5 pointer-events-none z-10">
+                    <span className="text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm uppercase tracking-wider">Hình ảnh</span>
+                  </div>
+                  
+                  {/* Download Button */}
+                  <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                    <a href={url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-md">
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              ))}
+
+              {/* Render Videos */}
+              {(activeTab === 'all' || activeTab === 'videos' || activeTab === 'favorites') && videoProject.filter(clip => activeTab === 'favorites' ? favorites.includes(clip.url) : true).map((clip, index) => (
+                <div key={index} className="group flex flex-col gap-2 animate-in fade-in zoom-in-95">
                   <div
-                    className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-teal-500/50 transition-all cursor-pointer shadow-md hover:shadow-teal-900/10"
+                    className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-teal-500/50 transition-all cursor-pointer shadow-sm hover:shadow-teal-900/20"
                     onClick={() => setEditorClipUrl(clip.url)}
                   >
-                    <video src={clip.url} className="w-full h-full object-cover rounded-xl group-hover:scale-[1.03] transition-transform duration-700 ease-out" />
+                    <video src={clip.url} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/10 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 rounded-xl pointer-events-none">
-                      <div className="flex justify-between items-start pointer-events-auto">
+                    <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 rounded-xl pointer-events-none">
+                      <div className="flex justify-between items-start pointer-events-auto w-full">
                         <span className="bg-white/90 dark:bg-black/60 text-teal-700 dark:text-white/90 text-[10px] uppercase font-bold px-2.5 py-1 rounded shadow-sm">
                           Clip {index + 1}
                         </span>
-                        <a href={clip.url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 bg-white/40 hover:bg-white/80 text-zinc-900 rounded-full backdrop-blur-sm">
-                            <Download className="h-3 w-3" />
+                        
+                        <div className="flex gap-1.5">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-transform active:scale-95" onClick={(e) => { e.stopPropagation(); toggleFavorite(clip.url); }}>
+                            <Heart className={cn("h-4 w-4 transition-colors", favorites.includes(clip.url) ? "fill-red-500 text-red-500" : "")} />
                           </Button>
-                        </a>
-                      </div>
-
-                      <div className="self-center pointer-events-auto" onClick={(e) => { e.stopPropagation(); setEditorClipUrl(clip.url); }}>
-                        <div className="h-12 w-12 rounded-full bg-white/40 backdrop-blur-md flex items-center justify-center translate-y-4 group-hover:translate-y-0 transition-transform duration-300 shadow-xl shadow-black/20 hover:bg-white/60 hover:scale-110">
-                          <Play className="h-5 w-5 text-zinc-900 ml-1" />
+                          <a href={clip.url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 bg-white/20 hover:bg-white/40 text-white rounded-full backdrop-blur-md">
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </a>
                         </div>
                       </div>
 
-                      <p className="text-[11px] font-medium text-white line-clamp-1 translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75 drop-shadow-md">{clip.duration}</p>
+                      <div className="self-center pointer-events-auto" onClick={(e) => { e.stopPropagation(); setEditorClipUrl(clip.url); }}>
+                        <div className="h-12 w-12 rounded-full bg-white/40 backdrop-blur-md flex items-center justify-center -translate-y-2 group-hover:translate-y-0 transition-transform duration-300 shadow-xl shadow-black/20 hover:bg-white/60 hover:scale-110">
+                          <Play className="h-5 w-5 text-white ml-0.5" />
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] font-medium text-white/90 line-clamp-1 translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75 drop-shadow-md pb-1">{clip.duration}</p>
                     </div>
                   </div>
 
                   {!videoModel.includes('veo-2') && index === videoProject.length - 1 && (
                     <Button
                       variant="outline"
-                      className="w-full border-dashed border-zinc-300 dark:border-white/20 bg-transparent hover:bg-teal-50 hover:text-teal-700 text-zinc-500 h-9 text-xs rounded-xl transition-colors"
+                      className="w-full border-dashed border-zinc-300 dark:border-white/10 bg-transparent hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 text-zinc-500 h-9 text-xs rounded-xl transition-colors"
                       onClick={() => activateExtendMode(clip.url)}
                     >
                       <Plus className="mr-2 h-3 w-3" /> Tạo cảnh nối tiếp
@@ -913,27 +1147,252 @@ export function VideoGenerationWorkspace() {
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-cyan-500">iGen +</h1>
               <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">Không gian làm việc vô cực. Chỉ cần mô tả ý tưởng, AI sẽ kết xuất video chuẩn điện ảnh với độ phân giải lên đến 4k.</p>
-            </div>
-
-            {/* TEMPLATES GRID IN EMPTY STATE */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 w-full mt-8 max-w-2xl px-4">
-              {VIDEO_TEMPLATES.filter(t => t.id !== 'none').slice(0, 6).map(tmpl => (
-                <div
-                  key={tmpl.id}
-                  onClick={() => { setInputMode('standard'); setSelectedTemplate(tmpl.id); setScriptDescription(tmpl.prompt); }}
-                  className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 hover:border-teal-400/50 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-3 sm:p-4 rounded-xl cursor-pointer text-left transition-all duration-300 group shadow-sm hover:shadow-md"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">{tmpl.label}</p>
-                    <ArrowRight className="h-3 w-3 text-zinc-400 group-hover:text-teal-500 group-hover:translate-x-0.5 transition-all" />
-                  </div>
-                  <p className="text-[11px] text-zinc-500 group-hover:text-zinc-600 dark:group-hover:text-zinc-400 line-clamp-2 leading-relaxed">{tmpl.prompt}</p>
-                </div>
-              ))}
+              <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-4">Ấn nút <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-zinc-100 text-zinc-500 mx-1"><Plus className="h-3 w-3" /></span> để chọn ảnh tham chiếu và mẫu prompt</p>
             </div>
           </div>
         )}
       </div>
+
+      {/* --- WIZARD PANEL OVERLAY --- */}
+      {wizardActive && (
+        <div className="absolute inset-0 z-[55] bg-white/40 dark:bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-white/10 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden animate-in slide-in-from-bottom-8 zoom-in-95 duration-500 flex flex-col max-h-[90vh]">
+            
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-50 dark:border-white/5 shrink-0 bg-white dark:bg-zinc-900 relative">
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 to-cyan-400"></div>
+              <div className="flex items-center gap-4">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-400 flex items-center justify-center shadow-md shadow-teal-500/10">
+                  <Wand2 className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <p className="text-base font-bold text-zinc-800 dark:text-white flex items-center gap-2">
+                    {wizardTemplate?.label || 'Prompt Wizard'}
+                  </p>
+                  <p className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold tracking-wide uppercase">Dự kiến ~5 bước</p>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-full" onClick={cancelWizard}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Scrollable Content Area */}
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-200">
+              
+              {/* Progress Breadcrumbs (Chat history style) */}
+              {wizardAnswers.length > 0 && (
+                <div className="flex flex-col gap-5">
+                  {wizardAnswers.map((qa, i) => (
+                    <div key={i} className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
+                      {/* Question bubble */}
+                      <div className="flex gap-3">
+                        <div className="h-7 w-7 rounded-full bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</div>
+                        <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed pt-1.5">{qa.question}</p>
+                      </div>
+                      {/* Answer bubble */}
+                      <div className="ml-10">
+                        <p className="text-[14px] text-zinc-800 dark:text-zinc-200 font-bold">{qa.answer}</p>
+                      </div>
+                    </div>
+                  ))}
+                  {/* Subtle separator before current question */}
+                  <div className="h-px bg-zinc-100 dark:bg-white/5 w-full mx-auto my-2"></div>
+                </div>
+              )}
+
+              {/* Current Question Block */}
+              <div>
+                {wizardLoading ? (
+                  <div className="flex flex-col items-center justify-center py-12 gap-4">
+                    <div className="relative">
+                      <div className="h-12 w-12 rounded-full border-2 border-teal-100 border-t-teal-500 animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center"><Wand2 className="h-4 w-4 text-teal-500 opacity-50" /></div>
+                    </div>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
+                      {wizardAnswers.length === 0 ? 'Đang phân tích và khởi tạo...' : wizardCurrentQuestion?.isDone ? 'Đang tổng hợp prompt hoàn chỉnh...' : 'AI đang suy nghĩ câu hỏi tiếp theo...'}
+                    </p>
+                  </div>
+                ) : wizardCurrentQuestion && !wizardCurrentQuestion.isDone ? (
+                  <div className="flex flex-col gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <h3 className="text-xl sm:text-2xl font-bold text-zinc-800 dark:text-white leading-tight tracking-tight">
+                      {wizardCurrentQuestion.question}
+                    </h3>
+                    
+                    {/* Option Buttons (Pill Style) */}
+                    <div className="flex flex-wrap gap-2.5">
+                      {wizardCurrentQuestion.options.map((opt, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          onClick={() => handleWizardAnswer(opt)}
+                          className="h-auto py-2.5 px-5 text-[13px] font-semibold rounded-full border border-teal-200 dark:border-teal-800 bg-white dark:bg-zinc-900 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 hover:border-teal-400 dark:hover:border-teal-600 transition-all whitespace-normal text-left shadow-sm hover:shadow-md active:scale-95"
+                        >
+                          {opt}
+                        </Button>
+                      ))}
+                    </div>
+
+                    {/* Image Upload for this step (Purple Dashed Style) */}
+                    {wizardCurrentQuestion.allowImageUpload && (
+                      <div className="mt-2 animate-in fade-in slide-in-from-bottom-2">
+                        <input type="file" accept="image/*" ref={wizardFileInputRef} className="hidden" onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file || !user) return;
+                          setWizardUploadingImage(true);
+                          try {
+                            const fileName = `wizard-${Date.now()}-${file.name}`;
+                            const imgRef = storageRef(storage, `users/${user.uid}/inputs/${fileName}`);
+                            await uploadBytes(imgRef, file);
+                            const url = await getDownloadURL(imgRef);
+                            setWizardStepImage(url);
+                            if (!inputImageUrls.includes(url)) setInputImageUrls(prev => [...prev, url]);
+                          } catch { toast({ variant: 'destructive', title: 'Lỗi tải ảnh' }); }
+                          finally { setWizardUploadingImage(false); }
+                          if (e.target) e.target.value = '';
+                        }} />
+                        
+                        {wizardStepImage ? (
+                          <div className="relative inline-block rounded-2xl overflow-hidden border-2 border-purple-200 shadow-md p-1 bg-white">
+                            <img src={wizardStepImage} alt="step" className="h-32 rounded-xl w-auto object-cover" />
+                            <button onClick={() => setWizardStepImage(null)} className="absolute top-2 right-2 h-7 w-7 bg-black/50 backdrop-blur-md text-white rounded-full flex items-center justify-center hover:bg-red-500 transition-colors shadow-sm"><X className="h-4 w-4" /></button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col sm:flex-row gap-2">
+                            <div
+                              onClick={() => wizardFileInputRef.current?.click()}
+                              className="flex-1 flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-purple-300 dark:border-purple-700 bg-purple-50/30 text-purple-600 hover:bg-purple-50 hover:border-purple-400 transition-all cursor-pointer group"
+                            >
+                              {wizardUploadingImage ? (
+                                <Loader2 className="h-5 w-5 animate-spin" />
+                              ) : (
+                                <ImagePlus className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                              )}
+                              <span className="text-sm font-semibold">Tải từ thiết bị</span>
+                            </div>
+                            <div
+                              onClick={() => { setLibraryTarget('wizard'); setIsLibraryOpen(true); }}
+                              className="flex-1 flex items-center justify-center gap-3 p-4 rounded-2xl border-2 border-dashed border-indigo-300 dark:border-indigo-700 bg-indigo-50/30 text-indigo-600 hover:bg-indigo-50 hover:border-indigo-400 transition-all cursor-pointer group"
+                            >
+                              <Images className="h-5 w-5 group-hover:scale-110 transition-transform" />
+                              <span className="text-sm font-semibold">Chọn từ Thư viện</span>
+                            </div>
+                          </div>
+                        )}
+                        <p className="text-[11px] text-zinc-400 font-medium text-center mt-3">
+                          💡 Ý AI: {wizardCurrentQuestion.imageUploadHint || 'Tải ảnh minh họa'}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Custom Input */}
+                    <div className="flex gap-2 items-center mt-3 relative">
+                      <input
+                        type="text"
+                        value={wizardCustomInput}
+                        onChange={(e) => setWizardCustomInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && wizardCustomInput.trim()) {
+                            handleWizardAnswer(wizardCustomInput.trim());
+                          }
+                        }}
+                        placeholder="Hoặc nhập câu trả lời của bạn..."
+                        className="w-full h-14 pl-5 pr-16 text-sm bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 transition-all"
+                      />
+                      <Button
+                        size="icon"
+                        onClick={() => { if (wizardCustomInput.trim()) handleWizardAnswer(wizardCustomInput.trim()); }}
+                        disabled={!wizardCustomInput.trim()}
+                        className="absolute right-2 h-10 w-10 rounded-xl bg-teal-400 hover:bg-teal-500 text-white shadow-md disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none transition-all"
+                      >
+                        <ArrowRight className="h-5 w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center py-10 gap-4 text-center">
+                    <div className="h-16 w-16 rounded-full bg-teal-50 flex items-center justify-center relative">
+                      <div className="absolute inset-0 bg-teal-400/20 blur-xl rounded-full"></div>
+                      <Wand2 className="h-7 w-7 text-teal-500 relative z-10" />
+                    </div>
+                    <h3 className="text-xl font-bold text-zinc-800 dark:text-white">Tuyệt vời, đã đủ thông tin!</h3>
+                    <p className="text-sm text-zinc-500 max-w-sm">AI đã tổng hợp mọi chi tiết. Nhấn Hoàn tất để hệ thống viết ra kịch bản video chuyên nghiệp cho bạn.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-zinc-50 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950/20 shrink-0">
+              <Button variant="ghost" size="sm" className="text-[13px] font-semibold text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100/50 px-4 rounded-xl" onClick={cancelWizard}>
+                Hủy bỏ
+              </Button>
+              <div className="flex gap-3">
+                {/* Back Button */}
+                {wizardAnswers.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={wizardLoading}
+                    onClick={() => {
+                      const prev = [...wizardAnswers];
+                      prev.pop();
+                      setWizardAnswers(prev);
+                      if (prev.length === 0) {
+                        startWizard({ id: wizardTemplate!.id, label: wizardTemplate!.label, prompt: '' });
+                      } else {
+                        setWizardLoading(true);
+                        generateWizardQuestion({
+                          templateId: wizardTemplate!.id,
+                          templateLabel: wizardTemplate!.label,
+                          previousAnswers: prev,
+                          imageUris: inputImageUrls.length > 0 ? inputImageUrls : undefined,
+                          videoDuration,
+                          aspectRatio,
+                          isExtending: !!extendingVideoUrl,
+                          apiKey: userData?.geminiApiKey,
+                        }).then(r => setWizardCurrentQuestion(r)).finally(() => setWizardLoading(false));
+                      }
+                    }}
+                    className="text-[13px] font-semibold h-10 px-5 rounded-xl border-zinc-200 dark:border-white/10"
+                  >
+                    ← Quay lại
+                  </Button>
+                )}
+
+                {/* Complete Buttons */}
+                {(wizardAnswers.length >= 1 || wizardCurrentQuestion?.isDone) && (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={wizardLoading}
+                      onClick={() => handleWizardComplete()}
+                      className="text-[13px] font-semibold h-10 px-5 rounded-xl border-zinc-200 dark:border-white/10"
+                    >
+                      {wizardLoading && !wizardActive ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Hoàn tất Prompt
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={wizardLoading}
+                      onClick={() => handleWizardComplete(undefined, true)}
+                      className="text-[13px] font-bold h-10 px-6 rounded-xl bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white shadow-[0_8px_16px_rgba(45,212,191,0.25)] hover:shadow-[0_8px_20px_rgba(45,212,191,0.35)] hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:translate-y-0 disabled:shadow-none"
+                    >
+                      {wizardLoading ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Wand2 className="mr-2 h-4 w-4" />
+                      )}
+                      Hoàn tất & Tạo Video
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- EXTEND ALERT --- */}
       {extendingVideoUrl && (
@@ -961,8 +1420,26 @@ export function VideoGenerationWorkspace() {
 
           {/* Before & After Upload Area (Expands if B/A mode) */}
           {inputMode === 'before-after' && (
-            <div className="p-4 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950/20 flex gap-4 rounded-t-2xl items-center justify-center overflow-x-auto scrollbar-none min-h-[160px]">
-              <div
+            <div className="bg-zinc-50/50 dark:bg-zinc-950/20 border-b border-zinc-100 dark:border-white/5 rounded-t-2xl relative flex flex-col transition-all duration-300">
+              
+              {/* Collapse/Expand Toggle Button */}
+              <div className={cn("flex justify-center z-10 transition-all duration-300", isBeforeAfterCollapsed ? "-mb-3 mt-0 py-2" : "-mb-3 mt-2")}>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setIsBeforeAfterCollapsed(!isBeforeAfterCollapsed)} 
+                  className="h-6 px-3 text-[10px] uppercase font-bold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm hover:text-teal-600 hover:border-teal-200 dark:hover:border-teal-800 transition-colors bg-opacity-90 backdrop-blur-sm"
+                >
+                  {isBeforeAfterCollapsed ? (
+                    <><ChevronDown className="h-4 w-4 mr-1" /> Mở rộng ảnh</>
+                  ) : (
+                    <><ChevronUp className="h-4 w-4 mr-1" /> Thu gọn ảnh</>
+                  )}
+                </Button>
+              </div>
+
+              <div className={cn("flex gap-4 items-center justify-center overflow-x-auto scrollbar-none transition-all duration-300", isBeforeAfterCollapsed ? "h-0 opacity-0 overflow-hidden" : "p-4 min-h-[160px] opacity-100")}>
+                <div
                 className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
                   beforeImageUrl ? "border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-orange-300 flex-1 min-h-[120px] flex items-center justify-center"
                 )}
@@ -1040,6 +1517,7 @@ export function VideoGenerationWorkspace() {
                       </Button>
                     </div>
                   )}
+                </div>
               </div>
             </div>
           )}
@@ -1093,7 +1571,11 @@ export function VideoGenerationWorkspace() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ảnh tham chiếu</p>
-                      <Button variant="link" size="sm" className="h-5 text-[10px] text-teal-500 px-0" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }}>Mở thư viện</Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="link" size="sm" className="h-5 text-[10px] text-teal-500 px-0" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }}>Mở thư viện</Button>
+                        <span className="text-zinc-300">|</span>
+                        <Button variant="link" size="sm" className="h-5 text-[10px] text-purple-500 px-0" onClick={() => setShowImageUpload(prev => !prev)}>Template</Button>
+                      </div>
                     </div>
                     {inputImageUrls.length > 0 ? (
                       <div className="flex flex-wrap gap-2">
@@ -1111,6 +1593,46 @@ export function VideoGenerationWorkspace() {
                         <span className="text-[10px] font-medium">Tải ảnh tham chiếu</span>
                       </div>
                     )}
+
+                    {/* Template Grid inside popover */}
+                    <div className="border-t border-zinc-100 dark:border-white/5 pt-2 mt-2">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Hãy ghi ngành nghề mà bạn muốn</p>
+                      
+                      {/* Custom industry input */}
+                      <div className="flex gap-1.5 mb-2">
+                        <input
+                          type="text"
+                          placeholder="VD: Spa, Nha khoa, Gym..."
+                          className="flex-1 h-8 px-3 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-400/50 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
+                              const val = (e.target as HTMLInputElement).value.trim();
+                              setShowImageUpload(false);
+                              startWizard({ id: 'custom', label: val, prompt: '' });
+                            }
+                          }}
+                        />
+                        <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg bg-teal-500 hover:bg-teal-600 text-white shrink-0" onClick={(e) => {
+                          const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                          if (input?.value.trim()) { setShowImageUpload(false); startWizard({ id: 'custom', label: input.value.trim(), prompt: '' }); }
+                        }}>
+                          <ArrowRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <p className="text-[9px] text-zinc-400 mb-1.5">Hoặc chọn mẫu có sẵn:</p>
+                      <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto scrollbar-thin pr-1">
+                        {VIDEO_TEMPLATES.filter(t => t.id !== 'none').map(tmpl => (
+                          <div
+                            key={tmpl.id}
+                            onClick={() => { setShowImageUpload(false); startWizard(tmpl); }}
+                            className="bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-white/5 hover:border-teal-400/40 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-2 rounded-lg cursor-pointer text-left transition-all group"
+                          >
+                            <p className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors leading-tight">{tmpl.label}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
