@@ -19,6 +19,11 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'picsum.photos', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com', port: '', pathname: '/**' },
       { protocol: 'https', hostname: 'storage.googleapis.com', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: 'files2.heygen.ai', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: 'resource.heygen.com', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: 'resource2.heygen.ai', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: '*.heygen.ai', port: '', pathname: '/**' },
+      { protocol: 'https', hostname: '*.heygen.com', port: '', pathname: '/**' },
     ],
   },
 };

@@ -2,7 +2,7 @@
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
-import { VideoGenerationWorkspace } from '@/components/video-generation-workspace';
+import { VideoWorkspaceSwitcher } from '@/components/video-workspace-switcher';
 import { useI18n } from '@/contexts/i18n-context';
 
 export function ContentStudioWorkspace() {
@@ -18,7 +18,7 @@ export function ContentStudioWorkspace() {
         <ImageGenerationWorkspace />
       </TabsContent>
       <TabsContent value="video" className="flex-1 flex flex-col mt-6">
-        <VideoGenerationWorkspace />
+        <VideoWorkspaceSwitcher />
       </TabsContent>
     </Tabs>
   );

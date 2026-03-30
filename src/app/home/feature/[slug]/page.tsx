@@ -17,7 +17,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
-import { VideoGenerationWorkspace } from '@/components/video-generation-workspace';
+import { VideoWorkspaceSwitcher } from '@/components/video-workspace-switcher';
 import { ContentStudioWorkspace } from '@/components/content-studio-workspace';
 import { VoiceCloningWorkspace } from '@/components/voice-cloning-workspace';
 import { AvatarCloningWorkspace } from '@/components/avatar-cloning-workspace';
@@ -95,7 +95,7 @@ export default function FeatureWorkspacePage() {
         case 'image-generation':
             return <ImageGenerationWorkspace />;
         case 'video-generation':
-            return <VideoGenerationWorkspace />;
+            return <VideoWorkspaceSwitcher />;
         case 'voice-cloning':
             return <VoiceCloningWorkspace />;
         case 'avatar-cloning':
@@ -107,16 +107,19 @@ export default function FeatureWorkspacePage() {
 
   return (
     <div className="container py-8 h-full flex flex-col">
-      <div className="flex items-center gap-4 mb-8">
-        <Button asChild variant="outline" size="icon">
-          <Link href="/home">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div className="flex items-center gap-3">
-          <div className="text-primary">{feature.icon}</div>
-          <h1 className="text-2xl font-bold">{t(feature.i18nKey)}</h1>
+      <div className="flex items-center justify-between gap-4 mb-8">
+        <div className="flex items-center gap-4">
+          <Button asChild variant="outline" size="icon">
+            <Link href="/home">
+              <ArrowLeft className="h-4 w-4" />
+            </Link>
+          </Button>
+          <div className="flex items-center gap-3">
+            <div className="text-primary">{feature.icon}</div>
+            <h1 className="text-2xl font-bold">{t(feature.i18nKey)}</h1>
+          </div>
         </div>
+        <div id="header-actions-portal"></div>
       </div>
 
       {renderWorkspace()}

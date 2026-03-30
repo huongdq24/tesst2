@@ -358,13 +358,19 @@ export function VideoFromImageTab({
     setPipelineStep('uploading_audio');
     setPipelineMessage('Đang tải audio lên HeyGen...');
 
-    const uploadForm = new FormData();
-    uploadForm.append('file', audioBlob, 'audio.mp3');
+    // Convert blob to base64 for reliable transport through Next.js API route
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    const base64 = btoa(
+      new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+    );
 
     const uploadResponse = await fetch('/api/heygen/upload-audio', {
       method: 'POST',
-      headers: { 'x-heygen-api-key': userData!.heyGenApiKey! },
-      body: uploadForm,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-heygen-api-key': userData!.heyGenApiKey!,
+      },
+      body: JSON.stringify({ audioBase64: base64 }),
     });
     if (!uploadResponse.ok) {
         const errData = await uploadResponse.json().catch(() => ({ error: 'Không thể phân tích phản hồi lỗi từ máy chủ.' }));

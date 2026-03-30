@@ -3,9 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 /**
  * POST /api/heygen/upload-audio
  * Uploads an audio file to HeyGen for use in video generation.
- * 
- * Body: FormData with 'file' (audio blob)
- * Returns: { url: string } - the HeyGen-hosted audio URL
+ *
+ * HeyGen's upload API expects RAW BINARY body with Content-Type set to the
+ * file's MIME type (e.g. audio/mpeg). It does NOT use multipart/form-data.
+ *
+ * Accepts JSON with 'audioBase64' field (base64-encoded audio data).
+ * Returns: { data: { url: string } } - the HeyGen-hosted audio URL
  */
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-heygen-api-key');
@@ -15,55 +18,63 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as Blob | null;
+    let audioBuffer: Buffer;
+    const contentType = request.headers.get('content-type') || '';
 
-    if (!file) {
-      return NextResponse.json({ error: 'Audio file is required.' }, { status: 400 });
+    if (contentType.includes('application/json')) {
+      const json = await request.json();
+      if (!json.audioBase64) {
+        return NextResponse.json({ error: 'audioBase64 is required.' }, { status: 400 });
+      }
+      audioBuffer = Buffer.from(json.audioBase64, 'base64');
+    } else {
+      const formData = await request.formData();
+      const file = formData.get('file') as Blob | null;
+      if (!file) {
+        return NextResponse.json({ error: 'Audio file is required.' }, { status: 400 });
+      }
+      const arrayBuffer = await file.arrayBuffer();
+      audioBuffer = Buffer.from(arrayBuffer);
     }
 
-    // Create a new FormData to forward to HeyGen
-    const heyGenForm = new FormData();
-    heyGenForm.append('file', file, 'audio.mp3');
+    if (audioBuffer.length === 0) {
+      return NextResponse.json({ error: 'Audio data is empty.' }, { status: 400 });
+    }
 
-    const response = await fetch('https://api.heygen.com/v1/asset', {
+    console.log(`[HeyGen Upload] Uploading audio as raw binary: ${audioBuffer.length} bytes`);
+
+    // ── HeyGen expects RAW BINARY body, NOT multipart/form-data ──
+    // curl equivalent:
+    //   curl -X POST https://upload.heygen.com/v1/asset \
+    //     -H 'x-api-key: <KEY>' \
+    //     -H 'Content-Type: audio/mpeg' \
+    //     --data-binary @audio.mp3
+    const response = await fetch('https://upload.heygen.com/v1/asset', {
       method: 'POST',
       headers: {
         'X-Api-Key': apiKey,
+        'Content-Type': 'audio/mpeg',
       },
-      body: heyGenForm,
+      body: new Uint8Array(audioBuffer),
     });
 
     if (!response.ok) {
       const errorBody = await response.text();
       console.error('[HeyGen Upload] API Error:', response.status, errorBody);
-      
-      let errorMessage = `HeyGen Upload Error: ${response.statusText}`;
+
+      let errorMessage = `HeyGen Upload Error (${response.status})`;
       try {
         const errorJson = JSON.parse(errorBody);
-        // Check for common HeyGen error formats
-        if (errorJson.message) {
-          errorMessage = `HeyGen: ${errorJson.message}`;
-        } else if (errorJson.error?.message) {
-          errorMessage = `HeyGen: ${errorJson.error.message}`;
-        } else if (errorJson.data?.message) {
-           errorMessage = `HeyGen: ${errorJson.data.message}`;
-        } else {
-           // It's JSON, but not a known format. Stringify it.
-           errorMessage = JSON.stringify(errorJson);
-        }
+        errorMessage = errorJson.message || errorJson.error?.message || errorJson.data?.message || JSON.stringify(errorJson);
       } catch {
-        // If it's not JSON (likely HTML), clean it up.
         errorMessage = errorBody.replace(/<[^>]*>/g, ' ').replace(/\s\s+/g, ' ').trim();
       }
-      
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: response.status }
-      );
+
+      return NextResponse.json({ error: errorMessage }, { status: response.status });
     }
 
     const data = await response.json();
+    console.log('[HeyGen Upload] Success:', JSON.stringify(data));
     return NextResponse.json(data);
   } catch (error: any) {
     console.error('[HeyGen Upload] Error:', error);

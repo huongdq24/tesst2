@@ -39,8 +39,8 @@ export function ImageGenerationWorkspace() {
   const [prompt, setPrompt] = useState('');
   const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
   const [imageModel, setImageModel] = useState('gemini-3.1-flash-image-preview');
-  const [artStyle, setArtStyle] = useState<string | null>(null);
-  const [intentAnalysis, setIntentAnalysis] = useState<string | null>(null);
+  const [negativePrompt, setNegativePrompt] = useState<string>('');
+  const [rawJsonOutput, setRawJsonOutput] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [numberOfImages, setNumberOfImages] = useState(1);
   const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
@@ -302,9 +302,9 @@ export function ImageGenerationWorkspace() {
     if (!simplePrompt.trim()) return;
     
     setIsGeneratingPrompt(true);
-    setArtStyle(null);
-    setIntentAnalysis(null);
+    setNegativePrompt('');
     setPrompt('');
+    setRawJsonOutput(null);
 
     try {
       const result = await optimalImagePromptGeneration({
@@ -314,8 +314,8 @@ export function ImageGenerationWorkspace() {
         apiKey: userData?.geminiApiKey,
       });
       setPrompt(result.optimized_english_prompt);
-      setArtStyle(result.art_style_inferred);
-      setIntentAnalysis(result.original_intent_analysis);
+      setNegativePrompt(result.negative_prompt);
+      setRawJsonOutput(JSON.stringify(result, null, 2));
     } catch (error: any) {
       console.error(error);
       let errorMsg = error.message;
@@ -536,12 +536,6 @@ export function ImageGenerationWorkspace() {
                 {t('workspace.image.generatePromptButton')}
               </Button>
             </div>
-            {intentAnalysis && artStyle && (
-              <div className="text-xs p-3 bg-muted/50 rounded-lg space-y-1.5 border">
-                <p><strong className="font-semibold">Phân tích:</strong> {intentAnalysis}</p>
-                <p><strong className="font-semibold">Phong cách:</strong> <span className="text-primary font-medium">{artStyle}</span></p>
-              </div>
-            )}
             <Separator />
             {/* Main prompt section */}
             <div className="space-y-2 flex-1 flex flex-col">
@@ -555,6 +549,26 @@ export function ImageGenerationWorkspace() {
                 className="resize-none flex-1"
               />
             </div>
+            {negativePrompt && (
+              <div className="space-y-2 flex-1 flex flex-col">
+                <Label htmlFor="negative-prompt">Negative Prompt (Dành cho AI khác)</Label>
+                <Textarea
+                  id="negative-prompt"
+                  value={negativePrompt}
+                  onChange={(e) => setNegativePrompt(e.target.value)}
+                  disabled={isBusy}
+                  className="resize-none h-20 text-muted-foreground"
+                />
+              </div>
+            )}
+            {rawJsonOutput && (
+              <div className="space-y-2">
+                <Label>Raw JSON (Structured Output)</Label>
+                <pre className="bg-muted p-4 rounded-md overflow-x-auto text-xs font-mono text-muted-foreground border">
+                  {rawJsonOutput}
+                </pre>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="image-model">Mô hình tạo ảnh</Label>
               <Select value={imageModel} onValueChange={setImageModel} disabled={isBusy}>
