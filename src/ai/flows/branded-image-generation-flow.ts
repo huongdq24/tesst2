@@ -1,8 +1,18 @@
 'use server';
 /**
- * @fileOverview This file defines a Genkit flow for generating a SINGLE branded image from text and reference images.
- * It implements a robust retry-with-fallback mechanism to handle API service availability issues.
- * Supports full config options: resolution, temperature, outputFormat (for all 3 Gemini image models).
+ * @fileOverview Branded Image Generation Flow with Nano Banana + Imagen 4 Pipeline.
+ * 
+ * ARCHITECTURE:
+ * ─────────────────────────────────────────────────────────────────────
+ * When user selects an IMAGEN 4 model AND provides reference images:
+ *   Step 1 (Nano Banana): gemini-2.5-flash-image analyzes reference images
+ *          → produces an ultra-detailed text description of what the user wants
+ *   Step 2 (Imagen 4): The selected Imagen model generates a high-quality image
+ *          from the enhanced prompt (text-only, since Imagen doesn't support images)
+ * 
+ * When user selects a GEMINI IMAGE model (or no reference images):
+ *   Single step: Generate directly with the selected Gemini model (multimodal)
+ * ─────────────────────────────────────────────────────────────────────
  */
 
 import { ai } from '@/ai/genkit';
@@ -28,8 +38,7 @@ const BrandedImageGenerationInputSchema = z.object({
   aspectRatio: z.string().optional().default('1:1').describe('The desired aspect ratio for the generated images.'),
   modelName: z.string().optional().describe('The user-preferred model for generation.'),
   apiKey: z.string().optional().describe("The user's Gemini API Key."),
-  // NEW: Extended config options matching AI Studio
-  resolution: z.string().optional().describe('Image resolution: "512", "1K", "2K", "4K". Only for Gemini 2.5 Flash model.'),
+  resolution: z.string().optional().describe('Image resolution: "512", "1K", "2K", "4K". Only for Gemini image models.'),
   temperature: z.number().optional().default(1).describe('Model temperature (creativity), 0-2.'),
   outputFormat: z.enum(['IMAGE_ONLY', 'IMAGE_AND_TEXT']).optional().default('IMAGE_ONLY').describe('Output modalities: image only or image+text.'),
 });
@@ -49,7 +58,7 @@ export async function brandedImageGeneration(
   return brandedImageGenerationFlow(input);
 }
 
-// Resolution mapping to Genkit's `imageSize` enum (which expects '1K', '2K', '4K').
+// Resolution mapping
 const RESOLUTION_MAP: Record<string, string> = {
   '512': '512',
   '1K': '1K',
@@ -57,24 +66,23 @@ const RESOLUTION_MAP: Record<string, string> = {
   '4K': '4K',
 };
 
+function isImagenModel(modelName: string): boolean {
+  return modelName.startsWith('imagen-');
+}
+
 /**
- * FIX #4: Helper to convert a URL (e.g. Firebase Storage) to a base64 data URI.
- * This is necessary because Genkit/Google AI cannot directly access Firebase Storage URLs.
- * Includes a timeout to prevent hanging on slow/failing URLs.
+ * Helper to convert a URL to a base64 data URI.
  */
 async function urlToDataUri(url: string, timeoutMs: number = 15000): Promise<string | null> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
     const response = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
-
     if (!response.ok) {
       console.warn(`[ImageGen] Failed to fetch image from URL: ${url}. Status: ${response.statusText}`);
       return null;
     }
-
     const buffer = await response.arrayBuffer();
     const base64Data = Buffer.from(buffer).toString('base64');
     const mimeType = response.headers.get('content-type') || 'image/jpeg';
@@ -88,6 +96,85 @@ async function urlToDataUri(url: string, timeoutMs: number = 15000): Promise<str
     return null;
   }
 }
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * STEP 1 of the Nano Banana + Imagen pipeline:
+ * Use gemini-2.5-flash-image (Nano Banana) to analyze reference images
+ * and produce an ultra-detailed English prompt for Imagen 4.
+ * 
+ * This bridges the gap: Imagen 4 can't see images, but Nano Banana can.
+ * Nano Banana describes what it sees → Imagen 4 generates from that description.
+ */
+async function enhancePromptWithNanoBanana(
+  localAi: ReturnType<typeof genkit>,
+  userPrompt: string,
+  imageDataUris: string[],
+): Promise<string> {
+  const NANO_BANANA_MODEL = 'gemini-2.5-flash-image';
+  const NANO_BANANA_TIMEOUT_MS = 30000; // 30s timeout for analysis
+
+  console.log(`[ImageGen] 🍌 Step 1: Nano Banana analyzing ${imageDataUris.length} reference image(s)...`);
+
+  const promptParts: Part[] = [];
+
+  // Add all reference images
+  for (const dataUri of imageDataUris) {
+    promptParts.push({ media: { url: dataUri } });
+  }
+
+  // Add the analysis instruction
+  promptParts.push({
+    text: `You are a visual analysis expert. The user wants to generate a NEW image using an AI model (Imagen 4) that can ONLY accept text prompts (no image input).
+
+Your job: Analyze the reference image(s) above and combine your understanding with the user's request to create ONE ultra-detailed English prompt that Imagen 4 can use to generate an image that matches the user's vision.
+
+USER'S REQUEST: "${userPrompt}"
+
+RULES:
+1. Describe in extreme detail: colors, textures, materials, lighting, composition, style, mood
+2. If the reference shows a person: describe age, ethnicity, hair, outfit, pose, expression in detail (do NOT name real people)
+3. If the reference shows a product/object: describe shape, material, brand elements, packaging
+4. If the reference shows a scene/environment: describe layout, architecture, atmosphere
+5. Incorporate the user's specific request INTO your detailed description
+6. Write as ONE continuous prompt paragraph in natural English (not a list)
+7. End with quality boosters: "high-resolution, professional photography, 8K ultra-detailed, studio lighting"
+8. Keep the prompt under 500 words
+9. Output ONLY the final prompt text. No explanations, no headings, no formatting.`
+  });
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('Nano Banana analysis timeout')), NANO_BANANA_TIMEOUT_MS);
+    });
+
+    const generatePromise = localAi.generate({
+      model: googleAI.model(NANO_BANANA_MODEL as any),
+      prompt: promptParts,
+      config: {
+        temperature: 0.3, // Low temp for accurate description
+      },
+    });
+
+    const result = await Promise.race([generatePromise, timeoutPromise]);
+    const enhancedPrompt = result.text?.trim();
+
+    if (enhancedPrompt && enhancedPrompt.length > 50) {
+      console.log(`[ImageGen] 🍌 Nano Banana enhanced prompt (${enhancedPrompt.length} chars): "${enhancedPrompt.substring(0, 150)}..."`);
+      return enhancedPrompt;
+    } else {
+      console.warn(`[ImageGen] 🍌 Nano Banana returned weak output. Falling back to original prompt.`);
+      return userPrompt;
+    }
+  } catch (error: any) {
+    console.error(`[ImageGen] 🍌 Nano Banana analysis failed: ${error.message}. Using original prompt.`);
+    return userPrompt;
+  }
+}
+
 
 const brandedImageGenerationFlow = ai.defineFlow(
   {
@@ -107,73 +194,108 @@ const brandedImageGenerationFlow = ai.defineFlow(
       outputFormat,
     } = input;
 
-    // Use per-key Genkit instance
     const localAi = getOrCreateGenkit(apiKey);
+    const selectedModel = modelName || 'gemini-3.1-flash-image-preview';
+    const hasReferenceImages = existingImageUris && existingImageUris.length > 0;
 
-    // Define a sequence of models to try (user's choice first, then fallbacks).
-    const modelsToTry = [
-      modelName || 'gemini-3.1-flash-image-preview',
-      'gemini-3.1-flash-image-preview',
-      'gemini-2.5-flash-image',
-    ];
-    const uniqueModelsToTry = [...new Set(modelsToTry)];
-
-    // Construct the prompt parts for the AI model.
-    const promptParts: Part[] = [{ text: generationPrompt }];
-    
-    // FIX #4: Convert all image URLs to base64 data URIs before passing to Genkit.
-    // Firebase Storage URLs are not accessible by Google AI directly.
-    if (existingImageUris && existingImageUris.length > 0) {
+    // ===== CONVERT REFERENCE IMAGES TO DATA URIs =====
+    const imageDataUris: string[] = [];
+    if (hasReferenceImages) {
       const imageConversions = await Promise.all(
-        existingImageUris.map(async (uri) => {
-          if (uri.startsWith('data:')) {
-            // Already a data URI, use as-is
-            return uri;
-          } else if (uri.startsWith('http://') || uri.startsWith('https://')) {
-            // Convert remote URL to data URI
-            return await urlToDataUri(uri);
-          }
+        existingImageUris!.map(async (uri) => {
+          if (uri.startsWith('data:')) return uri;
+          if (uri.startsWith('http://') || uri.startsWith('https://')) return await urlToDataUri(uri);
           return null;
         })
       );
-
       imageConversions.forEach((dataUri) => {
-        if (dataUri) {
-          promptParts.push({ media: { url: dataUri } });
-        }
+        if (dataUri) imageDataUris.push(dataUri);
       });
     }
 
-    // Build response modalities
+    // ===== DETERMINE PROMPT BASED ON MODEL TYPE =====
+    let finalTextPrompt = generationPrompt;
+
+    if (isImagenModel(selectedModel) && imageDataUris.length > 0) {
+      // ✨ NANO BANANA + IMAGEN PIPELINE ✨
+      // Step 1: Nano Banana analyzes reference images → enhanced text prompt
+      console.log(`[ImageGen] 🔗 Detected Imagen model + reference images → activating Nano Banana pipeline`);
+      finalTextPrompt = await enhancePromptWithNanoBanana(localAi, generationPrompt, imageDataUris);
+    }
+
+    // ===== BUILD PROMPT PARTS (for Gemini models) =====
+    const promptParts: Part[] = [{ text: generationPrompt }];
+    imageDataUris.forEach((dataUri) => {
+      promptParts.push({ media: { url: dataUri } });
+    });
+
+    // ===== FALLBACK MODEL LIST =====
+    const allFallbackModels = [
+      'gemini-3.1-flash-image-preview',
+      'gemini-3-pro-image-preview',
+      'gemini-2.5-flash-image',
+      'imagen-4.0-fast-generate-001',
+      'imagen-4.0-generate-001',
+    ];
+
+    const modelsToTry = [selectedModel, ...allFallbackModels];
+    const uniqueModelsToTry = [...new Set(modelsToTry)];
+
     const responseModalities = ['IMAGE', ...(outputFormat === 'IMAGE_AND_TEXT' ? ['TEXT'] : [])] as ('TEXT' | 'IMAGE' | 'AUDIO')[];
+    const PER_MODEL_TIMEOUT_MS = 90000;
 
     let lastError: any = null;
+    let failedModelCount = 0;
 
     for (const model of uniqueModelsToTry) {
       try {
-        console.log(`[ImageGen] Attempting generation with model: ${model}`);
+        console.log(`[ImageGen] Attempting generation with model: ${model} (${failedModelCount} previous failures)`);
 
-        // Build image config
-        const imageConfig: any = {
-          aspectRatio: aspectRatio,
-        };
-        const supportsResolution = model.includes('3.1-flash-image') || model.includes('3-pro-image');
-        if (resolution && supportsResolution) {
-          imageConfig.imageSize = RESOLUTION_MAP[resolution] || resolution;
-        }
-        
-        const result = await localAi.generate({
-          model: googleAI.model(model as any),
-          prompt: promptParts,
-          config: {
-            responseModalities,
-            imageConfig,
-            temperature: temperature ?? 1,
-          },
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Timeout after ${PER_MODEL_TIMEOUT_MS / 1000}s for model ${model}`)), PER_MODEL_TIMEOUT_MS);
         });
 
+        let generatePromise: Promise<any>;
+
+        if (isImagenModel(model)) {
+          // ===== IMAGEN 4 MODELS =====
+          // Use the enhanced prompt from Nano Banana (if available) or the original prompt
+          const imagenPrompt = (model === selectedModel && finalTextPrompt !== generationPrompt)
+            ? finalTextPrompt  // Use Nano Banana enhanced prompt for the originally selected Imagen model
+            : generationPrompt; // Use original prompt for fallback Imagen models (they didn't go through pipeline)
+
+          console.log(`[ImageGen] 🖼️ Imagen mode: text-only prompt (${imagenPrompt.length} chars)`);
+          generatePromise = localAi.generate({
+            model: googleAI.model(model as any),
+            prompt: imagenPrompt,
+            config: {
+              aspectRatio: aspectRatio,
+              numberOfImages: 1,
+            },
+          });
+        } else {
+          // ===== GEMINI IMAGE MODELS =====
+          const imageConfig: any = { aspectRatio };
+          const supportsResolution = model.includes('3.1-flash-image') || model.includes('3-pro-image');
+          if (resolution && supportsResolution) {
+            imageConfig.imageSize = RESOLUTION_MAP[resolution] || resolution;
+          }
+
+          generatePromise = localAi.generate({
+            model: googleAI.model(model as any),
+            prompt: promptParts,
+            config: {
+              responseModalities,
+              imageConfig,
+              temperature: temperature ?? 1,
+            },
+          });
+        }
+
+        const result = await Promise.race([generatePromise, timeoutPromise]);
+
         if (result.media) {
-          console.log(`[ImageGen] Successfully generated image with model: ${model}`);
+          console.log(`[ImageGen] ✅ Successfully generated image with model: ${model}`);
           const caption = outputFormat === 'IMAGE_AND_TEXT' ? result.text : undefined;
           return { generatedImageUri: result.media.url, caption };
         } else {
@@ -183,38 +305,56 @@ const brandedImageGenerationFlow = ai.defineFlow(
         }
       } catch (error: any) {
         lastError = error;
-        console.error(`[ImageGen] Generation with model ${model} failed:`, error.message);
+        failedModelCount++;
+        console.error(`[ImageGen] ❌ Generation with model ${model} failed:`, error.message);
         
-        // For 400 errors (bad request / unsupported params), also try the next model
-        // because different models support different config params
-        const isServiceUnavailable = error.message && (
-          error.message.includes('503') || 
-          error.message.toLowerCase().includes('unavailable') || 
-          error.message.toLowerCase().includes('rate limit') ||
-          error.message.includes('429') ||
-          error.message.includes('RESOURCE_EXHAUSTED') ||
-          error.message.includes('400') ||
-          error.message.includes('INVALID_ARGUMENT')
-        );
+        const errorMsg = error.message || '';
 
-        if (isServiceUnavailable) {
-          console.warn(`[ImageGen] Model ${model} failed (will try next model if available):`, error.message?.substring(0, 200));
+        if (errorMsg.includes('503') || errorMsg.toLowerCase().includes('unavailable')) {
+          console.warn(`[ImageGen] Model ${model} overloaded (503). Next model after 3s...`);
+          await sleep(3000);
+          continue;
+        }
+
+        if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.toLowerCase().includes('rate limit')) {
+          console.warn(`[ImageGen] Model ${model} rate limited (429). Next model after 5s...`);
+          await sleep(5000);
+          continue;
+        }
+
+        if (errorMsg.includes('400') || errorMsg.includes('INVALID_ARGUMENT')) {
+          console.warn(`[ImageGen] Model ${model} rejected params (400). Trying next...`);
+          continue;
+        }
+
+        if (errorMsg.includes('403') || errorMsg.includes('404')) {
+          console.error(`[ImageGen] Model ${model}: ${errorMsg.includes('403') ? '403 Forbidden' : '404 Not Found'}. Trying next...`);
+          continue;
+        }
+
+        if (errorMsg.includes('Timeout')) {
+          console.warn(`[ImageGen] Model ${model} timed out. Trying next...`);
           continue;
         }
         
-        // Only truly non-retryable errors (403 forbidden, 404 not found) should break
-        if (error.message?.includes('403') || error.message?.includes('404')) {
-          console.error(`[ImageGen] Non-retryable error for model ${model}. Stopping.`);
-          break;
-        }
-        
-        // For any other error, also try the next model
-        console.warn(`[ImageGen] Unknown error for model ${model}, trying next model...`);
+        console.warn(`[ImageGen] Unknown error for model ${model}, trying next...`);
         continue;
       }
     }
 
     console.error("[ImageGen] All image generation attempts failed.", lastError);
-    throw new Error(`Image generation failed on all available models. Last error: ${lastError?.message || 'An unknown error occurred.'}`);
+    
+    const errorDetail = lastError?.message || 'An unknown error occurred.';
+    let userMessage = `Tạo ảnh thất bại trên tất cả ${uniqueModelsToTry.length} model.`;
+    
+    if (errorDetail.includes('503') || errorDetail.toLowerCase().includes('unavailable')) {
+      userMessage += ' Tất cả các model đang quá tải. Vui lòng thử lại sau 1-2 phút.';
+    } else if (errorDetail.includes('429') || errorDetail.includes('RESOURCE_EXHAUSTED')) {
+      userMessage += ' API key đã hết lượt gọi (quota). Vui lòng thử lại sau hoặc sử dụng API key khác.';
+    } else {
+      userMessage += ` Lỗi cuối: ${errorDetail}`;
+    }
+    
+    throw new Error(userMessage);
   }
 );

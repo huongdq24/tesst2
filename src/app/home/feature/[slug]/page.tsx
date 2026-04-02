@@ -106,20 +106,20 @@ export default function FeatureWorkspacePage() {
   }
 
   return (
-    <div className="container py-8 h-full flex flex-col">
-      <div className="flex items-center justify-between gap-4 mb-8">
-        <div className="flex items-center gap-4">
-          <Button asChild variant="outline" size="icon">
+    <div className="container py-4 md:py-8 h-full flex flex-col px-4 md:px-8">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 md:mb-8">
+        <div className="flex items-center gap-3 shrink-0">
+          <Button asChild variant="outline" size="icon" className="h-9 w-9 shrink-0">
             <Link href="/home">
               <ArrowLeft className="h-4 w-4" />
             </Link>
           </Button>
-          <div className="flex items-center gap-3">
-            <div className="text-primary">{feature.icon}</div>
-            <h1 className="text-2xl font-bold">{t(feature.i18nKey)}</h1>
+          <div className="flex items-center gap-2.5">
+            <div className="text-teal-500">{feature.icon}</div>
+            <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">{t(feature.i18nKey)}</h1>
           </div>
         </div>
-        <div id="header-actions-portal"></div>
+        <div id="header-actions-portal" className="w-full md:w-auto overflow-x-auto scrollbar-none pb-1 md:pb-0"></div>
       </div>
 
       {renderWorkspace()}

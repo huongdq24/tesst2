@@ -131,13 +131,21 @@ export async function checkVideoStatus(operationName: string, apiKey: string): P
     // Call the Google AI REST API to check operation status
     const url = `https://generativelanguage.googleapis.com/v1beta/${operationName}`;
 
+    // Add timeout to prevent HeadersTimeoutError from crashing the poll loop
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'x-goog-api-key': apiKey,
       },
+      cache: 'no-store',
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorBody = await response.text();
@@ -209,6 +217,18 @@ export async function checkVideoStatus(operationName: string, apiKey: string): P
     };
 
   } catch (err: any) {
+    // Network errors (timeout, DNS, etc.) are TRANSIENT - don't kill the generation!
+    // Return 'processing' so the frontend keeps polling instead of showing an error.
+    const isTransientError = err.name === 'AbortError' ||
+      err.message?.includes('fetch failed') ||
+      err.message?.includes('TIMEOUT') ||
+      err.cause?.code === 'UND_ERR_HEADERS_TIMEOUT';
+
+    if (isTransientError) {
+      console.warn(`[CheckStatus] Transient network error (will retry): ${err.message || err.cause?.code}`);
+      return { status: 'processing', progress: 0 };
+    }
+
     console.error(`[CheckStatus] Error checking operation ${operationName}:`, err);
     return { status: 'failed', error: formatDetailedError(err.message || 'Unknown error') };
   }

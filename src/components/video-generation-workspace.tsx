@@ -4,7 +4,7 @@ import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download, ArrowRight, ImagePlus, ChevronDown, ChevronUp, Play, Pencil, Paperclip, Plus, Heart } from 'lucide-react';
+import { Loader2, Video, X, UploadCloud, Wand2, Copy, Images, Download, ArrowRight, ImagePlus, ChevronDown, ChevronUp, Play, Pencil, Paperclip, Plus, Heart, Mic } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { startVideoGeneration } from '@/app/actions/video-generation';
 import { checkVideoStatus } from '@/app/actions/check-video-status';
@@ -88,6 +88,8 @@ export function VideoGenerationWorkspace() {
   const [wizardStepImage, setWizardStepImage] = useState<string | null>(null);
   const [wizardUploadingImage, setWizardUploadingImage] = useState(false);
   const wizardFileInputRef = useRef<HTMLInputElement>(null);
+  const [wizardVoiceText, setWizardVoiceText] = useState('');
+  const [wizardVoiceType, setWizardVoiceType] = useState('Giọng nam ấm áp, lôi cuốn');
 
   // Before & After mode states
   const [inputMode, setInputMode] = useState<InputMode>('standard');
@@ -104,13 +106,24 @@ export function VideoGenerationWorkspace() {
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // New state for async job handling
+  // New state for async job handling (batch support)
+  type BatchOp = {
+    id: string;
+    operationName: string;
+    status: 'processing' | 'completed' | 'failed';
+    videoUrl?: string;
+    error?: string;
+    refImage?: string;
+    pollingErrors: number;
+  };
+  const [batchOperations, setBatchOperations] = useState<BatchOp[]>([]);
   const [operationName, setOperationName] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const pollingErrorsRef = useRef(0);
   const MAX_POLLING_ERRORS = 3;
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const batchPollingRef = useRef<NodeJS.Timeout | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   const { toast } = useToast();
@@ -144,6 +157,10 @@ export function VideoGenerationWorkspace() {
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
+    }
+    if (batchPollingRef.current) {
+      clearInterval(batchPollingRef.current);
+      batchPollingRef.current = null;
     }
   };
 
@@ -302,11 +319,127 @@ export function VideoGenerationWorkspace() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operationName, jobStatus, userData?.geminiApiKey, saveVideoToFirebase]);
 
+  // ── BATCH POLLING: Poll all pending batch operations ──
+  useEffect(() => {
+    const hasPending = batchOperations.some(op => op.status === 'processing');
+    if (!hasPending || jobStatus !== 'processing') return;
+
+    batchPollingRef.current = setInterval(async () => {
+      let updated = false;
+
+      const updatedOps = await Promise.all(
+        batchOperations.map(async (op) => {
+          if (op.status !== 'processing') return op;
+
+          try {
+            const result = await checkVideoStatus(op.operationName, userData?.geminiApiKey || '');
+
+            if (result.status === 'completed' && result.videoUrl) {
+              updated = true;
+              setGeneratedVideoUrls(prev => [...prev, result.videoUrl!]);
+              setVideoProject(prev => [...prev, { url: result.videoUrl!, duration: videoDuration + 's' }]);
+              saveVideoToFirebase(result.videoUrl);
+              toast({ title: `✅ Video hoàn tất!`, description: `1 video mới đã sẵn sàng.` });
+              return { ...op, status: 'completed' as const, videoUrl: result.videoUrl };
+            } else if (result.status === 'failed') {
+              updated = true;
+              const errorMsg = result.error || 'Unknown error';
+              console.warn(`[Batch Poll] Op ${op.id} failed:`, errorMsg);
+
+              // ── RAI SAFETY AUTO-BYPASS: Retry without reference image ──
+              const isRaiError = errorMsg.toLowerCase().includes('safety') ||
+                errorMsg.toLowerCase().includes('rai') ||
+                errorMsg.toLowerCase().includes('policy') ||
+                errorMsg.toLowerCase().includes('celebrity') ||
+                errorMsg.toLowerCase().includes('likeness') ||
+                errorMsg.toLowerCase().includes('filtered');
+
+              if (isRaiError && op.refImage && !op.id.includes('-retry')) {
+                console.log(`[Batch Poll] RAI detected for op ${op.id}. Auto-retrying text-only...`);
+                toast({ title: '🔄 Vượt bộ lọc an toàn...', description: 'Đang thử lại 1 video không dùng ảnh tham chiếu.' });
+
+                try {
+                  // Build prompt from current state
+                  const retryPrompt = promptRef.current || '';
+                  const retryResult = await startVideoGeneration({
+                    textPrompt: retryPrompt,
+                    referenceImageUris: undefined, // No image → bypass RAI
+                    referenceVideoUri: undefined,
+                    afterImageUri: undefined,
+                    aspectRatio: aspectRatioRef.current,
+                    modelName: videoModelRef.current,
+                    userId: user!.uid,
+                    apiKey: userData?.geminiApiKey || '',
+                    durationSeconds: videoDuration,
+                    frameRate: videoModelRef.current.includes('veo-2') ? frameRate : undefined,
+                    resolution: !videoModelRef.current.includes('veo-2') ? outputResolution : undefined,
+                  });
+
+                  if (retryResult.status === 'processing' && retryResult.operationName) {
+                    return { ...op, id: op.id + '-retry', operationName: retryResult.operationName, status: 'processing' as const, refImage: undefined, pollingErrors: 0 };
+                  } else if (retryResult.status === 'completed' && retryResult.videoUrl) {
+                    setGeneratedVideoUrls(prev => [...prev, retryResult.videoUrl!]);
+                    setVideoProject(prev => [...prev, { url: retryResult.videoUrl!, duration: videoDuration + 's' }]);
+                    saveVideoToFirebase(retryResult.videoUrl);
+                    return { ...op, id: op.id + '-retry', status: 'completed' as const, videoUrl: retryResult.videoUrl };
+                  }
+                } catch (retryErr: any) {
+                  console.error(`[Batch Poll] Retry failed for op ${op.id}:`, retryErr.message);
+                }
+              }
+
+              return { ...op, status: 'failed' as const, error: errorMsg };
+            }
+            return op; // Still processing
+          } catch (err: any) {
+            const newErrors = op.pollingErrors + 1;
+            if (newErrors >= MAX_POLLING_ERRORS) {
+              updated = true;
+              return { ...op, status: 'failed' as const, error: 'Mất kết nối', pollingErrors: newErrors };
+            }
+            return { ...op, pollingErrors: newErrors };
+          }
+        })
+      );
+
+      if (updated) {
+        setBatchOperations(updatedOps);
+
+        const stillPending = updatedOps.filter(op => op.status === 'processing');
+        if (stillPending.length === 0) {
+          const completedCount = updatedOps.filter(op => op.status === 'completed').length;
+          const failedCount = updatedOps.filter(op => op.status === 'failed').length;
+          setJobStatus(completedCount > 0 ? 'completed' : 'failed');
+          stopTimer();
+          if (batchPollingRef.current) {
+            clearInterval(batchPollingRef.current);
+            batchPollingRef.current = null;
+          }
+          toast({
+            title: `🏁 Hoàn tất tạo video hàng loạt`,
+            description: `${completedCount} thành công, ${failedCount} thất bại.`,
+          });
+        }
+      }
+    }, 15000);
+
+    return () => {
+      if (batchPollingRef.current) {
+        clearInterval(batchPollingRef.current);
+        batchPollingRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [batchOperations, jobStatus, userData?.geminiApiKey, saveVideoToFirebase]);
+
   // Effect to adjust settings based on the selected video model and resolution
   useEffect(() => {
     const isVeo2 = videoModel.includes('veo-2');
 
     if (isVeo2) {
+      if (outputResolution !== '720p') {
+        setOutputResolution('720p');
+      }
       // For Veo 2, ensure duration is valid. Resolution is not configurable by user.
       if (!['5', '6', '8'].includes(videoDuration)) {
         setVideoDuration('8');
@@ -348,6 +481,7 @@ export function VideoGenerationWorkspace() {
       setVideoProject([]);
     }
     setOperationName(null);
+    setBatchOperations([]);
     setJobStatus('idle');
     setErrorDetails(null);
     pollingErrorsRef.current = 0;
@@ -488,32 +622,102 @@ export function VideoGenerationWorkspace() {
     timerRef.current = setInterval(() => {
       setElapsedTime(prev => prev + 1);
     }, 1000);
-    toast({ title: "Bắt đầu tạo video...", description: "Quá trình này có thể mất vài phút." });
 
     // Smooth scroll to the current project area
     const mainCanvas = document.getElementById('main-canvas');
     if (mainCanvas) mainCanvas.scrollTo({ top: 0, behavior: 'smooth' });
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    // Build reference images and prompt based on input mode
-    let referenceImages: string[] | undefined;
-    // Priority: customPrompt > prompt (AI script) > scriptDescription (user typed)
+    // Build prompt
     let finalPrompt = customPrompt || prompt.trim() || scriptDescription.trim();
 
+    if (wizardVoiceText.trim() && !finalPrompt.includes('[MANDATORY SCRIPT/AUDIO INSTRUCTION]')) {
+      const voiceDesc = wizardVoiceType.trim() ? ` a ${wizardVoiceType} voice` : 'a clear voice';
+      finalPrompt += `\n\n[MANDATORY SCRIPT/AUDIO INSTRUCTION]: The main character in the scene speaks clearly directly to the camera/audience with ${voiceDesc}. They say EXACTLY the following dialogue: "${wizardVoiceText.trim()}". Their lip movements must perfectly match this dialogue.`;
+    }
+
+    // ── BATCH MODE: Multiple images in standard mode (no extend, no before-after) ──
+    const isBatchMode = !isAutoBypass && inputMode === 'standard' && inputImageUrls.length > 1 && !extendingVideoUrl;
+
+    if (isBatchMode) {
+      console.log(`[VideoGen] BATCH MODE: Spawning ${inputImageUrls.length} parallel video requests.`);
+      toast({ title: `🎬 Tạo ${inputImageUrls.length} video hàng loạt...`, description: `Mỗi ảnh tham chiếu sẽ tạo 1 video riêng biệt.` });
+
+      const newBatchOps: BatchOp[] = [];
+
+      // Spawn all requests in parallel
+      const promises = inputImageUrls.map(async (imageUrl, idx) => {
+        const opId = `batch-${Date.now()}-${idx}`;
+        try {
+          const result = await startVideoGeneration({
+            textPrompt: finalPrompt,
+            referenceImageUris: [imageUrl],
+            referenceVideoUri: undefined,
+            afterImageUri: undefined,
+            aspectRatio: aspectRatio,
+            modelName: videoModel,
+            userId: user.uid,
+            apiKey: userData.geminiApiKey,
+            durationSeconds: videoDuration,
+            frameRate: videoModel.includes('veo-2') ? frameRate : undefined,
+            resolution: !videoModel.includes('veo-2') ? outputResolution : undefined,
+          });
+
+          if (result.status === 'completed' && result.videoUrl) {
+            newBatchOps.push({ id: opId, operationName: '', status: 'completed', videoUrl: result.videoUrl, refImage: imageUrl, pollingErrors: 0 });
+            saveVideoToFirebase(result.videoUrl);
+          } else if (result.status === 'processing' && result.operationName) {
+            newBatchOps.push({ id: opId, operationName: result.operationName, status: 'processing', refImage: imageUrl, pollingErrors: 0 });
+          } else {
+            newBatchOps.push({ id: opId, operationName: '', status: 'failed', error: result.error || 'Phản hồi không hợp lệ', refImage: imageUrl, pollingErrors: 0 });
+          }
+        } catch (err: any) {
+          console.error(`[VideoGen Batch] Error for image ${idx}:`, err);
+          newBatchOps.push({ id: opId, operationName: '', status: 'failed', error: err.message || 'Lỗi không mong muốn', refImage: imageUrl, pollingErrors: 0 });
+        }
+      });
+
+      await Promise.all(promises);
+
+      // Add already-completed videos to project immediately
+      const completedNow = newBatchOps.filter(op => op.status === 'completed' && op.videoUrl);
+      if (completedNow.length > 0) {
+        setGeneratedVideoUrls(prev => [...prev, ...completedNow.map(op => op.videoUrl!)]);
+        setVideoProject(prev => [...prev, ...completedNow.map(op => ({ url: op.videoUrl!, duration: videoDuration + 's' }))]);
+      }
+
+      const stillProcessing = newBatchOps.filter(op => op.status === 'processing');
+      if (stillProcessing.length === 0) {
+        // All done immediately (unlikely but possible)
+        const anyFailed = newBatchOps.some(op => op.status === 'failed');
+        setJobStatus(anyFailed && completedNow.length === 0 ? 'failed' : 'completed');
+        stopTimer();
+        if (completedNow.length > 0) {
+          toast({ title: `✅ Tạo xong ${completedNow.length}/${inputImageUrls.length} video!` });
+        }
+      } else {
+        setBatchOperations(newBatchOps);
+        toast({ title: `⏳ ${stillProcessing.length} video đang xử lý...`, description: `${completedNow.length} đã hoàn tất ngay lập tức.` });
+      }
+
+      return; // Exit — batch polling useEffect will handle the rest
+    }
+
+    // ── SINGLE MODE (original behavior) ──
+    let referenceImages: string[] | undefined;
+
     if (isAutoBypass === true) {
-      referenceImages = undefined; // Strip images to bypass filter
+      referenceImages = undefined;
       finalPrompt = prompt.trim() || '';
       console.log("[VideoGen] Executing text-only fallback generation state...");
     } else if (inputMode === 'before-after' && beforeImageUrl && afterImageUrl) {
-      // BEFORE image = reference image = first frame of the video
       referenceImages = [beforeImageUrl];
-      // The AFTER image will be sent via afterImageUri to the flow,
-      // which will use Gemini to analyze it and build a detailed prompt.
-      // The user's prompt (if any) is passed along as additional context.
       finalPrompt = prompt.trim() || '';
     } else if (inputImageUrls.length > 0) {
-      referenceImages = inputImageUrls;
+      referenceImages = [inputImageUrls[0]]; // Single image → single video
     }
+
+    toast({ title: "Bắt đầu tạo video...", description: "Quá trình này có thể mất vài phút." });
 
     try {
       const result = await startVideoGeneration({
@@ -531,7 +735,6 @@ export function VideoGenerationWorkspace() {
       });
 
       if (result.status === 'failed') {
-        // Server returned an error
         const errorMessage = result.error || 'Đã xảy ra lỗi không mong muốn.';
         setErrorDetails(errorMessage);
         toast({
@@ -542,15 +745,12 @@ export function VideoGenerationWorkspace() {
         setJobStatus('failed');
         stopTimer();
       } else if (result.status === 'completed' && result.videoUrl) {
-        // Video returned directly (synchronous)
         setGeneratedVideoUrls([result.videoUrl]);
         setJobStatus('completed');
         stopTimer();
         toast({ title: "✅ Tạo video hoàn tất!", description: "Video của bạn đã sẵn sàng." });
-        // Save to Firebase Storage → Firestore
         saveVideoToFirebase(result.videoUrl);
       } else if (result.status === 'processing' && result.operationName) {
-        // LRO - start polling
         setOperationName(result.operationName);
         toast({ title: "🎬 Video đang được tạo...", description: "Quá trình này có thể mất 2-5 phút." });
       } else {
@@ -657,6 +857,11 @@ export function VideoGenerationWorkspace() {
   const activateExtendMode = async (videoUrlToExtend: string) => {
     if (!user) {
       toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập để mở rộng video.' });
+      return;
+    }
+
+    if (!videoUrlToExtend.includes('generativelanguage.googleapis.com/v1beta/files/')) {
+      toast({ variant: 'destructive', title: 'Không thể nối tiếp', description: 'Tính năng nối tiếp (Extend Video) chỉ hỗ trợ những video được tạo bằng các model Veo 3.1 trở lên.' });
       return;
     }
 
@@ -836,6 +1041,8 @@ export function VideoGenerationWorkspace() {
     setWizardCurrentQuestion(null);
     setWizardCustomInput('');
     setWizardStepImage(null);
+    setWizardVoiceText('');
+    setWizardVoiceType('Giọng nam ấm áp, lôi cuốn');
     setWizardLoading(true);
 
     try {
@@ -908,17 +1115,22 @@ export function VideoGenerationWorkspace() {
         isExtending: !!extendingVideoUrl,
         apiKey: userData?.geminiApiKey,
       });
-      
-      const compiledPrompt = result.compiledPrompt;
+
+      let compiledPrompt = result.compiledPrompt;
+      if (wizardVoiceText.trim()) {
+        const voiceDesc = wizardVoiceType.trim() ? ` a ${wizardVoiceType} voice` : 'a clear voice';
+        compiledPrompt += `\n\n[MANDATORY SCRIPT/AUDIO INSTRUCTION]: The main character in the scene speaks clearly directly to the camera/audience with ${voiceDesc}. They say EXACTLY the following dialogue: "${wizardVoiceText.trim()}". Their lip movements must perfectly match this dialogue.`;
+      }
+
       setScriptDescription(compiledPrompt);
-      
+
       if (!autoGenerate) {
         toast({ title: '✅ Prompt đã được tạo!', description: 'Bạn có thể chỉnh sửa hoặc ấn ✨ để tạo kịch bản AI.' });
       } else {
         // AUTO GENERATION FLOW: Use compiled prompt directly, skip AI script optimization
         toast({ title: '🎬 Đang tạo video...', description: 'Sử dụng prompt wizard trực tiếp.' });
         setPrompt(compiledPrompt);
-        
+
         // Start Video Generation directly with compiled prompt
         await handleGenerate(false, compiledPrompt);
       }
@@ -945,6 +1157,8 @@ export function VideoGenerationWorkspace() {
     setWizardCurrentQuestion(null);
     setWizardCustomInput('');
     setWizardStepImage(null);
+    setWizardVoiceText('');
+    setWizardVoiceType('Giọng nam ấm áp, lôi cuốn');
     setWizardLoading(false);
   };
 
@@ -966,15 +1180,15 @@ export function VideoGenerationWorkspace() {
       <ImageLibraryModal
         open={isLibraryOpen}
         onOpenChange={setIsLibraryOpen}
-        onImageSelect={(url) => { 
-          if (libraryTarget === 'standard') setInputImageUrls(p => [...p, url]); 
-          else if (libraryTarget === 'before') setBeforeImageUrl(url); 
-          else if (libraryTarget === 'after') setAfterImageUrl(url); 
+        onImageSelect={(url) => {
+          if (libraryTarget === 'standard') setInputImageUrls(p => [...p, url]);
+          else if (libraryTarget === 'before') setBeforeImageUrl(url);
+          else if (libraryTarget === 'after') setAfterImageUrl(url);
           else if (libraryTarget === 'wizard') {
             setWizardStepImage(url);
             if (!inputImageUrls.includes(url)) setInputImageUrls(prev => [...prev, url]);
           }
-          setIsLibraryOpen(false); 
+          setIsLibraryOpen(false);
         }}
         onVideoExtend={activateExtendMode}
       />
@@ -1043,23 +1257,61 @@ export function VideoGenerationWorkspace() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-              
-              {/* Generating Placeholder (if processing) */}
+
+              {/* Generating Placeholder(s) - batch aware */}
               {jobStatus === 'processing' && (activeTab === 'all' || activeTab === 'videos') && (
-                <div className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 group cursor-wait">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/5 to-cyan-500/5 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                  <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-3" />
-                  <p className="text-sm font-medium text-teal-800 dark:text-teal-400">Đang tạo video của bạn...</p>
-                  <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 mt-2 bg-teal-50 dark:bg-teal-900/40 px-2.5 py-1 rounded-full border border-teal-100 dark:border-teal-800">{elapsedTime}s</div>
-                  {isSaving && <p className="text-[10px] text-teal-500/70 mt-1 absolute bottom-4">Đang lưu trữ dữ liệu...</p>}
-                </div>
+                <>
+                  {batchOperations.length > 0 ? (
+                    <>
+                      {/* Batch progress summary bar */}
+                      <div className="col-span-full">
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/40">
+                          <Loader2 className="h-4 w-4 animate-spin text-teal-500 shrink-0" />
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-teal-800 dark:text-teal-300">
+                              Tạo video hàng loạt: {batchOperations.filter(op => op.status === 'completed').length}/{batchOperations.length} hoàn tất
+                            </p>
+                            <div className="w-full bg-teal-100 dark:bg-teal-900/40 rounded-full h-1.5 mt-1.5">
+                              <div
+                                className="bg-gradient-to-r from-teal-400 to-cyan-500 h-1.5 rounded-full transition-all duration-700"
+                                style={{ width: `${(batchOperations.filter(op => op.status !== 'processing').length / batchOperations.length) * 100}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">{elapsedTime}s</div>
+                        </div>
+                      </div>
+                      {/* Individual batch operation cards */}
+                      {batchOperations.filter(op => op.status === 'processing').map((op) => (
+                        <div key={op.id} className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 cursor-wait">
+                          {op.refImage && (
+                            <img src={op.refImage} alt="ref" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm" />
+                          )}
+                          <div className="relative z-10 flex flex-col items-center gap-2">
+                            <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
+                            <p className="text-xs font-medium text-teal-700 dark:text-teal-400">Đang xử lý...</p>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  ) : (
+                    /* Single video processing placeholder */
+                    <div className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 group cursor-wait">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/5 to-cyan-500/5 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                      <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-3" />
+                      <p className="text-sm font-medium text-teal-800 dark:text-teal-400">Đang tạo video của bạn...</p>
+                      <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 mt-2 bg-teal-50 dark:bg-teal-900/40 px-2.5 py-1 rounded-full border border-teal-100 dark:border-teal-800">{elapsedTime}s</div>
+                      {isSaving && <p className="text-[10px] text-teal-500/70 mt-1 absolute bottom-4">Đang lưu trữ dữ liệu...</p>}
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Render Images */}
               {(activeTab === 'all' || activeTab === 'images' || activeTab === 'favorites') && projectImages.filter(url => activeTab === 'favorites' ? favorites.includes(url) : true).map((url, index) => (
                 <div key={`img-${index}`} className="group relative w-full aspect-video rounded-xl bg-zinc-100 dark:bg-zinc-900 overflow-hidden border border-zinc-200 dark:border-white/10 shadow-sm animate-in fade-in zoom-in-95 cursor-pointer" onClick={() => setViewingImage(url)}>
                   <img src={url} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="Reference" />
-                  
+
                   {/* Overlay Gradient */}
                   <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-black/60 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
 
@@ -1069,12 +1321,12 @@ export function VideoGenerationWorkspace() {
                       <Heart className={cn("h-4 w-4 transition-colors", favorites.includes(url) ? "fill-red-500 text-red-500" : "")} />
                     </Button>
                   </div>
-                  
+
                   {/* Badge */}
                   <div className="absolute bottom-3 left-3 flex gap-1.5 pointer-events-none z-10">
                     <span className="text-[10px] font-bold text-white bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded shadow-sm uppercase tracking-wider">Hình ảnh</span>
                   </div>
-                  
+
                   {/* Download Button */}
                   <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity z-20">
                     <a href={url} download onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
@@ -1100,7 +1352,7 @@ export function VideoGenerationWorkspace() {
                         <span className="bg-white/90 dark:bg-black/60 text-teal-700 dark:text-white/90 text-[10px] uppercase font-bold px-2.5 py-1 rounded shadow-sm">
                           Clip {index + 1}
                         </span>
-                        
+
                         <div className="flex gap-1.5">
                           <Button variant="ghost" size="icon" className="h-8 w-8 bg-black/40 hover:bg-black/60 text-white rounded-full backdrop-blur-sm transition-transform active:scale-95" onClick={(e) => { e.stopPropagation(); toggleFavorite(clip.url); }}>
                             <Heart className={cn("h-4 w-4 transition-colors", favorites.includes(clip.url) ? "fill-red-500 text-red-500" : "")} />
@@ -1157,7 +1409,7 @@ export function VideoGenerationWorkspace() {
       {wizardActive && (
         <div className="absolute inset-0 z-[55] bg-white/40 dark:bg-black/80 backdrop-blur-xl flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="w-full max-w-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-white/10 rounded-[28px] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] overflow-hidden animate-in slide-in-from-bottom-8 zoom-in-95 duration-500 flex flex-col max-h-[90vh]">
-            
+
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-50 dark:border-white/5 shrink-0 bg-white dark:bg-zinc-900 relative">
               <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 to-cyan-400"></div>
@@ -1179,7 +1431,7 @@ export function VideoGenerationWorkspace() {
 
             {/* Scrollable Content Area */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-200">
-              
+
               {/* Progress Breadcrumbs (Chat history style) */}
               {wizardAnswers.length > 0 && (
                 <div className="flex flex-col gap-5">
@@ -1218,7 +1470,7 @@ export function VideoGenerationWorkspace() {
                     <h3 className="text-xl sm:text-2xl font-bold text-zinc-800 dark:text-white leading-tight tracking-tight">
                       {wizardCurrentQuestion.question}
                     </h3>
-                    
+
                     {/* Option Buttons (Pill Style) */}
                     <div className="flex flex-wrap gap-2.5">
                       {wizardCurrentQuestion.options.map((opt, i) => (
@@ -1251,7 +1503,7 @@ export function VideoGenerationWorkspace() {
                           finally { setWizardUploadingImage(false); }
                           if (e.target) e.target.value = '';
                         }} />
-                        
+
                         {wizardStepImage ? (
                           <div className="relative inline-block rounded-2xl overflow-hidden border-2 border-purple-200 shadow-md p-1 bg-white">
                             <img src={wizardStepImage} alt="step" className="h-32 rounded-xl w-auto object-cover" />
@@ -1310,13 +1562,43 @@ export function VideoGenerationWorkspace() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex flex-col items-center py-10 gap-4 text-center">
+                  <div className="flex flex-col items-center py-10 gap-4 text-center px-4">
                     <div className="h-16 w-16 rounded-full bg-teal-50 flex items-center justify-center relative">
                       <div className="absolute inset-0 bg-teal-400/20 blur-xl rounded-full"></div>
                       <Wand2 className="h-7 w-7 text-teal-500 relative z-10" />
                     </div>
                     <h3 className="text-xl font-bold text-zinc-800 dark:text-white">Tuyệt vời, đã đủ thông tin!</h3>
-                    <p className="text-sm text-zinc-500 max-w-sm">AI đã tổng hợp mọi chi tiết. Nhấn Hoàn tất để hệ thống viết ra kịch bản video chuyên nghiệp cho bạn.</p>
+                    <p className="text-sm text-zinc-500 max-w-sm">Nhấn Hoàn tất để hệ thống viết ra kịch bản video chuyên nghiệp cho bạn.</p>
+
+                    <div className="w-full max-w-md mt-6 text-left border border-teal-100 dark:border-teal-800/40 p-5 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm transition-all hover:shadow-md">
+                      <div className="flex items-center gap-2 mb-2">
+                         <div className="bg-teal-100 dark:bg-teal-900/50 p-1.5 rounded-lg"><Mic className="h-4 w-4 text-teal-600 dark:text-teal-400" /></div>
+                         <span className="font-bold text-zinc-800 dark:text-zinc-200">Nhân vật phát âm (Tuỳ chọn)</span>
+                      </div>
+                      <p className="text-[11px] text-teal-600 dark:text-teal-400 mb-4 bg-teal-50 dark:bg-teal-900/20 px-2.5 py-1.5 rounded-lg border border-teal-100 dark:border-teal-800/30 font-medium">✨ Veo 3 tự động tạo âm thanh & nhép môi nhân vật theo đúng đoạn hội thoại nhập dưới đây!</p>
+                      
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-[12px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5 block">Nội dung lời thoại:</label>
+                          <textarea 
+                            placeholder="Ví dụ: Xin chào mừng các bạn đã đến với sản phẩm mới..."
+                            value={wizardVoiceText}
+                            onChange={(e) => setWizardVoiceText(e.target.value)}
+                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl p-3 h-20 resize-none outline-none focus:ring-2 focus:ring-teal-400/50 transition-all text-zinc-800 dark:text-zinc-200"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[12px] font-semibold text-zinc-600 dark:text-zinc-400 mb-1.5 block">Loại giọng đọc (Phong cách):</label>
+                          <input 
+                            type="text"
+                            placeholder="VD: Nam tính trầm ấm, Nữ truyền cảm..."
+                            value={wizardVoiceType}
+                            onChange={(e) => setWizardVoiceType(e.target.value)}
+                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-teal-400/50 transition-all text-zinc-800 dark:text-zinc-200"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1421,13 +1703,13 @@ export function VideoGenerationWorkspace() {
           {/* Before & After Upload Area (Expands if B/A mode) */}
           {inputMode === 'before-after' && (
             <div className="bg-zinc-50/50 dark:bg-zinc-950/20 border-b border-zinc-100 dark:border-white/5 rounded-t-2xl relative flex flex-col transition-all duration-300">
-              
+
               {/* Collapse/Expand Toggle Button */}
               <div className={cn("flex justify-center z-10 transition-all duration-300", isBeforeAfterCollapsed ? "-mb-3 mt-0 py-2" : "-mb-3 mt-2")}>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setIsBeforeAfterCollapsed(!isBeforeAfterCollapsed)} 
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsBeforeAfterCollapsed(!isBeforeAfterCollapsed)}
                   className="h-6 px-3 text-[10px] uppercase font-bold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm hover:text-teal-600 hover:border-teal-200 dark:hover:border-teal-800 transition-colors bg-opacity-90 backdrop-blur-sm"
                 >
                   {isBeforeAfterCollapsed ? (
@@ -1440,83 +1722,83 @@ export function VideoGenerationWorkspace() {
 
               <div className={cn("flex gap-4 items-center justify-center overflow-x-auto scrollbar-none transition-all duration-300", isBeforeAfterCollapsed ? "h-0 opacity-0 overflow-hidden" : "p-4 min-h-[160px] opacity-100")}>
                 <div
-                className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
-                  beforeImageUrl ? "border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-orange-300 flex-1 min-h-[120px] flex items-center justify-center"
-                )}
-              >
-                {isUploadingBefore ? <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
-                  : beforeImageUrl ? (
-                    <div className="relative flex">
-                      <img src={beforeImageUrl} alt="B" className="max-h-[350px] w-auto block object-contain transition-opacity" />
-                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
-                        <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setBeforeImageUrl(null); }}><X className="h-4 w-4" /></Button>
-                      </div>
-                      <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">TRƯỚC</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
-                      <div
-                        className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
-                        onClick={() => !beforeImageUrl && beforeFileInputRef.current?.click()}
-                        title="Tải ảnh từ thiết bị"
-                      >
-                        <UploadCloud className="h-6 w-6 text-orange-400/70 mb-1.5" />
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Trước</span>
-                      </div>
-                      <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setLibraryTarget('before'); setIsLibraryOpen(true); }}
-                        className="text-[10px] font-semibold text-orange-500 h-7 w-full rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30"
-                      >
-                        Mở thư viện
-                      </Button>
-                    </div>
+                  className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
+                    beforeImageUrl ? "border-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-orange-300 flex-1 min-h-[120px] flex items-center justify-center"
                   )}
-              </div>
-
-              <div className="flex items-center text-zinc-400 shrink-0 px-1">
-                <div className="h-8 w-8 rounded-full bg-zinc-100 dark:bg-black/40 flex items-center justify-center shadow-inner">
-                  <ArrowRight className="h-4 w-4" />
+                >
+                  {isUploadingBefore ? <Loader2 className="h-4 w-4 animate-spin text-orange-500" />
+                    : beforeImageUrl ? (
+                      <div className="relative flex">
+                        <img src={beforeImageUrl} alt="B" className="max-h-[350px] w-auto block object-contain transition-opacity" />
+                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
+                          <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setBeforeImageUrl(null); }}><X className="h-4 w-4" /></Button>
+                        </div>
+                        <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/60 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">TRƯỚC</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
+                        <div
+                          className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
+                          onClick={() => !beforeImageUrl && beforeFileInputRef.current?.click()}
+                          title="Tải ảnh từ thiết bị"
+                        >
+                          <UploadCloud className="h-6 w-6 text-orange-400/70 mb-1.5" />
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Trước</span>
+                        </div>
+                        <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setLibraryTarget('before'); setIsLibraryOpen(true); }}
+                          className="text-[10px] font-semibold text-orange-500 h-7 w-full rounded-lg hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                        >
+                          Mở thư viện
+                        </Button>
+                      </div>
+                    )}
                 </div>
-              </div>
 
-              <div
-                className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
-                  afterImageUrl ? "border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-teal-300 flex-1 min-h-[120px] flex items-center justify-center"
-                )}
-              >
-                {isUploadingAfter ? <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
-                  : afterImageUrl ? (
-                    <div className="relative flex">
-                      <img src={afterImageUrl} alt="A" className="max-h-[350px] w-auto block object-contain transition-opacity" />
-                      <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
-                        <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setAfterImageUrl(null); }}><X className="h-4 w-4" /></Button>
-                      </div>
-                      <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/70 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">SAU</span>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
-                      <div
-                        className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
-                        onClick={() => !afterImageUrl && afterFileInputRef.current?.click()}
-                        title="Tải ảnh từ thiết bị"
-                      >
-                        <UploadCloud className="h-6 w-6 text-teal-500/60 mb-1.5" />
-                        <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Sau</span>
-                      </div>
-                      <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); setLibraryTarget('after'); setIsLibraryOpen(true); }}
-                        className="text-[10px] font-semibold text-teal-600 h-7 w-full rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/30"
-                      >
-                        Mở thư viện
-                      </Button>
-                    </div>
+                <div className="flex items-center text-zinc-400 shrink-0 px-1">
+                  <div className="h-8 w-8 rounded-full bg-zinc-100 dark:bg-black/40 flex items-center justify-center shadow-inner">
+                    <ArrowRight className="h-4 w-4" />
+                  </div>
+                </div>
+
+                <div
+                  className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
+                    afterImageUrl ? "border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-teal-300 flex-1 min-h-[120px] flex items-center justify-center"
                   )}
+                >
+                  {isUploadingAfter ? <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
+                    : afterImageUrl ? (
+                      <div className="relative flex">
+                        <img src={afterImageUrl} alt="A" className="max-h-[350px] w-auto block object-contain transition-opacity" />
+                        <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 flex transition-opacity items-center justify-center">
+                          <Button size="icon" variant="destructive" className="h-8 w-8 rounded-full shadow-lg" onClick={(e) => { e.stopPropagation(); setAfterImageUrl(null); }}><X className="h-4 w-4" /></Button>
+                        </div>
+                        <span className="absolute bottom-2 left-2 text-[10px] font-bold text-white bg-black/70 backdrop-blur-md px-2 py-0.5 rounded shadow-sm z-10 uppercase tracking-tighter">SAU</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center w-full h-full py-6 px-4">
+                        <div
+                          className="flex flex-col items-center justify-center group-hover:scale-105 transition-transform flex-1 w-full cursor-pointer py-1"
+                          onClick={() => !afterImageUrl && afterFileInputRef.current?.click()}
+                          title="Tải ảnh từ thiết bị"
+                        >
+                          <UploadCloud className="h-6 w-6 text-teal-500/60 mb-1.5" />
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Sau</span>
+                        </div>
+                        <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setLibraryTarget('after'); setIsLibraryOpen(true); }}
+                          className="text-[10px] font-semibold text-teal-600 h-7 w-full rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                        >
+                          Mở thư viện
+                        </Button>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -1557,7 +1839,7 @@ export function VideoGenerationWorkspace() {
 
             {/* Attachment Popover */}
             {showImageUpload && (
-              <div className="absolute bottom-[110%] left-0 mb-1 p-3 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl w-[280px] animate-in slide-in-from-bottom-2 z-50">
+              <div className="absolute bottom-[110%] left-[-4px] sm:left-0 mb-2 p-3 sm:p-4 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-[92vw] sm:w-[320px] max-w-[340px] animate-in zoom-in-95 origin-bottom-left z-50">
                 <div className="flex items-center gap-2 mb-3 bg-zinc-100 dark:bg-black/40 p-1 rounded-lg">
                   <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'standard' ? "bg-white text-teal-600 shadow-sm" : "text-zinc-500 hover:text-teal-600")} onClick={() => { setInputMode('standard'); }}>
                     Tiêu chuẩn
@@ -1595,11 +1877,11 @@ export function VideoGenerationWorkspace() {
                     )}
 
                     {/* Template Grid inside popover */}
-                    <div className="border-t border-zinc-100 dark:border-white/5 pt-2 mt-2">
-                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-1.5">Hãy ghi ngành nghề mà bạn muốn</p>
-                      
+                    <div className="border-t border-zinc-100 dark:border-white/5 pt-3 mt-3">
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider mb-2">Hãy ghi ngành nghề mà bạn muốn</p>
+
                       {/* Custom industry input */}
-                      <div className="flex gap-1.5 mb-2">
+                      <div className="flex gap-1.5 mb-3">
                         <input
                           type="text"
                           placeholder="VD: Spa, Nha khoa, Gym..."
@@ -1612,26 +1894,49 @@ export function VideoGenerationWorkspace() {
                             }
                           }}
                         />
-                        <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg bg-teal-500 hover:bg-teal-600 text-white shrink-0" onClick={(e) => {
+                        <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg bg-teal-500 hover:bg-teal-600 text-white shrink-0 shadow-sm" onClick={(e) => {
                           const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
                           if (input?.value.trim()) { setShowImageUpload(false); startWizard({ id: 'custom', label: input.value.trim(), prompt: '' }); }
                         }}>
                           <ArrowRight className="h-3 w-3" />
                         </Button>
                       </div>
-                      
+
                       <p className="text-[9px] text-zinc-400 mb-1.5">Hoặc chọn mẫu có sẵn:</p>
-                      <div className="grid grid-cols-2 gap-1.5 max-h-[180px] overflow-y-auto scrollbar-thin pr-1">
+                      <div className="grid grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto scrollbar-thin pr-1">
                         {VIDEO_TEMPLATES.filter(t => t.id !== 'none').map(tmpl => (
                           <div
                             key={tmpl.id}
                             onClick={() => { setShowImageUpload(false); startWizard(tmpl); }}
-                            className="bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-white/5 hover:border-teal-400/40 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-2 rounded-lg cursor-pointer text-left transition-all group"
+                            className="bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-white/5 hover:border-teal-400/40 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-2 rounded-lg cursor-pointer text-left transition-all group shadow-sm hover:shadow"
                           >
                             <p className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors leading-tight">{tmpl.label}</p>
                           </div>
                         ))}
                       </div>
+
+                      {/* Native Veo 3 Voice Synthesis */}
+                      <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/5">
+                        <div className="flex items-center gap-1.5 mb-2">
+                           <Mic className="h-3.5 w-3.5 text-teal-500" />
+                           <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Nhân vật phát âm (Veo 3)</p>
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Nội dung lời thoại (VD: Xin chào...)"
+                          value={wizardVoiceText}
+                          onChange={(e) => setWizardVoiceText(e.target.value)}
+                          className="w-full mb-1.5 h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-400/50 placeholder:text-zinc-400"
+                        />
+                        <input
+                          type="text"
+                          placeholder="Loại giọng (VD: Nam ấm áp...)"
+                          value={wizardVoiceType}
+                          onChange={(e) => setWizardVoiceType(e.target.value)}
+                          className="w-full h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-400/50 placeholder:text-zinc-400"
+                        />
+                      </div>
+
                     </div>
                   </div>
                 )}
@@ -1649,9 +1954,9 @@ export function VideoGenerationWorkspace() {
                     if (scriptDescription.trim() && !isGeneratingScript) handleGenerateScript();
                   }
                 }}
-                placeholder={inputMode === 'standard' ? "Bạn muốn tạo gì? (Bấm ✨ AI sẽ viết kịch bản giúp bạn)" : "Tùy chọn: Nhập thêm yêu cầu chuyển đổi (VD: Phong cách Vintage...)"}
-                className="resize-none border-0 bg-transparent shadow-none text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 min-h-[44px] max-h-[150px] overflow-y-auto py-3 pl-3 pr-10 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-zinc-200 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full"
-                rows={scriptDescription.length > 80 ? 3 : 1}
+                placeholder={inputMode === 'standard' ? "Nhập ý tưởng... (Bấm ✨ AI sẽ viết kịch bản)" : "Tùy chọn: Thêm yêu cầu chuyển đổi..."}
+                className="resize-none border-0 bg-transparent shadow-none text-[13px] md:text-sm leading-relaxed text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-500 min-h-[44px] max-h-[120px] overflow-y-auto py-3 pl-3 pr-10 focus-visible:ring-0 focus-visible:ring-offset-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-zinc-200 dark:[&::-webkit-scrollbar-thumb]:bg-zinc-800 [&::-webkit-scrollbar-thumb]:rounded-full"
+                rows={scriptDescription.length > 50 ? 2 : 1}
                 disabled={isBusy}
               />
 
@@ -1684,21 +1989,24 @@ export function VideoGenerationWorkspace() {
               <Button
                 variant="outline"
                 size="icon"
-                className={cn("h-11 w-11 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all sm:hidden bg-white shadow-sm hover:text-teal-600 text-zinc-600", showAdvancedSettings ? "bg-zinc-100" : "")}
+                className={cn("h-11 w-11 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all sm:hidden bg-white shadow-sm hover:text-teal-600 text-zinc-600", showAdvancedSettings ? "bg-zinc-100 ring-2 ring-teal-500/20" : "")}
                 onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
               >
-                <span className="text-xs font-bold">⚙️</span>
+                <span className="text-sm font-bold opacity-80">⚙️</span>
               </Button>
 
               {showAdvancedSettings && (
-                <div className="absolute right-0 bottom-[110%] mb-1 bg-white dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-xl w-[300px] p-4 animate-in slide-in-from-bottom-2 z-50 origin-bottom-right">
-                  <p className="text-[10px] font-bold text-zinc-400 mb-3 uppercase tracking-wider">Thông số Video</p>
+                <div className="absolute right-[-44px] sm:right-0 bottom-[110%] mb-2 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] w-[92vw] sm:w-[320px] max-w-[340px] p-4 animate-in zoom-in-95 origin-bottom-right z-50">
+                  <p className="text-[10px] font-bold text-zinc-400 mb-3 uppercase tracking-wider flex items-center justify-between">
+                    <span>Thông số Video</span>
+                    <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full text-zinc-400" onClick={() => setShowAdvancedSettings(false)}><X className="h-3 w-3"/></Button>
+                  </p>
                   <div className="space-y-4">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <Label className="text-[10px] text-zinc-500">KHUNG HÌNH</Label>
+                        <Label className="text-[10px] text-zinc-500 font-semibold">KHUNG HÌNH</Label>
                         <Select value={aspectRatio} onValueChange={(v) => setAspectRatio(v as '16:9' | '9:16')}>
-                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg shadow-sm"><SelectValue /></SelectTrigger>
                           <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                             <SelectItem value="16:9">Ngang 16:9</SelectItem>
                             <SelectItem value="9:16">Dọc 9:16</SelectItem>
@@ -1706,9 +2014,9 @@ export function VideoGenerationWorkspace() {
                         </Select>
                       </div>
                       <div className="space-y-1.5">
-                        <Label className="text-[10px] text-zinc-500">ĐỘ PHÂN GIẢI</Label>
+                        <Label className="text-[10px] text-zinc-500 font-semibold">ĐỘ PHÂN GIẢI</Label>
                         <Select value={outputResolution} onValueChange={setOutputResolution} disabled={videoModel.includes('veo-2')}>
-                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg shadow-sm"><SelectValue /></SelectTrigger>
                           <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                             <SelectItem value="720p">720p</SelectItem>
                             <SelectItem value="1080p">1080p</SelectItem>
@@ -1718,9 +2026,9 @@ export function VideoGenerationWorkspace() {
                       </div>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-zinc-500">THỜI LƯỢNG MẶC ĐỊNH</Label>
+                      <Label className="text-[10px] text-zinc-500 font-semibold">THỜI LƯỢNG MẶC ĐỊNH</Label>
                       <Select value={videoDuration} onValueChange={setVideoDuration}>
-                        <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg shadow-sm"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                           <SelectItem value="4">4 Giây (Tiết kiệm)</SelectItem>
                           <SelectItem value="6">6 Giây (Tiêu chuẩn)</SelectItem>
@@ -1729,13 +2037,13 @@ export function VideoGenerationWorkspace() {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label className="text-[10px] text-zinc-500">CỐT LÕI AI</Label>
+                      <Label className="text-[10px] text-zinc-500 font-semibold">CỐT LÕI AI</Label>
                       <Select value={videoModel} onValueChange={setVideoModel}>
-                        <SelectTrigger className="h-9 text-xs bg-teal-50 dark:bg-black/40 border-teal-200 dark:border-white/10 text-teal-700 dark:text-teal-300 rounded-lg font-medium"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-xs bg-teal-50 dark:bg-black/40 border-teal-200 dark:border-teal-800/40 text-teal-700 dark:text-teal-300 rounded-lg shadow-sm font-medium"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                           <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
                           <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
-                          {inputMode !== 'before-after' && (
+                          {inputMode !== 'before-after' && !extendingVideoUrl && (
                             <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0 Legacy</SelectItem>
                           )}
                         </SelectContent>

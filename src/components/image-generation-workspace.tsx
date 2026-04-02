@@ -328,8 +328,9 @@ export function ImageGenerationWorkspace() {
     }
   };
 
-  const handleGenerate = () => { // No longer async, just sets up the state-driven process
-    if (!prompt.trim()) {
+  const handleGenerate = async () => {
+    // Validate: need either an existing optimized prompt OR a simplePrompt to auto-optimize
+    if (!prompt.trim() && !simplePrompt.trim()) {
       toast({ variant: 'destructive', title: 'Thiếu prompt', description: 'Vui lòng nhập mô tả cho ảnh.' });
       return;
     }
@@ -346,12 +347,54 @@ export function ImageGenerationWorkspace() {
       return;
     }
 
+    // ===== AUTO STEP 1: If no optimized prompt yet, generate it from simplePrompt =====
+    let finalPrompt = prompt.trim();
+    if (!finalPrompt && simplePrompt.trim()) {
+      try {
+        setIsGeneratingPrompt(true);
+        toast({ title: '🔄 Bước 1/2: Đang tạo prompt tối ưu...', description: 'AI đang phân tích yêu cầu của bạn.' });
+
+        const result = await optimalImagePromptGeneration({
+          description: simplePrompt,
+          imageUris: inputImageUrls,
+          model: promptModel,
+          apiKey: userData?.geminiApiKey,
+        });
+
+        finalPrompt = result.optimized_english_prompt;
+        setPrompt(finalPrompt);
+        setNegativePrompt(result.negative_prompt);
+        setRawJsonOutput(JSON.stringify(result, null, 2));
+        
+        toast({ title: '✅ Prompt tối ưu đã sẵn sàng!', description: 'Đang chuyển sang bước tạo ảnh...' });
+      } catch (error: any) {
+        console.error(error);
+        let errorMsg = error.message;
+        if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+          errorMsg = 'API Gemini đã hết lượt (429). Vui lòng chọn mô hình khác hoặc thử lại sau.';
+        }
+        toast({ variant: 'destructive', title: 'Lỗi tạo prompt tối ưu', description: errorMsg });
+        setIsGeneratingPrompt(false);
+        return; // Stop here, don't proceed to image generation
+      } finally {
+        setIsGeneratingPrompt(false);
+      }
+    }
+
+    if (!finalPrompt) {
+      toast({ variant: 'destructive', title: 'Thiếu prompt', description: 'Không thể tạo ảnh khi chưa có prompt.' });
+      return;
+    }
+
+    // ===== STEP 2: Start image generation with optimized English prompt =====
+    // Update the prompt ref to use the optimized prompt
+    promptRef.current = finalPrompt;
+
     setIsGenerating(true);
     setGeneratedImageUrls([]);
-    generatedUrisForSaveRef.current = []; // Reset the ref
+    generatedUrisForSaveRef.current = [];
     setElapsedTime(0);
 
-    // Create a queue of indices to process
     const queue = Array.from({ length: numberOfImages }, (_, i) => i);
     setGenerationQueue(queue);
 
@@ -536,9 +579,9 @@ export function ImageGenerationWorkspace() {
                 {t('workspace.image.generatePromptButton')}
               </Button>
             </div>
-            <Separator />
+            <Separator className="hidden" />
             {/* Main prompt section */}
-            <div className="space-y-2 flex-1 flex flex-col">
+            <div className="space-y-2 flex-1 flex flex-col hidden">
               <Label htmlFor="prompt">{t('workspace.image.promptLabel')}</Label>
               <Textarea
                 id="prompt"
@@ -550,7 +593,7 @@ export function ImageGenerationWorkspace() {
               />
             </div>
             {negativePrompt && (
-              <div className="space-y-2 flex-1 flex flex-col">
+              <div className="space-y-2 flex-1 flex flex-col hidden">
                 <Label htmlFor="negative-prompt">Negative Prompt (Dành cho AI khác)</Label>
                 <Textarea
                   id="negative-prompt"
@@ -579,8 +622,18 @@ export function ImageGenerationWorkspace() {
                   <SelectItem value="gemini-3.1-flash-image-preview">iGen-3.1-flash-image-preview</SelectItem>
                   <SelectItem value="gemini-3-pro-image-preview">iGen-3-pro-image-preview</SelectItem>
                   <SelectItem value="gemini-2.5-flash-image">iGen-2.5-flash-image</SelectItem>
+                  <SelectItem value="imagen-4.0-fast-generate-001">Imagen 4 Fast ⚡</SelectItem>
+                  <SelectItem value="imagen-4.0-generate-001">Imagen 4 Standard</SelectItem>
+                  <SelectItem value="imagen-4.0-ultra-generate-001">Imagen 4 Ultra 🔥</SelectItem>
                 </SelectContent>
               </Select>
+              {imageModel.startsWith('imagen-') && (
+                <p className={`text-xs rounded px-2 py-1.5 ${inputImageUrls.length > 0 ? 'text-teal-700 bg-teal-50 border border-teal-200' : 'text-blue-600 bg-blue-50 border border-blue-200'}`}>
+                  {inputImageUrls.length > 0
+                    ? '🍌 Nano Banana sẽ phân tích ảnh tham chiếu → tạo prompt chi tiết → Imagen 4 tạo ảnh chất lượng cao.'
+                    : '🖼️ Imagen 4 tạo ảnh từ text. Thêm ảnh tham chiếu để kích hoạt pipeline Nano Banana + Imagen 4.'}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -616,11 +669,11 @@ export function ImageGenerationWorkspace() {
               </div>
             </div>
             {/* ===== Extended Config - Per Model, matching Google AI Studio ===== */}
-            <Separator />
+            <Separator className="hidden" />
 
             {/* Output Format: ONLY for gemini-3.1-flash-image-preview */}
-            {imageModel === 'gemini-3.1-flash-image-preview' && (
-              <div className="space-y-2">
+            {imageModel === 'gemini-3.1-flash-image-preview' && !imageModel.startsWith('imagen-') && (
+              <div className="space-y-2 hidden">
                 <Label>Định dạng đầu ra</Label>
                 <div className="grid grid-cols-2 gap-2">
                   <button
@@ -652,7 +705,7 @@ export function ImageGenerationWorkspace() {
             )}
 
             {/* Temperature: ALL models */}
-            <div className="space-y-3">
+            <div className="space-y-3 hidden">
               <div className="flex justify-between items-center">
                 <Label htmlFor="temperature">Nhiệt độ (Sáng tạo)</Label>
                 <span className="text-sm font-mono text-muted-foreground w-8 text-right">{temperature.toFixed(1)}</span>
@@ -678,11 +731,9 @@ export function ImageGenerationWorkspace() {
                 - gemini-3-pro-image-preview:      1K / 2K / 4K  (no 512)
                 - gemini-2.5-flash-image:          hidden
             */}
-            {imageModel !== 'gemini-2.5-flash-image' && (() => {
-              const resOptions = imageModel === 'gemini-3.1-flash-image-preview'
-                ? (['512', '1K', '2K', '4K'] as const)
-                : (['1K', '2K', '4K'] as const);
-              const cols = resOptions.length === 4 ? 'grid-cols-4' : 'grid-cols-3';
+            {!imageModel.startsWith('imagen-') && imageModel !== 'gemini-2.5-flash-image' && (() => {
+              const resOptions = ['1K', '2K', '4K'] as const;
+              const cols = 'grid-cols-3';
               return (
                 <div className="space-y-2">
                   <Label>Độ phân giải</Label>
@@ -707,7 +758,7 @@ export function ImageGenerationWorkspace() {
                 </div>
               );
             })()}
-            <Button onClick={handleGenerate} disabled={isBusy || !prompt.trim()} className="w-full mt-2">
+            <Button onClick={handleGenerate} disabled={isBusy || (!prompt.trim() && !simplePrompt.trim())} className="w-full mt-2">
               {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
               {t('workspace.image.generateButton')}
             </Button>

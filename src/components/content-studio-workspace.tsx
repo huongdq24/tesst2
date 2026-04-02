@@ -3,6 +3,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ImageGenerationWorkspace } from '@/components/image-generation-workspace';
 import { VideoWorkspaceSwitcher } from '@/components/video-workspace-switcher';
+import { VoiceGenerationWorkspace } from '@/components/voice-generation-workspace';
 import { useI18n } from '@/contexts/i18n-context';
 
 export function ContentStudioWorkspace() {
@@ -10,15 +11,19 @@ export function ContentStudioWorkspace() {
 
   return (
     <Tabs defaultValue="image" className="w-full flex-1 flex flex-col">
-      <TabsList className="grid w-full grid-cols-2 max-w-lg mx-auto">
+      <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto">
         <TabsTrigger value="image">{t('feature.imageGeneration')}</TabsTrigger>
         <TabsTrigger value="video">{t('feature.videoGeneration')}</TabsTrigger>
+        <TabsTrigger value="voice">Tạo giọng nói</TabsTrigger>
       </TabsList>
       <TabsContent value="image" className="flex-1 flex flex-col mt-6">
         <ImageGenerationWorkspace />
       </TabsContent>
       <TabsContent value="video" className="flex-1 flex flex-col mt-6">
         <VideoWorkspaceSwitcher />
+      </TabsContent>
+      <TabsContent value="voice" className="flex-1 flex flex-col mt-6">
+        <VoiceGenerationWorkspace />
       </TabsContent>
     </Tabs>
   );

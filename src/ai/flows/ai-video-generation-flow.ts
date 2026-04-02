@@ -101,7 +101,7 @@ export async function uploadVideoToGemini(url: string, apiKey: string, timeoutMs
 
     const arrayBuffer = await response.arrayBuffer();
     const mimeType = response.headers.get('content-type') || 'video/mp4';
-    
+
     console.log(`[VideoUpload] Downloading finished. Uploading to Gemini File API...`);
 
     const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`;
@@ -118,7 +118,7 @@ export async function uploadVideoToGemini(url: string, apiKey: string, timeoutMs
 
     clearTimeout(timeoutId);
     const uploadData = await uploadRes.json();
-    
+
     if (!uploadRes.ok) {
       console.warn(`[VideoUpload] Failed to upload to Gemini API:`, uploadData);
       return null;
@@ -164,7 +164,7 @@ async function analyzeAfterImage(imageUri: string, apiKey: string): Promise<stri
       return '';
     }
 
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent?key=${apiKey}`;
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-preview:generateContent?key=${apiKey}`;
     const geminiPayload = {
       contents: [{
         parts: [
@@ -231,25 +231,40 @@ const startVideoGenerationFlow = ai.defineFlow(
     const isVeo2 = modelName.includes('veo-2');
     const isVeo3 = modelName.includes('veo-3');
 
+    console.log(`[VideoGen] ===== NEW VIDEO GENERATION REQUEST =====`);
+    console.log(`[VideoGen] Model: ${modelName} (isVeo2=${isVeo2}, isVeo3=${isVeo3})`);
+    console.log(`[VideoGen] User requested: aspectRatio=${input.aspectRatio}, durationSeconds=${input.durationSeconds}, resolution=${input.resolution}`);
+    console.log(`[VideoGen] Has referenceImage=${!!(input.referenceImageUris?.length)}, afterImage=${!!input.afterImageUri}, referenceVideo=${!!input.referenceVideoUri}`);
+
     const config: any = {
       aspectRatio: input.aspectRatio,
     };
 
     if (input.durationSeconds) {
       let duration = Number(input.durationSeconds);
+      const originalDuration = duration;
       if (isVeo2) {
-        if (![5, 6, 8].includes(duration)) duration = 8;
+        // Veo 2: valid durations are 4, 5, 6, 8
+        if (![4, 5, 6, 8].includes(duration)) duration = 8;
       } else {
         // Veo 3.x: valid durations are 4, 6, 8
         if (![4, 6, 8].includes(duration)) duration = 8;
       }
+      if (originalDuration !== duration) {
+        console.warn(`[VideoGen] Duration adjusted from ${originalDuration}s to ${duration}s (not supported by ${isVeo2 ? 'Veo 2' : 'Veo 3.x'})`);
+      }
       // API expects durationSeconds as a NUMBER (integer)
       config.durationSeconds = duration;
+    } else {
+      console.log(`[VideoGen] No durationSeconds provided, using API default.`);
     }
 
     // Resolution: Veo 3.x supports 720p, 1080p, 4k; Veo 2 does not
     if (!isVeo2 && input.resolution) {
       config.resolution = input.resolution;
+      console.log(`[VideoGen] Set resolution=${input.resolution} for Veo 3.x.`);
+    } else if (isVeo2) {
+      console.log(`[VideoGen] Skipping resolution for Veo 2 (not supported).`);
     }
 
     // ===== BEFORE & AFTER MODE: Analyze the AFTER image with Gemini =====
@@ -309,55 +324,113 @@ const startVideoGenerationFlow = ai.defineFlow(
     if (input.referenceImageUris && input.referenceImageUris.length > 0) {
       firstFramePayload = await prepareImagePayload(input.referenceImageUris[0]);
     }
-    
+
     // For Before & After mode, pass the AFTER image explicitly as the 'lastFrame'
     if (input.afterImageUri) {
       lastFramePayload = await prepareImagePayload(input.afterImageUri);
       console.log(`[VideoGen] Prepared lastFrame payload from AFTER image. This ensures 100% match at the end of the video.`);
     }
 
-    // For Extend mode, prepare the reference video payload by passing the original Gemini Native URI
+    // ===== VIDEO EXTENSION MODE =====
+    // Official REST API format (from Google docs):
+    //   instances: [{ prompt: "...", video: { inlineData: { mimeType: "video/mp4", data: "<base64>" } } }]
+    //   parameters: { numberOfVideos: 1, resolution: "720p" }
+    // IMPORTANT: Video extension ONLY works with veo-3.1-generate-preview model.
+    // Veo 2 and veo-3.1-fast do NOT support video extension.
     if (input.referenceVideoUri) {
-      if (input.referenceVideoUri.includes('generativelanguage.googleapis.com/v1beta/files/')) {
-        // If it's already a Gemini File URI, skip upload and extract the pure URI
-        const match = input.referenceVideoUri.match(/(https:\/\/generativelanguage\.googleapis\.com\/v1beta\/files\/[a-zA-Z0-9]+)/);
-        if (match) {
-          referenceVideoPayload = { uri: match[1] };
-          console.log(`[VideoGen] Using original Gemini File URI for extension: ${match[1]}`);
-        }
-      } else {
-        // Fallback: Try uploading unknown/legacy external URLs to Gemini File API
-        console.warn(`[VideoGen] Attempting to upload a non-Gemini URL. This might be rejected by Veo 3 since it strictly requires videos generated by VEO.`);
-        const geminiUri = await uploadVideoToGemini(input.referenceVideoUri, input.apiKey || '');
-        if (geminiUri) {
-          referenceVideoPayload = { uri: geminiUri };
-          console.log(`[VideoGen] Prepared fallback video extension payload with URI: ${geminiUri}`);
+      // Force model to veo-3.1-generate-preview for extension (only model that supports it)
+      const extensionModel = 'veo-3.1-generate-preview';
+      if (modelName !== extensionModel) {
+        console.warn(`[VideoGen] Video extension requires ${extensionModel}. Overriding from ${modelName}.`);
+      }
+      // Override modelName for the API call (we use a local variable later)
+      (input as any)._extensionModelOverride = extensionModel;
+
+      // Force extension-specific parameters
+      config.resolution = '720p';
+      // Remove params that conflict with extension
+      delete config.durationSeconds;
+      delete config.aspectRatio;
+      delete config.numberOfVideos; // predictLongRunning doesn't support this param
+      console.log(`[VideoGen] Extension mode: forced model=${extensionModel}, resolution=720p`);
+
+      // The video was previously generated by Veo and is already stored on Google servers.
+      // predictLongRunning does NOT support inlineData/bytesBase64Encoded for video objects.
+      // We simply pass the existing Gemini File URI directly.
+      let videoUri = input.referenceVideoUri;
+
+      // Strip API key from URL if present (the API auth is handled via x-goog-api-key or ?key= on the main request)
+      if (videoUri.includes('?key=')) {
+        videoUri = videoUri.split('?key=')[0];
+      } else if (videoUri.includes('&key=')) {
+        videoUri = videoUri.replace(/[&?]key=[^&]+/, '');
+      }
+
+      // If it came through the proxy, extract the original URL
+      if (videoUri.startsWith('/api/proxy-video')) {
+        try {
+          const urlParam = new URL(videoUri, 'http://localhost').searchParams.get('url');
+          if (urlParam) {
+            videoUri = urlParam;
+            // Strip key again from the decoded URL
+            if (videoUri.includes('?key=')) {
+              videoUri = videoUri.split('?key=')[0];
+            } else if (videoUri.includes('&key=')) {
+              videoUri = videoUri.replace(/[&?]key=[^&]+/, '');
+            }
+          }
+        } catch (e) { /* ignore parse errors */ }
+      }
+
+      // Strip :download?alt=media suffix to get clean file URI
+      videoUri = videoUri.replace(/:download\?alt=media.*$/, '');
+
+      referenceVideoPayload = { uri: videoUri };
+      console.log(`[VideoGen] Extension: using existing Gemini file URI: ${videoUri}`);
+    }
+
+    // ===== STRIP UNSUPPORTED PARAMETERS for non-extension modes =====
+    if (!referenceVideoPayload) {
+      if (firstFramePayload && lastFramePayload) {
+        // Before/After interpolation mode
+        delete config.resolution;
+        delete config.durationSeconds;
+        console.log(`[VideoGen] Stripped resolution and durationSeconds for Before/After interpolation mode.`);
+      } else if (firstFramePayload || lastFramePayload) {
+        // Image-to-video mode: Veo 2 does not support resolution
+        if (isVeo2) {
+          delete config.resolution;
+          console.log(`[VideoGen] Stripped resolution for Veo 2 image-to-video mode.`);
         }
       }
     }
 
+    // Use override model for extension, otherwise use the user-selected model
+    const finalModelName = (input as any)._extensionModelOverride || modelName;
+    console.log(`[VideoGen] Final model: ${finalModelName}, config: ${JSON.stringify(config)}`);
 
     let lastError = '';
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
-        const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predictLongRunning?key=${input.apiKey}`;
-
-        // Prepare parameters
-        // Force-strip duration format for extensions to prevent internal server error crashes
-        if (referenceVideoPayload) {
-          delete config.durationSeconds; 
-        }
+        const fetchUrl = `https://generativelanguage.googleapis.com/v1beta/models/${finalModelName}:predictLongRunning?key=${input.apiKey}`;
 
         const payload: any = {
           instances: [{ prompt: enhancedPrompt }],
-          parameters: config,
+          parameters: { ...config }, // spread to avoid mutation across retries
         };
 
         // If we are extending a video, we MUST NOT pass `image` or `lastFrame`. 
         // Extension continues from the end of the video, so an initial frame contradicts it.
         if (referenceVideoPayload) {
           payload.instances[0].video = referenceVideoPayload;
+          // Veo 3.1 supports referenceImages to preserve subjects/characters
+          if (firstFramePayload) {
+            payload.instances[0].referenceImages = [
+              { image: firstFramePayload }
+            ];
+            console.log(`[VideoGen] Passed referenceImages to preserve subject during extension.`);
+          }
         } else {
           // Add FIRST frame (BEFORE image)
           if (firstFramePayload) {
@@ -369,9 +442,7 @@ const startVideoGenerationFlow = ai.defineFlow(
           }
         }
 
-
-
-        console.log(`[VideoGen] Calling ${fetchUrl.split('?')[0]} (attempt ${attempt + 1})...`);
+        console.log(`[VideoGen] Calling ${fetchUrl.split('?')[0]} (attempt ${attempt + 1}), parameters: ${JSON.stringify(payload.parameters)}`);
 
         // FIX #3: Add per-request timeout via AbortController
         const controller = new AbortController();
@@ -395,16 +466,16 @@ const startVideoGenerationFlow = ai.defineFlow(
           // FIX: For 400 errors, auto-strip potentially unsupported params and retry once
           if (statusCode === 400) {
             console.warn(`[VideoGen] Got 400 error: ${errMessage}`);
-            
+
             // === CELEBRITY/CHILDREN LIKENESS BYPASS ===
             // If the error is about celebrity or children likeness in the INPUT IMAGE,
             // retry WITHOUT the reference image. The detailed text prompt from script
             // generation already describes the scene perfectly, so Veo can generate
             // a matching video using text-only mode.
-            const isCelebrityError = errMessage.toLowerCase().includes('celebrity') || 
-                                     errMessage.toLowerCase().includes('likeness') ||
-                                     errMessage.toLowerCase().includes('children') ||
-                                     errMessage.toLowerCase().includes('photorealistic children');
+            const isCelebrityError = errMessage.toLowerCase().includes('celebrity') ||
+              errMessage.toLowerCase().includes('likeness') ||
+              errMessage.toLowerCase().includes('children') ||
+              errMessage.toLowerCase().includes('photorealistic children');
             if (isCelebrityError && (firstFramePayload || lastFramePayload)) {
               console.warn(`[VideoGen] Celebrity/children likeness detected in reference image. Retrying WITHOUT reference image (text-only mode)...`);
               // Remove the images from the payload so Veo uses text-only
@@ -417,25 +488,24 @@ const startVideoGenerationFlow = ai.defineFlow(
             }
 
             // Check if we have extra params that could be stripped
+            // If the strict configuration fails with 400 (e.g. Model doesn't support the duration)
+            // fallback to default limits rather than crashing the generation entirely.
             const hasExtraParams = config.resolution || config.durationSeconds;
             const isSafetyError = errMessage.toLowerCase().includes('safety') || errMessage.toLowerCase().includes('policy');
             if (hasExtraParams && attempt === 0 && !isSafetyError) {
-              console.warn(`[VideoGen] Stripping optional params (resolution, durationSeconds) and retrying...`);
-              // Remove params that might not be supported by this model version
+              console.warn(`[VideoGen] Stripping resolution and durationSeconds and retrying as fallback...`);
               delete config.resolution;
               delete config.durationSeconds;
-              // Update the payload for next retry
-              payload.parameters = config;
               await new Promise(resolve => setTimeout(resolve, 1000));
-              continue; // Retry with stripped params
+              continue; // Retry with stripped resolution and duration
             }
-            
+
             // If we already stripped params or had none, fail
             lastError = `Google API returned ${statusCode}: ${errMessage}`;
             console.error(`[VideoGen] Non-retryable error (${statusCode}):`, errMessage);
             break;
           }
-          
+
           if (statusCode === 403 || statusCode === 404) {
             // These are genuinely non-retryable - auth issue or model not found
             lastError = `Google API returned ${statusCode}: ${errMessage}`;

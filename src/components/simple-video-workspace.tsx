@@ -3,7 +3,7 @@
 import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, UploadCloud, Video, Heart, Download, Play, Sparkles, ArrowRight, Images, Library, Settings, X, Link2 } from 'lucide-react';
+import { Loader2, UploadCloud, Video, Heart, Download, Play, Sparkles, ArrowRight, Images, Library, Settings, X, Link2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { startVideoGeneration } from '@/app/actions/video-generation';
 import { checkVideoStatus } from '@/app/actions/check-video-status';
@@ -19,17 +19,24 @@ import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 
 // Types
 type InputMode = 'standard' | 'before-after';
-type VideoClip = { url: string; duration: string; geminiFileUri?: string | null; prompt?: string; originalVeoUrl?: string | null };
+type VideoClip = { url: string; duration: string; geminiFileUri?: string | null; prompt?: string; originalVeoUrl?: string | null; aspectRatio?: string };
 
 // Model definitions for display
 const MODEL_OPTIONS = [
   { value: 'veo-3.1-fast-generate-preview', label: 'iGen Veo 3.1 Nhanh', desc: 'Tốc độ nhanh, chất lượng tốt' },
   { value: 'veo-3.1-generate-preview', label: 'iGen Veo 3.1 HQ', desc: 'Chất lượng cao nhất' },
-  { value: 'veo-2.0-generate-preview', label: 'iGen Veo 2.0', desc: 'Phiên bản ổn định cũ' },
+  { value: 'veo-2.0-generate-001', label: 'iGen Veo 2.0', desc: 'Phiên bản ổn định cũ (chỉ 720p)' },
 ];
 
-const DURATION_OPTIONS = [
+const DURATION_OPTIONS_VEO3 = [
   { value: '4', label: '4 giây' },
+  { value: '6', label: '6 giây' },
+  { value: '8', label: '8 giây' },
+];
+
+const DURATION_OPTIONS_VEO2 = [
+  { value: '4', label: '4 giây' },
+  { value: '5', label: '5 giây' },
   { value: '6', label: '6 giây' },
   { value: '8', label: '8 giây' },
 ];
@@ -50,12 +57,12 @@ export function SimpleVideoWorkspace() {
 
   // Settings state
   const [videoModel, setVideoModel] = useState('veo-3.1-fast-generate-preview');
-  const [videoDuration, setVideoDuration] = useState('8');
+  const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16'>('16:9');
+  const [videoDuration, setVideoDuration] = useState('4');
   const [videoQuality, setVideoQuality] = useState('1080p');
-  const [showSettings, setShowSettings] = useState(false);
 
   // Extend Video state
-  const [extendVideoUrl, setExtendVideoUrl] = useState<string | null>(null);
+  const [extendingVideoUrl, setExtendingVideoUrl] = useState<string | null>(null);
   const [extendVideoPrompt, setExtendVideoPrompt] = useState<string | null>(null);
 
   // Upload & Library states
@@ -69,45 +76,59 @@ export function SimpleVideoWorkspace() {
   const [jobStatus, setJobStatus] = useState<'idle' | 'processing' | 'completed' | 'failed'>('idle');
   const [operationName, setOperationName] = useState<string | null>(null);
   const [errorDetails, setErrorDetails] = useState<string | null>(null);
+  const [generationStage, setGenerationStage] = useState<'script' | 'uploading' | 'rendering' | null>(null);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
   const pollingErrorsRef = useRef(0);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  const stopTimer = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
 
   // Project state
   const [videoProject, setVideoProject] = useState<VideoClip[]>([]);
+  const [hiddenVideoUrls, setHiddenVideoUrls] = useState<Set<string>>(new Set());
+  const visibleVideos = videoProject.filter(v => !hiddenVideoUrls.has(v.url));
   const { toast } = useToast();
   const { user, userData } = useAuth();
 
   const promptRef = useRef(prompt);
   useEffect(() => { promptRef.current = prompt; }, [prompt]);
 
-  // Firebase Realtime Listener for Gallery
+  // Firebase Realtime Listener Removed. Workspace now acts as a temporary session.
+
+  // Adjust quality & duration settings based on selected model
+  const isVeo2Selected = videoModel.includes('veo-2');
+  const durationOptions = isVeo2Selected ? DURATION_OPTIONS_VEO2 : DURATION_OPTIONS_VEO3;
+
   useEffect(() => {
-    if (!user) return;
-    const q = query(
-      collection(firestore, 'generatedVideos'),
-      where('ownerId', '==', user.uid)
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const videos: (VideoClip & { timestamp: number })[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        if (data.videoUrl) {
-          videos.push({
-            url: data.videoUrl,
-            duration: '8s',
-            prompt: data.prompt,
-            originalVeoUrl: data.originalVeoUrl || null,
-            timestamp: data.createdAt?.toMillis() || 0
-          });
-        }
-      });
-      videos.sort((a, b) => b.timestamp - a.timestamp);
-      const finalVideos = videos.map(({ timestamp, ...clip }) => clip);
-      setVideoProject(finalVideos);
-    });
-    return () => unsubscribe();
-  }, [user]);
+    if (isVeo2Selected) {
+      // Veo 2: force 720p quality
+      if (videoQuality !== '720p') {
+        setVideoQuality('720p');
+        toast({
+          title: 'Chất lượng đã tự động điều chỉnh',
+          description: 'Model Veo 2.0 chỉ hỗ trợ chất lượng 720p.',
+        });
+      }
+      // Veo 2 doesn't support 4s in certain contexts but the API will handle fallback;
+      // However if user selected a duration not valid for Veo 2, correct it
+    } else {
+      // Veo 3.x: if user had selected 5s (only valid for Veo 2), switch to 4s
+      if (videoDuration === '5') {
+        setVideoDuration('4');
+        toast({
+          title: 'Thời lượng đã tự động điều chỉnh',
+          description: 'Model Veo 3.x không hỗ trợ 5 giây. Đã chuyển về 4 giây.',
+        });
+      }
+    }
+  }, [isVeo2Selected, videoQuality, videoDuration, toast]);
 
   // Upload handler
   const handleFileUpload = async (file: File, target: 'standard' | 'before' | 'after') => {
@@ -166,7 +187,7 @@ export function SimpleVideoWorkspace() {
         prompt: finalPrompt,
         videoUrl: downloadURL,
         originalVeoUrl: originalVeoUrl, // CRITICAL: needed for extend/continuation
-        aspectRatio: '16:9',
+        aspectRatio: videoAspectRatio,
         modelName: videoModel,
         createdAt: serverTimestamp(),
       });
@@ -193,7 +214,15 @@ export function SimpleVideoWorkspace() {
           if (result.status === 'completed') {
             setJobStatus('completed');
             setIsGenerating(false);
+            stopTimer();
             if (result.videoUrl) {
+              setVideoProject(prev => [{
+                url: `/api/proxy-video?url=${encodeURIComponent(result.videoUrl!)}`,
+                duration: videoDuration + 's',
+                prompt: promptRef.current,
+                originalVeoUrl: result.videoUrl,
+                aspectRatio: videoAspectRatio
+              }, ...prev]);
               saveVideoToFirebase(result.videoUrl, promptRef.current);
             }
             toast({ title: "✅ Tạo video hoàn tất!" });
@@ -202,6 +231,7 @@ export function SimpleVideoWorkspace() {
           } else if (result.status === 'failed') {
             setJobStatus('failed');
             setIsGenerating(false);
+            stopTimer();
             setErrorDetails(result.error || "Lỗi không xác định");
             toast({ variant: 'destructive', title: "❌ Tạo video thất bại", description: result.error });
             cleanupPolling();
@@ -212,22 +242,29 @@ export function SimpleVideoWorkspace() {
           if (pollingErrorsRef.current >= 3) {
             setJobStatus('failed');
             setIsGenerating(false);
+            stopTimer();
             cleanupPolling();
             setOperationName(null);
           }
         }
-      }, 10000);
+      }, 5000);
     }
     return () => cleanupPolling();
-  }, [operationName, jobStatus, userData?.geminiApiKey, toast]);
+  }, [operationName, jobStatus, userData?.geminiApiKey, toast, saveVideoToFirebase]);
 
-  // Select video to extend
-  const handleExtendVideo = (clip: VideoClip) => {
-    if (!clip.originalVeoUrl) {
-      toast({ variant: 'destructive', title: 'Không thể nối tiếp', description: 'Video này không có URL gốc từ Veo. Chỉ video mới tạo sau bản cập nhật này mới hỗ trợ nối tiếp.' });
+  const activateExtendMode = (clip: VideoClip) => {
+    const originalVeoUrl = clip.originalVeoUrl || '';
+    if (!originalVeoUrl.includes('generativelanguage.googleapis.com/v1beta/files/')) {
+      toast({ variant: 'destructive', title: 'Không thể nối tiếp', description: 'Tính năng nối tiếp (Extend Video) chỉ hỗ trợ những video được tạo trực tiếp bằng các model Veo 3.1 trở lên.' });
       return;
     }
-    setExtendVideoUrl(clip.originalVeoUrl);
+
+    if (videoModel.includes('veo-2')) {
+      setVideoModel('veo-3.1-fast-generate-preview');
+      toast({ title: 'Đã tự động chuyển model', description: 'Tính năng nối tiếp chỉ khả dụng với model từ Veo 3.1.' });
+    }
+
+    setExtendingVideoUrl(originalVeoUrl);
     setExtendVideoPrompt(clip.prompt || null);
     setPrompt('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -235,9 +272,18 @@ export function SimpleVideoWorkspace() {
   };
 
   const cancelExtend = () => {
-    setExtendVideoUrl(null);
+    setExtendingVideoUrl(null);
     setExtendVideoPrompt(null);
   };
+
+  const resetGenerationState = () => {
+    setJobStatus('idle');
+    setOperationName(null);
+    setErrorDetails(null);
+    setGenerationStage(null);
+    stopTimer();
+    setElapsedTime(0);
+  }
 
   const handleGenerate = async () => {
     if (!user || !userData?.geminiApiKey) {
@@ -246,7 +292,7 @@ export function SimpleVideoWorkspace() {
     }
 
     // Extend mode validation
-    if (extendVideoUrl) {
+    if (extendingVideoUrl) {
       if (!prompt.trim()) {
         toast({ variant: 'destructive', title: 'Thiếu mô tả', description: 'Vui lòng nhập mô tả cho phần video tiếp theo.' });
         return;
@@ -263,51 +309,68 @@ export function SimpleVideoWorkspace() {
     }
 
     setIsGenerating(true);
-    setJobStatus('processing');
-    setErrorDetails(null);
+    resetGenerationState();
+    timerRef.current = setInterval(() => setElapsedTime(prev => prev + 1), 1000);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       // EXTEND MODE
-      if (extendVideoUrl) {
-        toast({ title: "🔗 Đang nối tiếp video..." });
+      if (extendingVideoUrl) {
+        toast({ title: "✨ Đang tối ưu kịch bản..." });
+        setGenerationStage('script');
 
         const aiResult = await videoScriptGeneration({
-          description: prompt || 'Continue this video seamlessly with natural motion',
+          description: `Video part 1 was about: "${extendVideoPrompt}". Part 2 should be: "${prompt || 'Continue smoothly'}". MAKE SURE to maintain the same subject and character!`,
           model: 'gemini-3.1-flash-lite-preview',
           apiKey: userData.geminiApiKey,
         });
         const finalPrompt = aiResult.optimized_english_prompt;
+        promptRef.current = finalPrompt; // IMPORTANT for polling to save the right prompt
 
+        toast({ title: "🔗 Đang gửi yêu cầu nối tiếp video...", description: "Sử dụng model Veo 3.1 (chỉ model này hỗ trợ nối tiếp)" });
+        setGenerationStage('uploading');
+
+        // Video extension ONLY works with veo-3.1-generate-preview (per Google API docs)
         const result = await startVideoGeneration({
           textPrompt: finalPrompt,
-          referenceVideoUri: extendVideoUrl,
-          aspectRatio: '16:9',
-          modelName: videoModel,
+          referenceVideoUri: extendingVideoUrl,
+          referenceImageUris: standardImage ? [standardImage] : undefined, // Keep original character image
+          aspectRatio: videoAspectRatio,
+          modelName: 'veo-3.1-generate-preview', // Force: only model supporting extension
           userId: user.uid,
           apiKey: userData.geminiApiKey,
-          durationSeconds: videoDuration,
-          resolution: videoQuality,
         });
 
         if (result.status === 'failed') {
           setJobStatus('failed');
           setIsGenerating(false);
+          stopTimer();
           toast({ variant: 'destructive', title: "Lỗi nối tiếp video", description: result.error });
         } else if (result.status === 'completed' && result.videoUrl) {
           setJobStatus('completed');
           setIsGenerating(false);
+          stopTimer();
+          setVideoProject(prev => [{
+            url: `/api/proxy-video?url=${encodeURIComponent(result.videoUrl!)}`,
+            duration: videoDuration + 's',
+            prompt: finalPrompt,
+            originalVeoUrl: result.videoUrl,
+            aspectRatio: videoAspectRatio
+          }, ...prev]);
           saveVideoToFirebase(result.videoUrl, finalPrompt);
           toast({ title: "✅ Nối tiếp video hoàn tất!" });
           cancelExtend();
         } else if (result.status === 'processing' && result.operationName) {
           setOperationName(result.operationName);
+          setJobStatus('processing');
+          setGenerationStage('rendering');
         }
         return;
       }
 
       // NORMAL MODE
-      toast({ title: "✨ Đang tự động tối ưu kịch bản..." });
+      toast({ title: "✨ Đang tối ưu kịch bản..." });
+      setGenerationStage('script');
 
       let finalPrompt = prompt;
       let referenceImageUris: string[] = [];
@@ -330,13 +393,14 @@ export function SimpleVideoWorkspace() {
         finalPrompt = prompt.trim() || 'Chuyển đổi mượt mà từ ảnh trước sang ảnh sau';
       }
 
-      toast({ title: "🎬 Đang tạo video..." });
+      toast({ title: "🎬 Đang gửi yêu cầu tạo video..." });
+      setGenerationStage('uploading');
 
       const result = await startVideoGeneration({
         textPrompt: finalPrompt,
         referenceImageUris: referenceImageUris,
         afterImageUri: afterImageUri,
-        aspectRatio: '16:9',
+        aspectRatio: videoAspectRatio,
         modelName: videoModel,
         userId: user.uid,
         apiKey: userData.geminiApiKey,
@@ -347,18 +411,30 @@ export function SimpleVideoWorkspace() {
       if (result.status === 'failed') {
         setJobStatus('failed');
         setIsGenerating(false);
+        stopTimer();
         toast({ variant: 'destructive', title: "Lỗi tạo video", description: result.error });
       } else if (result.status === 'completed' && result.videoUrl) {
         setJobStatus('completed');
         setIsGenerating(false);
+        stopTimer();
+        setVideoProject(prev => [{
+          url: `/api/proxy-video?url=${encodeURIComponent(result.videoUrl!)}`,
+          duration: videoDuration + 's',
+          prompt: finalPrompt,
+          originalVeoUrl: result.videoUrl,
+          aspectRatio: videoAspectRatio
+        }, ...prev]);
         saveVideoToFirebase(result.videoUrl, finalPrompt);
         toast({ title: "✅ Tạo video hoàn tất!" });
       } else if (result.status === 'processing' && result.operationName) {
         setOperationName(result.operationName);
+        setJobStatus('processing');
+        setGenerationStage('rendering');
       }
     } catch (error: any) {
       console.error(error);
       setIsGenerating(false);
+      stopTimer();
       setJobStatus('failed');
       toast({ variant: 'destructive', title: "Lỗi kết nối", description: error.message });
     }
@@ -367,213 +443,176 @@ export function SimpleVideoWorkspace() {
   // Helper to get current model label
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === videoModel)?.label || videoModel;
 
+  const isBusy = isGenerating || isUploading;
+
   return (
-    <div className="w-full max-w-[900px] mx-auto flex flex-col pt-8 pb-24 px-4">
+    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 flex-1 w-full max-w-[1400px] mx-auto pt-8 pb-24 px-4">
+      <div className="lg:col-span-2 flex flex-col">
+        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex-1 flex flex-col">
+          <div className="p-6 flex flex-col flex-1 gap-6">
 
-      {/* HEADER TABS (Mode Switcher) */}
-      <div className="flex justify-center mb-10">
-        <div className="inline-flex items-center p-1.5 bg-zinc-100/80 dark:bg-zinc-800/60 backdrop-blur-md rounded-full border border-zinc-200/80 dark:border-white/5 shadow-inner">
-          <button
-            onClick={() => setActiveMode('standard')}
-            className={cn(
-              "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
-              activeMode === 'standard'
-                ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            )}
-          >
-            <Video className="w-4 h-4 mr-2" /> Tiêu chuẩn (1 Ảnh)
-          </button>
-          <button
-            onClick={() => setActiveMode('before-after')}
-            className={cn(
-              "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
-              activeMode === 'before-after'
-                ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
-                : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
-            )}
-          >
-            <Images className="w-4 h-4 mr-2" /> Trước / Sau
-          </button>
-        </div>
-      </div>
-
-      {/* LUXURY MAIN CARD */}
-      <div className="relative bg-white/70 dark:bg-zinc-900/50 backdrop-blur-2xl border border-white/60 dark:border-zinc-800/60 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.1)] dark:shadow-[0_8px_40px_-12px_rgba(20,184,166,0.05)] rounded-[2.5rem] p-8 md:p-12 overflow-hidden">
-
-        {/* Subtle decorative glows */}
-        <div className="absolute top-[-20%] left-[-10%] w-[40%] h-[40%] bg-teal-400/10 dark:bg-teal-500/10 blur-[100px] rounded-full pointer-events-none" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-cyan-400/10 dark:bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none" />
-
-        <div className="relative z-10 text-center mb-10">
-          <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-3 bg-gradient-to-br from-zinc-900 to-zinc-600 dark:from-white dark:to-zinc-400 bg-clip-text text-transparent">
-            {extendVideoUrl ? 'Nối tiếp Video' : activeMode === 'standard' ? 'Biến ảnh tĩnh thành kiệt tác động' : 'Phép màu chuyển đổi liền mạch'}
-          </h2>
-          <p className="text-zinc-500 dark:text-zinc-400 text-base md:text-lg max-w-xl mx-auto font-medium">
-            {extendVideoUrl ? 'Mô tả nội dung bạn muốn tiếp diễn từ video đã chọn.' : 'Mô tả ý tưởng hoặc tải ảnh sản phẩm lên, AI sinh tạo của chúng tôi sẽ xử lý phần còn lại.'}
-          </p>
-        </div>
-
-        {/* EXTEND VIDEO BANNER */}
-        {extendVideoUrl && (
-          <div className="relative z-10 w-full max-w-2xl mx-auto mb-8">
-            <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800/50 rounded-2xl p-4 flex gap-4 items-center">
-              <div className="relative w-32 aspect-video rounded-xl overflow-hidden bg-black shrink-0 shadow-md">
-                <video src={extendVideoUrl} className="w-full h-full object-cover" muted playsInline />
-                <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                  <Play className="w-6 h-6 text-white/80" />
-                </div>
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <Link2 className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" />
-                  <span className="font-bold text-teal-700 dark:text-teal-300 text-sm">Đang nối tiếp từ video gốc</span>
-                </div>
-                {extendVideoPrompt && (
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{extendVideoPrompt}</p>
-                )}
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-                  {currentModelLabel} · {videoDuration}s · {videoQuality}
-                </p>
-              </div>
-              <Button variant="ghost" size="icon" onClick={cancelExtend} className="h-8 w-8 rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 shrink-0">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </div>
-        )}
-
-        {/* UPLOAD AREA (hidden when extending) */}
-        {!extendVideoUrl && (
-          <>
-            {activeMode === 'standard' ? (
-              <div className="flex flex-col items-center gap-4 mb-10 w-full max-w-2xl mx-auto">
-                <div
-                  onClick={() => { setUploadTarget('standard'); fileInputRef.current?.click(); }}
-                  className="w-full aspect-[21/9] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-400/50 hover:bg-teal-50/30 dark:hover:bg-teal-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
-                >
-                  {standardImage ? (
-                    <Image src={standardImage} alt="Standard" fill className="object-cover" />
-                  ) : (
-                    <>
-                      <div className="w-16 h-16 mb-4 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                        {isUploading === 'standard' ? <Loader2 className="w-8 h-8 animate-spin text-teal-500" /> : <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-teal-500 transition-colors" />}
-                      </div>
-                      <p className="font-bold text-lg text-zinc-700 dark:text-zinc-200">Tải ảnh lên làm khung hình đầu</p>
-                      <p className="text-sm text-zinc-400 mt-1">Kéo thả hoặc nhấp để chọn ảnh (Tùy chọn)</p>
-                    </>
+            {/* HEADER TABS (Mode Switcher) */}
+            <div className="flex justify-center">
+              <div className="inline-flex items-center p-1.5 bg-zinc-100/80 dark:bg-zinc-800/60 backdrop-blur-md rounded-full border border-zinc-200/80 dark:border-white/5 shadow-inner">
+                <button
+                  onClick={() => setActiveMode('standard')}
+                  className={cn(
+                    "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
+                    activeMode === 'standard'
+                      ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                   )}
-                </div>
-                <Button variant="ghost" onClick={() => { setUploadTarget('standard'); setIsLibraryOpen(true); }} className="text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100/50 rounded-full px-6">
-                  <Library className="w-4 h-4 mr-2" /> Chọn từ thư viện tài nguyên
-                </Button>
-              </div>
-            ) : (
-              <div className="w-full max-w-3xl mx-auto mb-10">
-                <div className="flex flex-col md:flex-row items-center justify-center gap-6">
-                  <div className="flex-1 w-full flex flex-col gap-3">
-                    <div
-                      onClick={() => { setUploadTarget('before'); fileInputRef.current?.click(); }}
-                      className="w-full aspect-[4/3] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-400/50 hover:bg-teal-50/30 dark:hover:bg-teal-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
-                    >
-                      {beforeImage ? (
-                        <Image src={beforeImage} alt="Before" fill className="object-cover" />
-                      ) : (
-                        <>
-                          <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                            {isUploading === 'before' ? <Loader2 className="w-6 h-6 animate-spin text-teal-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-teal-500" />}
-                          </div>
-                          <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Bắt đầu</p>
-                        </>
-                      )}
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('before'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
-                      <Library className="w-4 h-4 mr-2" /> Thư viện
-                    </Button>
-                  </div>
-
-                  <div className="w-12 h-12 rounded-full bg-white dark:bg-zinc-800 shadow-md border border-zinc-100 dark:border-zinc-700 flex items-center justify-center flex-shrink-0 z-10 -my-4 md:my-0">
-                    <ArrowRight className="w-5 h-5 text-teal-500 rotate-90 md:rotate-0" />
-                  </div>
-
-                  <div className="flex-1 w-full flex flex-col gap-3">
-                    <div
-                      onClick={() => { setUploadTarget('after'); fileInputRef.current?.click(); }}
-                      className="w-full aspect-[4/3] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
-                    >
-                      {afterImage ? (
-                        <Image src={afterImage} alt="After" fill className="object-cover" />
-                      ) : (
-                        <>
-                          <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                            {isUploading === 'after' ? <Loader2 className="w-6 h-6 animate-spin text-cyan-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-cyan-500" />}
-                          </div>
-                          <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Kết thúc</p>
-                        </>
-                      )}
-                    </div>
-                    <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('after'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
-                      <Library className="w-4 h-4 mr-2" /> Thư viện
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* PROMPT INPUT BAR */}
-        <div className="relative w-full max-w-3xl mx-auto">
-          <div className="flex items-end bg-white dark:bg-zinc-950 rounded-[1.5rem] shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-none border border-zinc-200 dark:border-zinc-800 p-2 pl-4 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all duration-300">
-            <Textarea
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              placeholder={extendVideoUrl ? "Mô tả phần tiếp theo (VD: Camera bay lên cao hơn, phóng to chi tiết...)" : activeMode === 'standard' ? "Bạn muốn video chuyển động ra sao? (VD: Máy quay lướt qua sản phẩm...)" : "Mô tả sự chuyển đổi (VD: Quá trình sửa nhà từ cũ kỹ thành hiện đại...)"}
-              className="flex-1 resize-none border-0 focus-visible:ring-0 bg-transparent text-base min-h-[64px] max-h-[120px] py-4 shadow-none scrollbar-hide"
-              style={{ boxShadow: 'none' }}
-            />
-            <div className="pb-1 pr-1 pl-2 flex gap-2 shrink-0 items-center">
-              {/* Settings gear button */}
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className={cn(
-                  "h-[44px] w-[44px] rounded-xl flex items-center justify-center transition-all duration-200 border",
-                  showSettings
-                    ? "bg-teal-50 dark:bg-teal-900/30 border-teal-200 dark:border-teal-800 text-teal-600 dark:text-teal-400"
-                    : "bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                )}
-              >
-                <Settings className="w-5 h-5" />
-              </button>
-
-              <Button
-                size="lg"
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className="h-[52px] rounded-xl px-6 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-bold text-base shadow-md shadow-teal-500/25 shrink-0"
-              >
-                {isGenerating ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <>{extendVideoUrl ? <Link2 className="w-5 h-5 mr-2" /> : <Sparkles className="w-5 h-5 mr-2" />} {extendVideoUrl ? 'Nối Video' : 'Tạo Video'}</>
-                )}
-              </Button>
-            </div>
-          </div>
-
-          {/* SETTINGS PANEL (collapsible below the bar) */}
-          {showSettings && (
-            <div className="mt-3 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-lg p-5 animate-in slide-in-from-top-2 duration-200">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="font-bold text-sm text-zinc-700 dark:text-zinc-200 flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-teal-500" /> Cài đặt nâng cao
-                </h4>
-                <button onClick={() => setShowSettings(false)} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300">
-                  <X className="w-4 h-4" />
+                >
+                  <Video className="w-4 h-4 mr-2" /> Tiêu chuẩn (1 Ảnh)
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveMode('before-after');
+                    if (videoModel.includes('veo-2')) {
+                      setVideoModel('veo-3.1-fast-generate-preview');
+                      toast({ title: 'Đã tự động chuyển model', description: 'Tính năng Trước/Sau (2 Ảnh) chỉ khả dụng với model từ Veo 3.1.' });
+                    }
+                  }}
+                  className={cn(
+                    "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
+                    activeMode === 'before-after'
+                      ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
+                      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                  )}
+                >
+                  <Images className="w-4 h-4 mr-2" /> Trước / Sau
                 </button>
               </div>
+            </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* UPLOAD AREA */}
+            <div className="space-y-4">
+              {activeMode === 'standard' ? (
+                <div className="flex flex-col items-center gap-4 w-full">
+                  <div
+                    onClick={() => { setUploadTarget('standard'); fileInputRef.current?.click(); }}
+                    className="w-full aspect-[21/9] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-400/50 hover:bg-teal-50/30 dark:hover:bg-teal-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                  >
+                    {standardImage ? (
+                      <>
+                        <Image src={standardImage} alt="Standard" fill className="object-cover" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setStandardImage(null); }}
+                          className="absolute top-3 right-3 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-16 h-16 mb-4 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                          {isUploading === 'standard' ? <Loader2 className="w-8 h-8 animate-spin text-teal-500" /> : <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-teal-500 transition-colors" />}
+                        </div>
+                        <p className="font-bold text-lg text-zinc-700 dark:text-zinc-200">Tải ảnh lên làm khung hình đầu</p>
+                        <p className="text-sm text-zinc-400 mt-1">Kéo thả hoặc nhấp để chọn ảnh (Tùy chọn)</p>
+                      </>
+                    )}
+                  </div>
+                  <Button variant="ghost" onClick={() => { setUploadTarget('standard'); setIsLibraryOpen(true); }} className="w-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100/50 rounded-xl px-6">
+                    <Library className="w-4 h-4 mr-2" /> Chọn từ thư viện tài nguyên
+                  </Button>
+                </div>
+              ) : (
+                <div className="w-full">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex-1 w-full flex flex-col gap-3">
+                      <div
+                        onClick={() => { setUploadTarget('before'); fileInputRef.current?.click(); }}
+                        className="w-full aspect-square bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-orange-400/50 hover:bg-orange-50/30 dark:hover:bg-orange-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                      >
+                        {beforeImage ? (
+                          <>
+                            <Image src={beforeImage} alt="Before" fill className="object-cover" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setBeforeImage(null); }}
+                              className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                              {isUploading === 'before' ? <Loader2 className="w-6 h-6 animate-spin text-orange-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-orange-500" />}
+                            </div>
+                            <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Bắt đầu</p>
+                          </>
+                        )}
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('before'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
+                        <Library className="w-4 h-4 mr-2" /> Thư viện
+                      </Button>
+                    </div>
+
+                    <div className="flex-1 w-full flex flex-col gap-3">
+                      <div
+                        onClick={() => { setUploadTarget('after'); fileInputRef.current?.click(); }}
+                        className="w-full aspect-square bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                      >
+                        {afterImage ? (
+                          <>
+                            <Image src={afterImage} alt="After" fill className="object-cover" />
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setAfterImage(null); }}
+                              className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                              {isUploading === 'after' ? <Loader2 className="w-6 h-6 animate-spin text-cyan-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-cyan-500" />}
+                            </div>
+                            <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Kết thúc</p>
+                          </>
+                        )}
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('after'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
+                        <Library className="w-4 h-4 mr-2" /> Thư viện
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* PROMPT INPUT BAR */}
+            <div className="space-y-2">
+              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Ý tưởng video</label>
+              <div className="flex items-end bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all duration-300">
+                <Textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder={activeMode === 'standard' ? "Máy quay lướt qua sản phẩm..." : "Chuyển đổi từ cũ sang mới..."}
+                  className="flex-1 resize-none border-0 focus-visible:ring-0 bg-transparent text-sm min-h-[80px] py-3 shadow-none scrollbar-hide"
+                  style={{ boxShadow: 'none' }}
+                />
+              </div>
+            </div>
+
+            {/* SETTINGS PANEL */}
+            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Aspect Ratio */}
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Khung hình</label>
+                  <Select value={videoAspectRatio} onValueChange={(val: any) => setVideoAspectRatio(val)}>
+                    <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl shadow-xl">
+                      <SelectItem value="16:9" className="rounded-lg cursor-pointer">16:9 (Ngang)</SelectItem>
+                      <SelectItem value="9:16" className="rounded-lg cursor-pointer">9:16 (Dọc)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Model */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Model AI</label>
@@ -582,7 +621,7 @@ export function SimpleVideoWorkspace() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl shadow-xl">
-                      {MODEL_OPTIONS.map(opt => (
+                      {(activeMode === 'before-after' ? MODEL_OPTIONS.filter(opt => !opt.value.includes('veo-2')) : MODEL_OPTIONS).map(opt => (
                         <SelectItem key={opt.value} value={opt.value} className="rounded-lg cursor-pointer">
                           <div>
                             <span className="font-medium">{opt.label}</span>
@@ -602,7 +641,7 @@ export function SimpleVideoWorkspace() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-xl shadow-xl">
-                      {DURATION_OPTIONS.map(opt => (
+                      {durationOptions.map(opt => (
                         <SelectItem key={opt.value} value={opt.value} className="rounded-lg cursor-pointer">{opt.label}</SelectItem>
                       ))}
                     </SelectContent>
@@ -612,7 +651,7 @@ export function SimpleVideoWorkspace() {
                 {/* Quality */}
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Chất lượng</label>
-                  <Select value={videoQuality} onValueChange={setVideoQuality}>
+                  <Select value={videoQuality} onValueChange={setVideoQuality} disabled={videoModel.includes('veo-2')}>
                     <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
                       <SelectValue />
                     </SelectTrigger>
@@ -628,94 +667,200 @@ export function SimpleVideoWorkspace() {
               {/* Current config summary */}
               <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
                 <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-                  Cấu hình: <strong className="text-zinc-600 dark:text-zinc-300">{currentModelLabel}</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{videoDuration}s</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{videoQuality}</strong>
+                  Cấu hình: <strong className="text-zinc-600 dark:text-zinc-300">{videoAspectRatio === '16:9' ? 'Ngang' : 'Dọc'}</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{currentModelLabel}</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{videoDuration}s</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{isVeo2Selected ? '720p (mặc định)' : videoQuality}</strong>
                 </p>
               </div>
             </div>
-          )}
-        </div>
 
+            <Button
+              size="lg"
+              onClick={handleGenerate}
+              disabled={isBusy}
+              className="w-full mt-4 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-bold text-base shadow-md shadow-teal-500/25 h-12 rounded-xl shrink-0"
+            >
+              {isGenerating ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <><Sparkles className="w-5 h-5 mr-2" /> Tạo Video</>
+              )}
+            </Button>
+
+          </div>
+        </div>
       </div>
 
-      {/* GENERATING SKELETON */}
-      {isGenerating && (
-        <div className="w-full mt-12 aspect-[21/9] bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-800 rounded-[2rem] flex flex-col items-center justify-center">
-          <div className="relative w-16 h-16 mb-6">
-            <div className="absolute inset-0 border-4 border-teal-500/30 rounded-full animate-ping"></div>
-            <div className="absolute inset-0 border-4 border-teal-500 border-t-transparent rounded-full animate-spin"></div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-teal-500" />
+      {/* RIGHT PANEL: PREVIEW & OUTPUT */}
+      <div className="lg:col-span-3 bg-muted/50 rounded-lg flex flex-col items-center justify-center min-h-[400px] lg:min-h-[600px] p-4 relative overflow-hidden border border-zinc-200 dark:border-zinc-800">
+
+        {/* GENERATING SKELETON */}
+        {isGenerating && (() => {
+          // Estimated times per stage (seconds)
+          const STAGE_TIMES = { script: 10, uploading: 5, rendering: 120 };
+          const TOTAL_ESTIMATED = STAGE_TIMES.script + STAGE_TIMES.uploading + STAGE_TIMES.rendering; // 135s
+
+          // Calculate estimated progress percentage based on stage + elapsed time
+          let estimatedPercent = 0;
+          if (generationStage === 'script') {
+            estimatedPercent = Math.min((elapsedTime / STAGE_TIMES.script) * 7, 7); // 0-7%
+          } else if (generationStage === 'uploading') {
+            estimatedPercent = 7 + Math.min(((elapsedTime - STAGE_TIMES.script) / STAGE_TIMES.uploading) * 5, 5); // 7-12%
+          } else if (generationStage === 'rendering') {
+            const renderStart = STAGE_TIMES.script + STAGE_TIMES.uploading;
+            const renderElapsed = Math.max(0, elapsedTime - renderStart);
+            estimatedPercent = 12 + Math.min((renderElapsed / STAGE_TIMES.rendering) * 83, 83); // 12-95%
+          }
+          estimatedPercent = Math.min(Math.round(estimatedPercent), 95);
+
+          // Estimated time remaining
+          const estimatedRemaining = Math.max(0, TOTAL_ESTIMATED - elapsedTime);
+          const remainMin = Math.floor(estimatedRemaining / 60);
+          const remainSec = estimatedRemaining % 60;
+
+          const stageLabel = generationStage === 'script' ? 'Đang tối ưu kịch bản'
+            : generationStage === 'uploading' ? 'Đang gửi yêu cầu'
+            : generationStage === 'rendering' ? 'Google AI đang render'
+            : 'Đang khởi tạo';
+
+          return (
+            <div className="flex flex-col items-center w-full z-10 max-w-3xl animate-in fade-in duration-500">
+              <div className={cn(
+                "relative rounded-2xl overflow-hidden shadow-2xl w-full flex flex-col items-center justify-center",
+                videoAspectRatio === '9:16' ? "max-w-[320px] aspect-[9/16] mx-auto" : "aspect-video"
+              )}>
+                {/* Background: reference image blurred or solid gray */}
+                {(standardImage || beforeImage) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={standardImage || beforeImage!} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-15 blur-lg grayscale scale-110" />
+                ) : null}
+
+                {/* Pulsing gray overlay */}
+                <div className="absolute inset-0 bg-zinc-800 animate-pulse" style={{ animationDuration: '2s' }} />
+
+                {/* Shimmer sweep effect */}
+                <div className="absolute inset-0 overflow-hidden">
+                  <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
+                </div>
+
+                {/* Content overlay */}
+                <div className="relative z-10 flex flex-col items-center justify-center gap-5 px-6 py-10 w-full">
+
+                  {/* Percentage circle */}
+                  <div className="relative w-28 h-28">
+                    {/* Background circle */}
+                    <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120">
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(161,161,170,0.15)" strokeWidth="6" />
+                      <circle
+                        cx="60" cy="60" r="52"
+                        fill="none"
+                        stroke="rgba(161,161,170,0.6)"
+                        strokeWidth="6"
+                        strokeLinecap="round"
+                        strokeDasharray={`${2 * Math.PI * 52}`}
+                        strokeDashoffset={`${2 * Math.PI * 52 * (1 - estimatedPercent / 100)}`}
+                        className="transition-all duration-1000 ease-out"
+                      />
+                    </svg>
+                    {/* Percent text */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-3xl font-bold font-mono text-zinc-200 tabular-nums">{estimatedPercent}%</span>
+                    </div>
+                  </div>
+
+                  {/* Stage label */}
+                  <div className="text-center space-y-1.5">
+                    <h3 className="text-base font-semibold text-zinc-200 tracking-wide animate-pulse" style={{ animationDuration: '1.5s' }}>
+                      {stageLabel}...
+                    </h3>
+                    <p className="text-sm text-zinc-500 font-mono tabular-nums">
+                      {estimatedRemaining > 0
+                        ? `Còn khoảng ${remainMin > 0 ? `${remainMin} phút ` : ''}${remainSec}s`
+                        : 'Sắp hoàn tất...'}
+                    </p>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full max-w-[240px]">
+                    <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-zinc-400 to-zinc-300 rounded-full transition-all duration-1000 ease-out"
+                        style={{ width: `${estimatedPercent}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Elapsed time small */}
+                  <p className="text-xs text-zinc-600 font-mono tabular-nums mt-1">
+                    {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}:{(elapsedTime % 60).toString().padStart(2, '0')} đã trôi qua
+                  </p>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ERROR MESSAGE */}
+        {errorDetails && (
+          <div className="w-full mt-8 bg-red-50/80 dark:bg-red-900/20 backdrop-blur-md border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 p-5 rounded-2xl flex items-start gap-4 shadow-sm">
+            <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg shrink-0">
+              <Video className="w-5 h-5" />
+            </div>
+            <div>
+              <strong className="block mb-1 text-lg">Đã xảy ra lỗi</strong>
+              <span className="text-sm">{errorDetails}</span>
             </div>
           </div>
-          <h3 className="text-xl font-bold bg-gradient-to-r from-teal-600 to-cyan-500 bg-clip-text text-transparent">
-            {extendVideoUrl ? 'Đang nối tiếp video...' : 'Đang thiết kế kiệt tác...'}
-          </h3>
-          <p className="text-zinc-500 dark:text-zinc-400 mt-2 font-medium">Hệ thống AI đang phân tích và dựng hình video của bạn.</p>
-        </div>
-      )}
+        )}
 
-      {/* ERROR MESSAGE */}
-      {errorDetails && (
-        <div className="w-full mt-8 bg-red-50/80 dark:bg-red-900/20 backdrop-blur-md border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 p-5 rounded-2xl flex items-start gap-4 shadow-sm">
-          <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg shrink-0">
-            <Video className="w-5 h-5" />
-          </div>
-          <div>
-            <strong className="block mb-1 text-lg">Đã xảy ra lỗi</strong>
-            <span className="text-sm">{errorDetails}</span>
-          </div>
-        </div>
-      )}
+        {/* LATEST GENERATED VIDEO */}
+        {!isGenerating && visibleVideos.length > 0 && (
+          <div className="flex flex-col items-center w-full z-10 max-w-3xl">
+            <div className={cn(
+              "relative bg-black rounded-lg overflow-hidden shadow-xl border border-zinc-200/20 w-full",
+              visibleVideos[0].aspectRatio === '9:16' ? "max-w-[320px] aspect-[9/16] mx-auto" : "aspect-video"
+            )}>
+              <video src={visibleVideos[0].url} className="w-full h-full object-cover" controls playsInline autoPlay muted loop />
+            </div>
 
-      {/* LUXURY GALLERY */}
-      {videoProject.length > 0 && (
-        <div className="mt-16 relative">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[60%] h-[1px] bg-gradient-to-r from-transparent via-zinc-200 dark:via-zinc-800 to-transparent" />
-
-          <div className="flex items-center justify-between mb-8 pt-8">
-            <h3 className="text-2xl font-bold flex items-center tracking-tight">
-              <Video className="w-6 h-6 mr-3 text-teal-500" />
-              Thư viện Video
-            </h3>
+            <div className="mt-6 flex flex-wrap justify-center gap-4 w-full">
+              {visibleVideos[0].originalVeoUrl && (
+                <Button
+                  onClick={() => activateExtendMode(visibleVideos[0])}
+                  className="bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white"
+                >
+                  <Link2 className="w-4 h-4 mr-2" />
+                  Tạo video nối tiếp
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                asChild
+              >
+                <a href={visibleVideos[0].url} download target="_blank" rel="noopener noreferrer">
+                  <Download className="w-4 h-4 mr-2" />
+                  Tải xuống
+                </a>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setHiddenVideoUrls(prev => new Set(prev).add(visibleVideos[0].url))}
+                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 dark:border-red-900/50"
+              >
+                <X className="w-4 h-4 mr-2" />
+                Đóng video này
+              </Button>
+            </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {videoProject.map((clip, i) => (
-              <div key={i} className="group relative aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-[1.5rem] overflow-hidden shadow-sm border border-zinc-200/60 dark:border-zinc-800/60 hover:shadow-xl hover:shadow-teal-500/10 transition-all duration-500">
-                <video src={clip.url} className="w-full h-full object-cover" controls playsInline />
-                {/* Action buttons overlay */}
-                <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                  {clip.originalVeoUrl && (
-                    <Button
-                      variant="secondary"
-                      size="icon"
-                      onClick={(e) => { e.stopPropagation(); handleExtendVideo(clip); }}
-                      className="h-9 w-9 rounded-xl bg-teal-500/80 backdrop-blur-md text-white border border-white/20 hover:bg-teal-600 shadow-lg"
-                      title="Nối tiếp video này"
-                    >
-                      <Link2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  <Button variant="secondary" size="icon" className="h-9 w-9 rounded-xl bg-black/40 backdrop-blur-md text-white border border-white/10 hover:bg-black/60 shadow-lg">
-                    <Download className="w-4 h-4" />
-                  </Button>
-                </div>
-                {/* Extend label at bottom */}
-                {clip.originalVeoUrl && (
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent pt-8 pb-3 px-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleExtendVideo(clip); }}
-                      className="flex items-center gap-1.5 text-xs font-semibold text-white/90 hover:text-white transition-colors"
-                    >
-                      <Link2 className="w-3.5 h-3.5" /> Nối tiếp video này →
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+        {/* EMPTY STATE */}
+        {!isGenerating && visibleVideos.length === 0 && !errorDetails && (
+          <div className="text-center text-muted-foreground z-10">
+            <Video className="h-16 w-16 mx-auto mb-4 text-zinc-300 dark:text-zinc-700" />
+            <p>Video tạo thành công sẽ hiển thị ở đây</p>
           </div>
-        </div>
-      )}
+        )}
+
+      </div>
 
       <ImageLibraryModal
         open={isLibraryOpen}
