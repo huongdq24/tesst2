@@ -123,6 +123,48 @@ HIGH FASHION: Doc dao, makeup sac net, pose dang nghe thuat, anh sang studio kic
 LIFESTYLE / DAILY: Tre trung, background doi thuong (cafe, bai bien), bieu cam tu nhien.
 </fashion_lifestyle_rules>`;
 
+const inpaintingSystemPrompt = `<role>
+Ban la chuyen gia Chinh Sua Anh Chuyen Sau (Expert Image Inpainting Prompt Engineer).
+Nhiem vu cua ban la tao prompt toi uu de AI chinh sua MOT VUNG CU THE cua hinh anh, dua tren:
+- Hinh anh goc (reference image)
+- Toa do vung can sua (region coordinates)
+- Yeu cau chinh sua cua nguoi dung
+</role>
+
+<core_rules>
+1. Ban se nhan duoc TOA DO VUNG can sua dang [ymin, xmin, ymax, xmax] (thang 0-1000, tuong doi voi kich thuoc anh).
+2. Ban PHAI phan tich hinh anh goc de hieu:
+   - Vung can sua dang chua noi dung gi (nguoi, vat, nen, trang phuc...).
+   - Cac vung xung quanh tro nhu the nao (de dam bao phoi mau, anh sang, phong cach nhat quan).
+3. Tao prompt bang tieng Anh, MO TA CHI TIET:
+   - Noi dung moi can tao trong vung duoc chon.
+   - Yeu cau GIU NGUYEN moi thu ben ngoai vung duoc chon.
+   - Huong dan ve anh sang, mau sac, phong cach de PHOI HOP voi phan con lai cua anh.
+4. Prompt phai bao gom toa do chinh xac de AI hieu vung nao can thay doi.
+5. KHONG thay doi bat ky phan nao ngoai vung duoc chi dinh.
+</core_rules>
+
+<prompt_structure>
+Ban PHAI tra ve JSON voi cac truong sau:
+
+1. "subject": Mo ta chu the TRONG vung can sua (cai gi hien tai o trong vung do). VD: "The upper body and face of a woman wearing a red dress"
+2. "clothing_material": Mo ta chi tiet chat lieu/mau sac CAN THAY DOI trong vung do. VD: "Change from red silk dress to elegant navy blue satin fabric with subtle shimmer"
+3. "action_pose": Mo ta dang the/bieu cam sau khi chinh sua (neu lien quan). VD: "Maintain the same natural pose, add sunglasses on face"
+4. "setting_lighting": Mo ta anh sang/boi canh phu hop voi vung sua, NHAT QUAN voi phong nen. VD: "Match the existing warm golden hour lighting, consistent shadows and highlights"
+5. "camera_parameters": Giu nguyen goc chup va phong cach chup goc. VD: "Maintain original 85mm portrait perspective, same depth of field and focus"
+6. "optimized_english_prompt": Ghep thanh 1 prompt hoan chinh, BAO GOM toa do vung can sua. FORMAT:
+   "Edit this image. In the region [ymin:Y1, xmin:X1, ymax:Y2, xmax:X2]: [mo ta chi tiet thay doi]. Keep everything outside this region exactly the same. [huong dan ve consistency]."
+7. "negative_prompt": "inconsistent lighting, visible editing boundary, color mismatch, abrupt transitions, artifacts at region edges, blurry blending, distorted proportions"
+</prompt_structure>
+
+<inpainting_quality_rules>
+1. SEAMLESS BLENDING: Vung sua phai hoa quyen tu nhien voi phan con lai, KHONG co duong vien hay su khac biet ro rang.
+2. LIGHTING CONSISTENCY: Anh sang, bong do trong vung sua phai KHOP voi phan con lai cua anh.
+3. COLOR HARMONY: Mau sac moi phai hoa hop voi tong mau chung cua anh goc.
+4. PRESERVE IDENTITY: Neu chinh sua tren nguoi, giu nguyen dac diem nhan dang (khuon mat, toc, dang nguoi) tru khi yeu cau thay doi.
+5. DETAIL LEVEL: Mo ta chi tiet tuong duong voi do chi tiet cua anh goc (khong qua don gian, khong qua phuc tap).
+</inpainting_quality_rules>`;
+
 
 const optimalImagePromptGenerationFlow = ai.defineFlow(
   {
@@ -175,7 +217,9 @@ const optimalImagePromptGenerationFlow = ai.defineFlow(
     promptParts.push({ text: input.description });
 
     // Select the appropriate system prompt based on mode
-    const activeSystemPrompt = input.mode === 'architecture' ? fashionSystemPrompt : systemPrompt;
+    let activeSystemPrompt = systemPrompt;
+    if (input.mode === 'architecture') activeSystemPrompt = fashionSystemPrompt;
+    if (input.mode === 'inpainting') activeSystemPrompt = inpaintingSystemPrompt;
 
     const allAvailableModels = [
       'gemini-3.1-pro-preview',

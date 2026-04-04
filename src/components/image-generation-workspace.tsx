@@ -188,13 +188,89 @@ export function ImageGenerationWorkspace() {
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number, y: number } | null>(null);
   const [selectionPrompt, setSelectionPrompt] = useState('');
+  const [isInpainting, setIsInpainting] = useState(false);
   // Ref for the image tag rendering the full image to calculate relative bounds
   const regionImageRef = useRef<HTMLImageElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const selectionStartRef = useRef<{ x: number, y: number } | null>(null);
+  const lastMousePosRef = useRef({ clientX: 0, clientY: 0 });
+  const autoScrollTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ===== GLOBAL MOUSE HANDLERS FOR SELECTION WITH AUTO-SCROLL =====
+  useEffect(() => {
+    if (!isSelecting) {
+      if (autoScrollTimerRef.current) {
+        clearInterval(autoScrollTimerRef.current);
+        autoScrollTimerRef.current = null;
+      }
+      return;
+    }
+
+    const updateSelectionAndScroll = (clientX: number, clientY: number) => {
+      if (!regionImageRef.current || !scrollContainerRef.current || !selectionStartRef.current) return;
+
+      const container = scrollContainerRef.current;
+      const containerRect = container.getBoundingClientRect();
+
+      // Auto-scroll when mouse is near top/bottom edges
+      const EDGE_ZONE = 60; // pixels from edge to trigger scroll
+      const MAX_SCROLL_SPEED = 15;
+
+      if (clientY < containerRect.top + EDGE_ZONE) {
+        const intensity = Math.max(0.2, 1 - Math.max(0, clientY - containerRect.top) / EDGE_ZONE);
+        container.scrollBy(0, -MAX_SCROLL_SPEED * intensity);
+      } else if (clientY > containerRect.bottom - EDGE_ZONE) {
+        const intensity = Math.max(0.2, 1 - Math.max(0, containerRect.bottom - clientY) / EDGE_ZONE);
+        container.scrollBy(0, MAX_SCROLL_SPEED * intensity);
+      }
+
+      // Update selection coordinates (getBoundingClientRect reflects current scroll position)
+      const imgRect = regionImageRef.current.getBoundingClientRect();
+      const currentX = Math.max(0, Math.min(clientX - imgRect.left, imgRect.width));
+      const currentY = Math.max(0, Math.min(clientY - imgRect.top, imgRect.height));
+      const start = selectionStartRef.current;
+
+      setSelection({
+        x: Math.min(start.x, currentX),
+        y: Math.min(start.y, currentY),
+        w: Math.abs(currentX - start.x),
+        h: Math.abs(currentY - start.y)
+      });
+    };
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      lastMousePosRef.current = { clientX: e.clientX, clientY: e.clientY };
+      updateSelectionAndScroll(e.clientX, e.clientY);
+    };
+
+    const handleGlobalMouseUp = () => {
+      setIsSelecting(false);
+    };
+
+    // Continuous auto-scroll interval: keeps scrolling even when mouse stops moving near edge
+    autoScrollTimerRef.current = setInterval(() => {
+      const { clientX, clientY } = lastMousePosRef.current;
+      updateSelectionAndScroll(clientX, clientY);
+    }, 30);
+
+    document.addEventListener('mousemove', handleGlobalMouseMove);
+    document.addEventListener('mouseup', handleGlobalMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleGlobalMouseMove);
+      document.removeEventListener('mouseup', handleGlobalMouseUp);
+      if (autoScrollTimerRef.current) {
+        clearInterval(autoScrollTimerRef.current);
+        autoScrollTimerRef.current = null;
+      }
+    };
+  }, [isSelecting]);
 
   // Toggle single-select (click again to deselect)
   const toggleDesignSingle = (groupKey: string, id: string) => {
@@ -376,20 +452,30 @@ export function ImageGenerationWorkspace() {
         } catch (error: any) {
           if (isCancelled) return;
           
+          const errorMsg = error.message || '';
+          const isOverloaded = errorMsg.includes('503') || errorMsg.includes('quá tải') || errorMsg.toLowerCase().includes('unavailable');
+          const isRateLimited = errorMsg.includes('429') || errorMsg.includes('hết lượt');
+          
+          let causeStr = 'Có lỗi xảy ra.';
+          if (isOverloaded) causeStr = 'Máy chủ AI hiện đang quá tải.';
+          else if (isRateLimited) causeStr = 'Đã đạt giới hạn API (Quota).';
+
           if (attempt < MAX_RETRIES) {
             // Not the last retry, wait and try again
             toast({
-              variant: 'default',
-              title: `Ảnh ${currentQueueItemCount} gặp lỗi, đang thử lại (${attempt + 1}/${MAX_RETRIES})...`,
-              description: `Đợi ${RETRY_DELAY / 1000}s trước khi thử lại.`,
+              variant: 'default', // standard notification
+              title: `⏳ Đang thử lại ảnh ${currentQueueItemCount} (${attempt + 1}/${MAX_RETRIES})`,
+              description: `${causeStr} Tự động thử lại sau ${RETRY_DELAY / 1000}s...`,
             });
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           } else {
             // Last retry failed, show final error for this image
             toast({
               variant: 'destructive',
-              title: `Lỗi khi tạo ảnh ${currentQueueItemCount}`,
-              description: error.message || 'Đã xảy ra lỗi không mong muốn.',
+              title: `❌ Lỗi khi tạo ảnh ${currentQueueItemCount}`,
+              description: isOverloaded 
+                ? 'Các cụm máy chủ AI đều đang bận. Vui lòng thử lại sau vài phút.' 
+                : errorMsg || 'Đã xảy ra lỗi không mong muốn.',
             });
           }
         }
@@ -636,6 +722,132 @@ export function ImageGenerationWorkspace() {
     }
     if (!inputImageUrls.includes(imageUrl)) {
         setInputImageUrls((prevUrls) => [...prevUrls, imageUrl]);
+    }
+  };
+
+  // ===== INPAINTING HANDLER (2-STEP: Prompt Optimization → Image Generation) =====
+  const handleInpaintingGenerate = async () => {
+    if (!selection || !regionImageRef.current || !editingImageUrl || !selectionPrompt.trim()) return;
+    if (!userData?.geminiApiKey) {
+      toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm Gemini API Key trong cài đặt tài khoản.' });
+      return;
+    }
+    if (!user) {
+      toast({ variant: 'destructive', title: 'Yêu cầu đăng nhập', description: 'Bạn cần đăng nhập.' });
+      return;
+    }
+
+    const imgRect = regionImageRef.current.getBoundingClientRect();
+    const ymin = Math.floor((selection.y / imgRect.height) * 1000);
+    const xmin = Math.floor((selection.x / imgRect.width) * 1000);
+    const ymax = Math.floor(((selection.y + selection.h) / imgRect.height) * 1000);
+    const xmax = Math.floor(((selection.x + selection.w) / imgRect.width) * 1000);
+
+    // User's raw inpainting description with region coordinates
+    const rawInpaintDescription = `[INPAINTING REQUEST] Region: [ymin:${ymin}, xmin:${xmin}, ymax:${ymax}, xmax:${xmax}]. User request: "${selectionPrompt.trim()}"`;
+
+    setIsInpainting(true);
+
+    try {
+      // ===== STEP 1: Optimize prompt via AI with inpainting mode =====
+      toast({ title: '🔍 Bước 1/2: Đang phân tích vùng chỉnh sửa...', description: 'AI đang tạo prompt tối ưu cho inpainting.' });
+
+      let finalPrompt: string;
+      try {
+        const promptResult = await optimalImagePromptGeneration({
+          description: rawInpaintDescription,
+          imageUris: [editingImageUrl],
+          model: promptModel,
+          apiKey: userData.geminiApiKey,
+          mode: 'inpainting',
+        });
+
+        finalPrompt = promptResult.optimized_english_prompt;
+        console.log('[Inpainting] Optimized prompt:', finalPrompt);
+        toast({ title: '✅ Prompt tối ưu đã sẵn sàng!', description: 'Đang chuyển sang bước tạo ảnh...' });
+      } catch (promptError: any) {
+        console.warn('[Inpainting] Prompt optimization failed, using fallback:', promptError.message);
+        // Fallback: use a basic inpainting prompt if optimization fails
+        finalPrompt = `Edit this image. In the region bounded by [ymin:${ymin}, xmin:${xmin}, ymax:${ymax}, xmax:${xmax}] (normalized 0-1000 coordinates), apply the following change: "${selectionPrompt.trim()}". Keep EVERYTHING outside this region EXACTLY the same. Preserve the original image quality, lighting, and style.`;
+        toast({ title: '⚠️ Dùng prompt mặc định', description: 'Không thể tối ưu prompt, đang tiếp tục với prompt cơ bản.' });
+      }
+
+      // ===== STEP 2: Generate edited image (with retry) =====
+      const MAX_INPAINT_RETRIES = 2;
+      let inpaintResult: any = null;
+
+      for (let attempt = 0; attempt < MAX_INPAINT_RETRIES; attempt++) {
+        try {
+          toast({ 
+            title: `🎨 Bước 2/2: Đang chỉnh sửa ảnh${attempt > 0 ? ` (thử lại lần ${attempt})` : ''}...`, 
+            description: 'AI đang xử lý vùng bạn đã chọn.' 
+          });
+
+          inpaintResult = await brandedImageGeneration({
+            existingImageUris: [editingImageUrl],
+            generationPrompt: finalPrompt,
+            aspectRatio: aspectRatio,
+            modelName: imageModel,
+            apiKey: userData.geminiApiKey,
+            resolution: resolution,
+            temperature: 0.7,
+            outputFormat: 'IMAGE_ONLY',
+          });
+
+          if (inpaintResult?.generatedImageUri) break; // Success
+        } catch (genError: any) {
+          console.error(`[Inpainting] Generation attempt ${attempt + 1} failed:`, genError.message);
+          
+          if (attempt < MAX_INPAINT_RETRIES - 1) {
+            const isTransient = genError.message?.includes('503') || genError.message?.includes('quá tải') || genError.message?.includes('429');
+            if (isTransient) {
+              toast({ title: '⏳ Các model đang quá tải...', description: 'Đợi 10 giây rồi thử lại...' });
+              await new Promise(r => setTimeout(r, 10000));
+              continue;
+            }
+          }
+          throw genError; // Non-transient or last attempt
+        }
+      }
+
+      if (inpaintResult?.generatedImageUri) {
+        setGeneratedImageUrls(prev => [...prev, inpaintResult.generatedImageUri]);
+
+        // Save to Firebase
+        try {
+          const fileName = `inpaint-${Date.now()}-${Math.random().toString(36).substring(7)}.png`;
+          const imgRef = storageRef(storage, `users/${user.uid}/generated/${fileName}`);
+          await uploadString(imgRef, inpaintResult.generatedImageUri, 'data_url');
+          const downloadURL = await getDownloadURL(imgRef);
+          await addDoc(collection(firestore, 'generatedImages'), {
+            ownerId: user.uid,
+            prompt: finalPrompt,
+            imageUrl: downloadURL,
+            createdAt: serverTimestamp(),
+          });
+          recordUsage({
+            userId: user.uid,
+            userEmail: user.email || '',
+            type: 'image',
+            model: imageModel,
+            amount: 1,
+            prompt: finalPrompt,
+          });
+        } catch (saveError) {
+          console.error('Failed to save inpainted image:', saveError);
+        }
+
+        toast({ title: '✅ Chỉnh sửa hoàn tất!', description: 'Ảnh đã sửa được thêm vào kết quả.' });
+      }
+
+      setEditingImageUrl(null);
+      setSelection(null);
+      setSelectionPrompt('');
+    } catch (error: any) {
+      console.error('Inpainting failed:', error);
+      toast({ variant: 'destructive', title: 'Lỗi chỉnh sửa vùng', description: error.message || 'Không thể xử lý yêu cầu.' });
+    } finally {
+      setIsInpainting(false);
     }
   };
   
@@ -1135,58 +1347,54 @@ export function ImageGenerationWorkspace() {
       </div>
 
       {/* ===== REGION EDITOR MODAL ===== */}
-      <Dialog open={!!editingImageUrl} onOpenChange={(v) => { if (!v) { setEditingImageUrl(null); setSelection(null); setSelectionPrompt(''); } }}>
-        <DialogContent className="max-w-4xl lg:h-[90vh] flex flex-col p-4 content-start">
+      <Dialog open={!!editingImageUrl} onOpenChange={(v) => { if (!v && !isInpainting) { setEditingImageUrl(null); setSelection(null); setSelectionPrompt(''); } }}>
+        <DialogContent className="max-w-4xl h-[85vh] flex flex-col p-4 content-start">
           <DialogHeader>
             <DialogTitle>✏️ Tùy chỉnh chi tiết (Inpainting)</DialogTitle>
             <DialogDescription>
-              Kéo chuột trên ảnh để chọn vùng cần sửa. Sau đó ghi chú bạn muốn thay đổi gì.
+              Kéo chuột trên ảnh để chọn vùng cần sửa. Cuộn chuột để xem toàn bộ ảnh.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 flex flex-col gap-4 overflow-hidden relative">
-            {/* Image Canvas */}
+          <div className="flex-1 flex flex-col gap-4 min-h-0 relative">
+            {/* Image Canvas - Scrollable */}
             <div 
-              className="flex-1 bg-black/5 rounded-lg overflow-hidden relative flex items-center justify-center cursor-crosshair select-none"
+              ref={scrollContainerRef}
+              className="flex-1 bg-black/5 rounded-lg overflow-auto cursor-crosshair select-none min-h-0 flex flex-col items-center"
               onMouseDown={(e) => {
-                if (!regionImageRef.current) return;
-                const rect = regionImageRef.current.getBoundingClientRect();
-                const x = Math.max(0, e.clientX - rect.left);
-                const y = Math.max(0, e.clientY - rect.top);
+                if (!regionImageRef.current || isInpainting) return;
+                const imgRect = regionImageRef.current.getBoundingClientRect();
+                // Only start selection if click is within the image bounds
+                if (e.clientX < imgRect.left || e.clientX > imgRect.right || e.clientY < imgRect.top || e.clientY > imgRect.bottom) return;
+                e.preventDefault();
+                const x = e.clientX - imgRect.left;
+                const y = e.clientY - imgRect.top;
+                // Sync ref immediately (state updates are batched)
+                selectionStartRef.current = { x, y };
+                lastMousePosRef.current = { clientX: e.clientX, clientY: e.clientY };
                 setIsSelecting(true);
                 setSelectionStart({ x, y });
                 setSelection({ x, y, w: 0, h: 0 });
               }}
-              onMouseMove={(e) => {
-                if (!isSelecting || !selectionStart || !regionImageRef.current) return;
-                const rect = regionImageRef.current.getBoundingClientRect();
-                const currentX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
-                const currentY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
-
-                setSelection({
-                  x: Math.min(selectionStart.x, currentX),
-                  y: Math.min(selectionStart.y, currentY),
-                  w: Math.abs(currentX - selectionStart.x),
-                  h: Math.abs(currentY - selectionStart.y)
-                });
-              }}
-              onMouseUp={() => {
-                setIsSelecting(false);
-              }}
-              onMouseLeave={() => {
-                if (isSelecting) setIsSelecting(false);
-              }}
             >
               {editingImageUrl && (
-                <div className="relative inline-block max-w-full max-h-full">
+                <div className="relative inline-block shrink-0">
                   <img
                     ref={regionImageRef}
                     src={editingImageUrl}
                     alt="Edit preview"
-                    className="max-w-full max-h-full object-contain pointer-events-none"
+                    className="max-w-full block pointer-events-none"
+                    style={{ display: 'block' }}
                   />
-                  {selection && (
+                  {/* Inpainting loading overlay */}
+                  {isInpainting && (
+                    <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-10 rounded-lg">
+                      <Loader2 className="h-10 w-10 text-white animate-spin" />
+                      <p className="text-white text-sm mt-3 font-medium">Đang xử lý chỉnh sửa...</p>
+                    </div>
+                  )}
+                  {selection && !isInpainting && (
                     <div 
-                      className="absolute border-2 border-primary bg-primary/20"
+                      className="absolute border-2 border-cyan-400 bg-cyan-400/20 pointer-events-none"
                       style={{
                         left: `${selection.x}px`,
                         top: `${selection.y}px`,
@@ -1194,8 +1402,8 @@ export function ImageGenerationWorkspace() {
                         height: `${selection.h}px`,
                       }}
                     >
-                      <span className="absolute -top-6 bg-primary text-primary-foreground text-[10px] px-1 rounded whitespace-nowrap">
-                        {Math.floor(selection.w)}x{Math.floor(selection.h)}
+                      <span className="absolute -top-6 left-0 bg-cyan-500 text-white text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap shadow">
+                        {Math.floor(selection.w)}×{Math.floor(selection.h)}
                       </span>
                     </div>
                   )}
@@ -1204,44 +1412,24 @@ export function ImageGenerationWorkspace() {
             </div>
 
             {/* Prompt input */}
-            <div className="flex gap-2">
+            <div className="flex gap-2 shrink-0">
               <Textarea 
                 placeholder='VD: "Thêm kính râm", "Đổi màu áo thành xanh", "Xóa vật thể này"...'
                 value={selectionPrompt}
                 onChange={e => setSelectionPrompt(e.target.value)}
                 className="h-[60px] resize-none"
+                disabled={isInpainting}
               />
               <Button 
-                className="h-[60px]" 
-                disabled={!selection || selection.w < 10 || !selectionPrompt.trim()}
-                onClick={() => {
-                  if (!selection || !regionImageRef.current) return;
-                  const rect = regionImageRef.current.getBoundingClientRect();
-                  
-                  const ymin = Math.floor((selection.y / rect.height) * 1000);
-                  const xmin = Math.floor((selection.x / rect.width) * 1000);
-                  const ymax = Math.floor(((selection.y + selection.h) / rect.height) * 1000);
-                  const xmax = Math.floor(((selection.x + selection.w) / rect.width) * 1000);
-
-                  const editInstruction = `\n\n[REGION EDIT: [ymin:${ymin}, xmin:${xmin}, ymax:${ymax}, xmax:${xmax}]] -> ${selectionPrompt.trim()}`;
-                  
-                  if (selectedTemplate === 'none') {
-                    setSimplePrompt(prev => prev.trim() + editInstruction);
-                  } else {
-                    setArchNote(prev => prev.trim() + editInstruction);
-                  }
-                  
-                  setEditingImageUrl(null);
-                  setSelection(null);
-                  setSelectionPrompt('');
-                  
-                  toast({
-                    title: "Đã thêm yêu cầu sửa vùng",
-                    description: "Bấm 'Bắt đầu Sáng tạo' để AI xử lý",
-                  });
-                }}
+                className="h-[60px] min-w-[100px]" 
+                disabled={!selection || selection.w < 10 || !selectionPrompt.trim() || isInpainting}
+                onClick={handleInpaintingGenerate}
               >
-                Xác nhận
+                {isInpainting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  'Xác nhận'
+                )}
               </Button>
             </div>
           </div>

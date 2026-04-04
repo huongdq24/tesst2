@@ -234,6 +234,7 @@ const brandedImageGenerationFlow = ai.defineFlow(
       'gemini-3.1-flash-image-preview',
       'gemini-3-pro-image-preview',
       'gemini-2.5-flash-image',
+      'gemini-2.0-flash-image-generation',
       'imagen-4.0-fast-generate-001',
       'imagen-4.0-generate-001',
     ];
@@ -244,65 +245,73 @@ const brandedImageGenerationFlow = ai.defineFlow(
     const responseModalities = ['IMAGE', ...(outputFormat === 'IMAGE_AND_TEXT' ? ['TEXT'] : [])] as ('TEXT' | 'IMAGE' | 'AUDIO')[];
     const PER_MODEL_TIMEOUT_MS = 90000;
 
+    // Progressive backoff delays (increases with each failure)
+    const getBackoffDelay = (failCount: number, baseMs: number) => {
+      return Math.min(baseMs * (1 + failCount * 0.6), 15000); // cap at 15s
+    };
+
     let lastError: any = null;
     let failedModelCount = 0;
+    let all503 = true; // Track if all failures are 503
 
+    const tryModel = async (model: string): Promise<{ generatedImageUri: string; caption?: string } | null> => {
+      console.log(`[ImageGen] Attempting generation with model: ${model} (${failedModelCount} previous failures)`);
+
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error(`Timeout after ${PER_MODEL_TIMEOUT_MS / 1000}s for model ${model}`)), PER_MODEL_TIMEOUT_MS);
+      });
+
+      let generatePromise: Promise<any>;
+
+      if (isImagenModel(model)) {
+        const imagenPrompt = (model === selectedModel && finalTextPrompt !== generationPrompt)
+          ? finalTextPrompt
+          : generationPrompt;
+
+        console.log(`[ImageGen] 🖼️ Imagen mode: text-only prompt (${imagenPrompt.length} chars)`);
+        generatePromise = localAi.generate({
+          model: googleAI.model(model as any),
+          prompt: imagenPrompt,
+          config: {
+            aspectRatio: aspectRatio,
+            numberOfImages: 1,
+          },
+        });
+      } else {
+        const imageConfig: any = { aspectRatio };
+        const supportsResolution = model.includes('3.1-flash-image') || model.includes('3-pro-image');
+        if (resolution && supportsResolution) {
+          imageConfig.imageSize = RESOLUTION_MAP[resolution] || resolution;
+        }
+
+        generatePromise = localAi.generate({
+          model: googleAI.model(model as any),
+          prompt: promptParts,
+          config: {
+            responseModalities,
+            imageConfig,
+            temperature: temperature ?? 1,
+          },
+        });
+      }
+
+      const result = await Promise.race([generatePromise, timeoutPromise]);
+
+      if (result.media) {
+        console.log(`[ImageGen] ✅ Successfully generated image with model: ${model}`);
+        const caption = outputFormat === 'IMAGE_AND_TEXT' ? result.text : undefined;
+        return { generatedImageUri: result.media.url, caption };
+      } else {
+        const reason = result.finishMessage || 'Model returned no media.';
+        throw new Error(reason);
+      }
+    };
+
+    // ===== FIRST PASS: Try all models with progressive backoff =====
     for (const model of uniqueModelsToTry) {
       try {
-        console.log(`[ImageGen] Attempting generation with model: ${model} (${failedModelCount} previous failures)`);
-
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Timeout after ${PER_MODEL_TIMEOUT_MS / 1000}s for model ${model}`)), PER_MODEL_TIMEOUT_MS);
-        });
-
-        let generatePromise: Promise<any>;
-
-        if (isImagenModel(model)) {
-          // ===== IMAGEN 4 MODELS =====
-          // Use the enhanced prompt from Nano Banana (if available) or the original prompt
-          const imagenPrompt = (model === selectedModel && finalTextPrompt !== generationPrompt)
-            ? finalTextPrompt  // Use Nano Banana enhanced prompt for the originally selected Imagen model
-            : generationPrompt; // Use original prompt for fallback Imagen models (they didn't go through pipeline)
-
-          console.log(`[ImageGen] 🖼️ Imagen mode: text-only prompt (${imagenPrompt.length} chars)`);
-          generatePromise = localAi.generate({
-            model: googleAI.model(model as any),
-            prompt: imagenPrompt,
-            config: {
-              aspectRatio: aspectRatio,
-              numberOfImages: 1,
-            },
-          });
-        } else {
-          // ===== GEMINI IMAGE MODELS =====
-          const imageConfig: any = { aspectRatio };
-          const supportsResolution = model.includes('3.1-flash-image') || model.includes('3-pro-image');
-          if (resolution && supportsResolution) {
-            imageConfig.imageSize = RESOLUTION_MAP[resolution] || resolution;
-          }
-
-          generatePromise = localAi.generate({
-            model: googleAI.model(model as any),
-            prompt: promptParts,
-            config: {
-              responseModalities,
-              imageConfig,
-              temperature: temperature ?? 1,
-            },
-          });
-        }
-
-        const result = await Promise.race([generatePromise, timeoutPromise]);
-
-        if (result.media) {
-          console.log(`[ImageGen] ✅ Successfully generated image with model: ${model}`);
-          const caption = outputFormat === 'IMAGE_AND_TEXT' ? result.text : undefined;
-          return { generatedImageUri: result.media.url, caption };
-        } else {
-          const reason = result.finishMessage || 'Model returned no media.';
-          lastError = new Error(reason);
-          console.warn(`[ImageGen] Model ${model} returned no media. Reason: ${reason}. Trying next model...`);
-        }
+        const result = await tryModel(model);
+        if (result) return result;
       } catch (error: any) {
         lastError = error;
         failedModelCount++;
@@ -311,16 +320,22 @@ const brandedImageGenerationFlow = ai.defineFlow(
         const errorMsg = error.message || '';
 
         if (errorMsg.includes('503') || errorMsg.toLowerCase().includes('unavailable')) {
-          console.warn(`[ImageGen] Model ${model} overloaded (503). Next model after 3s...`);
-          await sleep(3000);
+          const delay = getBackoffDelay(failedModelCount, 4000);
+          console.warn(`[ImageGen] Model ${model} overloaded (503). Next model after ${Math.round(delay / 1000)}s...`);
+          await sleep(delay);
           continue;
         }
 
         if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.toLowerCase().includes('rate limit')) {
-          console.warn(`[ImageGen] Model ${model} rate limited (429). Next model after 5s...`);
-          await sleep(5000);
+          all503 = false;
+          const delay = getBackoffDelay(failedModelCount, 5000);
+          console.warn(`[ImageGen] Model ${model} rate limited (429). Next model after ${Math.round(delay / 1000)}s...`);
+          await sleep(delay);
           continue;
         }
+
+        // Non-transient errors: don't count as 503
+        all503 = false;
 
         if (errorMsg.includes('400') || errorMsg.includes('INVALID_ARGUMENT')) {
           console.warn(`[ImageGen] Model ${model} rejected params (400). Trying next...`);
@@ -339,6 +354,26 @@ const brandedImageGenerationFlow = ai.defineFlow(
         
         console.warn(`[ImageGen] Unknown error for model ${model}, trying next...`);
         continue;
+      }
+    }
+
+    // ===== SECOND PASS: If all failures were 503 (transient), wait longer and retry top models =====
+    if (all503 && failedModelCount > 0) {
+      console.log(`[ImageGen] 🔄 All ${failedModelCount} models returned 503. Waiting 15s before second pass...`);
+      await sleep(15000);
+
+      const retryModels = uniqueModelsToTry.slice(0, 3); // Retry top 3 models
+      for (const model of retryModels) {
+        try {
+          console.log(`[ImageGen] 🔄 RETRY PASS: Attempting ${model}...`);
+          const result = await tryModel(model);
+          if (result) return result;
+        } catch (error: any) {
+          lastError = error;
+          console.error(`[ImageGen] ❌ RETRY PASS: ${model} failed again:`, error.message);
+          await sleep(5000);
+          continue;
+        }
       }
     }
 

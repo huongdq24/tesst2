@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/fire
 import { firestore, storage } from '@/lib/firebase/config';
 import { ref, deleteObject } from 'firebase/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2, Wand2, ZoomIn, X as XIcon } from 'lucide-react';
+import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2, Wand2, ZoomIn, PenLine, X as XIcon } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/contexts/i18n-context';
@@ -40,9 +40,10 @@ interface ImageLibraryModalProps {
   onOpenChange: (open: boolean) => void;
   onImageSelect: (imageUrl: string) => void;
   onVideoExtend?: (videoUrl: string) => void;
+  onImageEdit?: (imageUrl: string) => void;
 }
 
-export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoExtend }: ImageLibraryModalProps) {
+export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoExtend, onImageEdit }: ImageLibraryModalProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
@@ -363,6 +364,19 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoEx
               </Button>
             )}
 
+            {/* Edit region button (Inpainting) */}
+            {!isSelectMode && item.type === 'image' && onImageEdit && (
+              <Button
+                variant="secondary"
+                size="icon"
+                title="Sửa vùng (Inpainting)"
+                className="absolute bottom-2 left-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                onClick={(e) => { e.stopPropagation(); onImageEdit(item.url); onOpenChange(false); }}
+              >
+                <PenLine className="h-4 w-4" />
+              </Button>
+            )}
+
             {/* Zoom/Preview button */}
             {!isSelectMode && (
               <Button
@@ -486,14 +500,25 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoEx
           >
             <Download className="h-6 w-6" />
           </button>
-          {/* Use as reference button */}
+          {/* Action buttons in preview */}
           {previewItem.type === 'image' && (
-            <button
-              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-6 py-2.5 text-sm font-medium text-white shadow-lg transition-colors"
-              onClick={(e) => { e.stopPropagation(); onImageSelect(previewItem.url); setPreviewItem(null); onOpenChange(false); }}
-            >
-              Chọn làm ảnh tham chiếu
-            </button>
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-3">
+              <button
+                className="flex items-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-6 py-2.5 text-sm font-medium text-white shadow-lg transition-colors"
+                onClick={(e) => { e.stopPropagation(); onImageSelect(previewItem.url); setPreviewItem(null); onOpenChange(false); }}
+              >
+                Chọn làm ảnh tham chiếu
+              </button>
+              {onImageEdit && (
+                <button
+                  className="flex items-center gap-2 rounded-full bg-cyan-500 hover:bg-cyan-600 px-6 py-2.5 text-sm font-medium text-white shadow-lg transition-colors"
+                  onClick={(e) => { e.stopPropagation(); onImageEdit(previewItem.url); setPreviewItem(null); onOpenChange(false); }}
+                >
+                  <PenLine className="h-4 w-4" />
+                  Sửa vùng
+                </button>
+              )}
+            </div>
           )}
           {/* Media content */}
           <div className="max-w-[90vw] max-h-[85vh] relative" onClick={(e) => e.stopPropagation()}>
