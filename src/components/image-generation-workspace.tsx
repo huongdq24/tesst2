@@ -184,6 +184,7 @@ export function ImageGenerationWorkspace() {
   
   // ===== REGION SELECTION / INPAINTING STATE =====
   const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
+  const [generationStatusMessage, setGenerationStatusMessage] = useState<string | null>(null);
   const [selection, setSelection] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number, y: number } | null>(null);
@@ -448,6 +449,7 @@ export function ImageGenerationWorkspace() {
             // Use ref instead of state to avoid triggering re-renders/infinite loops
             generatedUrisForSaveRef.current = [...generatedUrisForSaveRef.current, result.generatedImageUri];
           }
+          setGenerationStatusMessage(null); // Clear status message on success
           break; // Success, break the retry loop
         } catch (error: any) {
           if (isCancelled) return;
@@ -462,19 +464,22 @@ export function ImageGenerationWorkspace() {
 
           if (attempt < MAX_RETRIES) {
             // Not the last retry, wait and try again
+            const statusMsg = `⏳ Đang thử lại (${attempt + 1}/${MAX_RETRIES})...\n${causeStr}`;
+            setGenerationStatusMessage(statusMsg);
             toast({
               variant: 'default', // standard notification
-              title: `⏳ Đang thử lại ảnh ${currentQueueItemCount} (${attempt + 1}/${MAX_RETRIES})`,
-              description: `${causeStr} Tự động thử lại sau ${RETRY_DELAY / 1000}s...`,
+              title: `Tạm ngưng do máy chủ bận`,
+              description: statusMsg,
             });
             await new Promise(resolve => setTimeout(resolve, RETRY_DELAY));
           } else {
             // Last retry failed, show final error for this image
+            setGenerationStatusMessage(null);
             toast({
               variant: 'destructive',
               title: `❌ Lỗi khi tạo ảnh ${currentQueueItemCount}`,
               description: isOverloaded 
-                ? 'Các cụm máy chủ AI đều đang bận. Vui lòng thử lại sau vài phút.' 
+                ? 'Các máy chủ AI đều đang bận. Vui lòng thử lại sau vài phút.' 
                 : errorMsg || 'Đã xảy ra lỗi không mong muốn.',
             });
           }
@@ -688,6 +693,7 @@ export function ImageGenerationWorkspace() {
     promptRef.current = finalPrompt;
 
     setIsGenerating(true);
+    setGenerationStatusMessage(null);
     setGeneratedImageUrls([]);
     generatedUrisForSaveRef.current = [];
     setElapsedTime(0);
@@ -1307,7 +1313,13 @@ export function ImageGenerationWorkspace() {
         {isGenerating ? (
           <div className="flex flex-col items-center gap-4 text-muted-foreground">
             <Loader2 className="h-16 w-16 animate-spin text-primary" />
-            <p>{t('workspace.image.loadingMessage')}</p>
+            <p className="text-center">
+              {generationStatusMessage ? (
+                <span className="whitespace-pre-wrap">{generationStatusMessage}</span>
+              ) : (
+                t('workspace.image.loadingMessage')
+              )}
+            </p>
             <div className="flex items-center gap-2 font-mono text-lg">
                 <span className="relative flex h-3 w-3">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>

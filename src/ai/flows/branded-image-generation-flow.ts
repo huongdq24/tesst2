@@ -307,7 +307,7 @@ const brandedImageGenerationFlow = ai.defineFlow(
       }
     };
 
-    // ===== FIRST PASS: Try all models with progressive backoff =====
+    // ===== FIRST PASS: Try all models with fast fallback =====
     for (const model of uniqueModelsToTry) {
       try {
         const result = await tryModel(model);
@@ -320,17 +320,16 @@ const brandedImageGenerationFlow = ai.defineFlow(
         const errorMsg = error.message || '';
 
         if (errorMsg.includes('503') || errorMsg.toLowerCase().includes('unavailable')) {
-          const delay = getBackoffDelay(failedModelCount, 4000);
-          console.warn(`[ImageGen] Model ${model} overloaded (503). Next model after ${Math.round(delay / 1000)}s...`);
-          await sleep(delay);
+          // Fail fast on the backend so the frontend can handle the retry UI
+          console.warn(`[ImageGen] Model ${model} overloaded (503). Trying next immediately...`);
+          await sleep(500); // Only a tiny delay to prevent absolute spam
           continue;
         }
 
         if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED') || errorMsg.toLowerCase().includes('rate limit')) {
           all503 = false;
-          const delay = getBackoffDelay(failedModelCount, 5000);
-          console.warn(`[ImageGen] Model ${model} rate limited (429). Next model after ${Math.round(delay / 1000)}s...`);
-          await sleep(delay);
+          console.warn(`[ImageGen] Model ${model} rate limited (429). Trying next immediately...`);
+          await sleep(500); 
           continue;
         }
 
@@ -357,35 +356,15 @@ const brandedImageGenerationFlow = ai.defineFlow(
       }
     }
 
-    // ===== SECOND PASS: If all failures were 503 (transient), wait longer and retry top models =====
-    if (all503 && failedModelCount > 0) {
-      console.log(`[ImageGen] 🔄 All ${failedModelCount} models returned 503. Waiting 15s before second pass...`);
-      await sleep(15000);
-
-      const retryModels = uniqueModelsToTry.slice(0, 3); // Retry top 3 models
-      for (const model of retryModels) {
-        try {
-          console.log(`[ImageGen] 🔄 RETRY PASS: Attempting ${model}...`);
-          const result = await tryModel(model);
-          if (result) return result;
-        } catch (error: any) {
-          lastError = error;
-          console.error(`[ImageGen] ❌ RETRY PASS: ${model} failed again:`, error.message);
-          await sleep(5000);
-          continue;
-        }
-      }
-    }
-
-    console.error("[ImageGen] All image generation attempts failed.", lastError);
+    console.error("[ImageGen] All image generation attempts failed on the backend.", lastError);
     
     const errorDetail = lastError?.message || 'An unknown error occurred.';
     let userMessage = `Tạo ảnh thất bại trên tất cả ${uniqueModelsToTry.length} model.`;
     
     if (errorDetail.includes('503') || errorDetail.toLowerCase().includes('unavailable')) {
-      userMessage += ' Tất cả các model đang quá tải. Vui lòng thử lại sau 1-2 phút.';
+      userMessage += ' Máy chủ AI đang quá tải.';
     } else if (errorDetail.includes('429') || errorDetail.includes('RESOURCE_EXHAUSTED')) {
-      userMessage += ' API key đã hết lượt gọi (quota). Vui lòng thử lại sau hoặc sử dụng API key khác.';
+      userMessage += ' API key đã hết lượt gọi (quota).';
     } else {
       userMessage += ` Lỗi cuối: ${errorDetail}`;
     }
