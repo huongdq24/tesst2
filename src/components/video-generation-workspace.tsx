@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
+import { recordUsage } from '@/lib/usage-tracker';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -207,6 +208,15 @@ export function VideoGenerationWorkspace() {
       });
 
       toast({ title: '💾 Đã lưu video', description: 'Video đã được lưu vào thư viện của bạn.' });
+      // Track usage for cost analytics
+      recordUsage({
+        userId: currentUser.uid,
+        userEmail: currentUser.email || '',
+        type: 'video',
+        model: videoModelRef.current,
+        amount: Number(videoDuration) || 8,
+        prompt: promptRef.current,
+      });
     } catch (saveError: any) {
       console.error('[VideoGen] Failed to save video to Firebase:', saveError);
       toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: `Tạo video thành công nhưng không thể lưu: ${saveError.message}` });
@@ -1234,24 +1244,24 @@ export function VideoGenerationWorkspace() {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-3 mb-2 flex-wrap">
               <div className="flex items-center gap-3">
-                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-teal-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-teal-500/20">
+                <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
                   <Video className="h-4 w-4 text-white" />
                 </div>
                 <h2 className="text-xl font-semibold text-zinc-900 dark:text-white">Dự án hiện tại</h2>
-                <span className="text-xs font-medium text-teal-700 dark:text-teal-200 bg-teal-100 dark:bg-teal-500/20 px-2.5 py-1 rounded-full border border-teal-200 dark:border-teal-500/20">{videoProject.length + projectImages.length} items</span>
+                <span className="text-xs font-medium text-cyan-700 dark:text-cyan-200 bg-cyan-100 dark:bg-cyan-500/20 px-2.5 py-1 rounded-full border border-cyan-200 dark:border-cyan-500/20">{videoProject.length + projectImages.length} items</span>
               </div>
 
               {/* Tabs */}
               <div className="flex bg-zinc-100 dark:bg-zinc-800/50 p-1 rounded-lg sm:ml-4 overflow-x-auto scrollbar-none shadow-inner opacity-90 hover:opacity-100 transition-opacity">
-                <Button variant={activeTab === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('all')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'all' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Tất cả</Button>
-                <Button variant={activeTab === 'images' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('images')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'images' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Hình ảnh</Button>
-                <Button variant={activeTab === 'videos' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('videos')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'videos' && "bg-white dark:bg-zinc-700 text-teal-600 dark:text-teal-300 shadow-sm")}>Video</Button>
+                <Button variant={activeTab === 'all' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('all')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'all' && "bg-white dark:bg-zinc-700 text-cyan-600 dark:text-cyan-300 shadow-sm")}>Tất cả</Button>
+                <Button variant={activeTab === 'images' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('images')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'images' && "bg-white dark:bg-zinc-700 text-cyan-600 dark:text-cyan-300 shadow-sm")}>Hình ảnh</Button>
+                <Button variant={activeTab === 'videos' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('videos')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'videos' && "bg-white dark:bg-zinc-700 text-cyan-600 dark:text-cyan-300 shadow-sm")}>Video</Button>
                 <Button variant={activeTab === 'favorites' ? 'default' : 'ghost'} size="sm" onClick={() => setActiveTab('favorites')} className={cn("h-7 text-xs px-3 rounded-md transition-all", activeTab === 'favorites' && "bg-white dark:bg-zinc-700 text-red-500 shadow-sm")}>
                   <Heart className={cn("h-3 w-3 mr-1.5", activeTab === 'favorites' ? "fill-red-500" : "")} /> Yêu thích
                 </Button>
               </div>
 
-              <Button variant="ghost" size="sm" className="ml-auto text-zinc-500 hover:text-teal-600 hover:bg-teal-50 rounded-full px-4 border border-transparent shrink-0" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); setInputImageUrls([]); setBeforeImageUrl(null); setAfterImageUrl(null); setActiveTab('all'); }}>
+              <Button variant="ghost" size="sm" className="ml-auto text-zinc-500 hover:text-cyan-600 hover:bg-cyan-50 rounded-full px-4 border border-transparent shrink-0" onClick={() => { setVideoProject([]); setGeneratedVideoUrls([]); setInputImageUrls([]); setBeforeImageUrl(null); setAfterImageUrl(null); setActiveTab('all'); }}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" /> Dự án mới
               </Button>
             </div>
@@ -1265,43 +1275,43 @@ export function VideoGenerationWorkspace() {
                     <>
                       {/* Batch progress summary bar */}
                       <div className="col-span-full">
-                        <div className="flex items-center gap-3 p-3 rounded-xl bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800/40">
-                          <Loader2 className="h-4 w-4 animate-spin text-teal-500 shrink-0" />
+                        <div className="flex items-center gap-3 p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800/40">
+                          <Loader2 className="h-4 w-4 animate-spin text-cyan-500 shrink-0" />
                           <div className="flex-1">
-                            <p className="text-sm font-semibold text-teal-800 dark:text-teal-300">
+                            <p className="text-sm font-semibold text-cyan-800 dark:text-cyan-300">
                               Tạo video hàng loạt: {batchOperations.filter(op => op.status === 'completed').length}/{batchOperations.length} hoàn tất
                             </p>
-                            <div className="w-full bg-teal-100 dark:bg-teal-900/40 rounded-full h-1.5 mt-1.5">
+                            <div className="w-full bg-cyan-100 dark:bg-cyan-900/40 rounded-full h-1.5 mt-1.5">
                               <div
-                                className="bg-gradient-to-r from-teal-400 to-cyan-500 h-1.5 rounded-full transition-all duration-700"
+                                className="bg-gradient-to-r from-cyan-400 to-cyan-500 h-1.5 rounded-full transition-all duration-700"
                                 style={{ width: `${(batchOperations.filter(op => op.status !== 'processing').length / batchOperations.length) * 100}%` }}
                               />
                             </div>
                           </div>
-                          <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 bg-teal-100 dark:bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-200 dark:border-teal-800">{elapsedTime}s</div>
+                          <div className="text-[10px] font-mono text-cyan-600 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/40 px-2 py-0.5 rounded-full border border-cyan-200 dark:border-cyan-800">{elapsedTime}s</div>
                         </div>
                       </div>
                       {/* Individual batch operation cards */}
                       {batchOperations.filter(op => op.status === 'processing').map((op) => (
-                        <div key={op.id} className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 cursor-wait">
+                        <div key={op.id} className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-cyan-200 dark:border-cyan-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 cursor-wait">
                           {op.refImage && (
                             <img src={op.refImage} alt="ref" className="absolute inset-0 w-full h-full object-cover opacity-20 blur-sm" />
                           )}
                           <div className="relative z-10 flex flex-col items-center gap-2">
-                            <Loader2 className="h-6 w-6 animate-spin text-teal-500" />
-                            <p className="text-xs font-medium text-teal-700 dark:text-teal-400">Đang xử lý...</p>
+                            <Loader2 className="h-6 w-6 animate-spin text-cyan-500" />
+                            <p className="text-xs font-medium text-cyan-700 dark:text-cyan-400">Đang xử lý...</p>
                           </div>
                         </div>
                       ))}
                     </>
                   ) : (
                     /* Single video processing placeholder */
-                    <div className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-teal-200 dark:border-teal-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 group cursor-wait">
-                      <div className="absolute inset-0 bg-gradient-to-tr from-teal-500/5 to-cyan-500/5 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                      <Loader2 className="h-8 w-8 animate-spin text-teal-500 mb-3" />
-                      <p className="text-sm font-medium text-teal-800 dark:text-teal-400">Đang tạo video của bạn...</p>
-                      <div className="text-[10px] font-mono text-teal-600 dark:text-teal-300 mt-2 bg-teal-50 dark:bg-teal-900/40 px-2.5 py-1 rounded-full border border-teal-100 dark:border-teal-800">{elapsedTime}s</div>
-                      {isSaving && <p className="text-[10px] text-teal-500/70 mt-1 absolute bottom-4">Đang lưu trữ dữ liệu...</p>}
+                    <div className="relative w-full aspect-video bg-zinc-50 dark:bg-zinc-900/40 rounded-xl overflow-hidden border-2 border-dashed border-cyan-200 dark:border-cyan-900/50 flex flex-col items-center justify-center shadow-inner animate-in fade-in zoom-in slide-in-from-bottom-2 group cursor-wait">
+                      <div className="absolute inset-0 bg-gradient-to-tr from-cyan-500/5 to-cyan-500/5 opacity-50 group-hover:opacity-100 transition-opacity"></div>
+                      <Loader2 className="h-8 w-8 animate-spin text-cyan-500 mb-3" />
+                      <p className="text-sm font-medium text-cyan-800 dark:text-cyan-400">Đang tạo video của bạn...</p>
+                      <div className="text-[10px] font-mono text-cyan-600 dark:text-cyan-300 mt-2 bg-cyan-50 dark:bg-cyan-900/40 px-2.5 py-1 rounded-full border border-cyan-100 dark:border-cyan-800">{elapsedTime}s</div>
+                      {isSaving && <p className="text-[10px] text-cyan-500/70 mt-1 absolute bottom-4">Đang lưu trữ dữ liệu...</p>}
                     </div>
                   )}
                 </>
@@ -1342,14 +1352,14 @@ export function VideoGenerationWorkspace() {
               {(activeTab === 'all' || activeTab === 'videos' || activeTab === 'favorites') && videoProject.filter(clip => activeTab === 'favorites' ? favorites.includes(clip.url) : true).map((clip, index) => (
                 <div key={index} className="group flex flex-col gap-2 animate-in fade-in zoom-in-95">
                   <div
-                    className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-teal-500/50 transition-all cursor-pointer shadow-sm hover:shadow-teal-900/20"
+                    className="relative w-full aspect-video bg-zinc-100 dark:bg-zinc-900 rounded-xl overflow-hidden border border-zinc-200 dark:border-white/10 hover:border-cyan-500/50 transition-all cursor-pointer shadow-sm hover:shadow-cyan-900/20"
                     onClick={() => setEditorClipUrl(clip.url)}
                   >
                     <video src={clip.url} className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" />
 
                     <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/10 to-black/70 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 rounded-xl pointer-events-none">
                       <div className="flex justify-between items-start pointer-events-auto w-full">
-                        <span className="bg-white/90 dark:bg-black/60 text-teal-700 dark:text-white/90 text-[10px] uppercase font-bold px-2.5 py-1 rounded shadow-sm">
+                        <span className="bg-white/90 dark:bg-black/60 text-cyan-700 dark:text-white/90 text-[10px] uppercase font-bold px-2.5 py-1 rounded shadow-sm">
                           Clip {index + 1}
                         </span>
 
@@ -1378,7 +1388,7 @@ export function VideoGenerationWorkspace() {
                   {!videoModel.includes('veo-2') && index === videoProject.length - 1 && (
                     <Button
                       variant="outline"
-                      className="w-full border-dashed border-zinc-300 dark:border-white/10 bg-transparent hover:bg-teal-50 dark:hover:bg-teal-900/20 hover:text-teal-700 dark:hover:text-teal-400 text-zinc-500 h-9 text-xs rounded-xl transition-colors"
+                      className="w-full border-dashed border-zinc-300 dark:border-white/10 bg-transparent hover:bg-cyan-50 dark:hover:bg-cyan-900/20 hover:text-cyan-700 dark:hover:text-cyan-400 text-zinc-500 h-9 text-xs rounded-xl transition-colors"
                       onClick={() => activateExtendMode(clip.url)}
                     >
                       <Plus className="mr-2 h-3 w-3" /> Tạo cảnh nối tiếp
@@ -1391,13 +1401,13 @@ export function VideoGenerationWorkspace() {
         ) : (
           <div className="h-full flex flex-col items-center justify-center max-w-3xl mx-auto text-center space-y-6 animate-in fade-in zoom-in-95 duration-700">
             <div className="relative group cursor-default">
-              <div className="absolute inset-0 bg-teal-400/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
-              <div className="relative h-24 w-24 bg-gradient-to-br from-teal-50 to-cyan-100 dark:from-teal-900/30 dark:to-cyan-900/30 rounded-full flex items-center justify-center border border-teal-200 dark:border-teal-800 shadow-xl shadow-teal-500/10">
-                <Wand2 className="h-10 w-10 text-teal-500 animate-pulse" />
+              <div className="absolute inset-0 bg-cyan-400/20 blur-3xl rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-1000"></div>
+              <div className="relative h-24 w-24 bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/30 dark:to-cyan-900/30 rounded-full flex items-center justify-center border border-cyan-200 dark:border-cyan-800 shadow-xl shadow-cyan-500/10">
+                <Wand2 className="h-10 w-10 text-cyan-500 animate-pulse" />
               </div>
             </div>
             <div>
-              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-teal-500 to-cyan-500">iGen +</h1>
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-cyan-500">iGen +</h1>
               <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">Không gian làm việc vô cực. Chỉ cần mô tả ý tưởng, AI sẽ kết xuất video chuẩn điện ảnh với độ phân giải lên đến 4k.</p>
               <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-4">Ấn nút <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-zinc-100 text-zinc-500 mx-1"><Plus className="h-3 w-3" /></span> để chọn ảnh tham chiếu và mẫu prompt</p>
             </div>
@@ -1412,16 +1422,16 @@ export function VideoGenerationWorkspace() {
 
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-50 dark:border-white/5 shrink-0 bg-white dark:bg-zinc-900 relative">
-              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 to-cyan-400"></div>
+              <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-cyan-400 to-cyan-400"></div>
               <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-teal-400 to-cyan-400 flex items-center justify-center shadow-md shadow-teal-500/10">
+                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-400 flex items-center justify-center shadow-md shadow-cyan-500/10">
                   <Wand2 className="h-5 w-5 text-white" />
                 </div>
                 <div className="flex flex-col">
                   <p className="text-base font-bold text-zinc-800 dark:text-white flex items-center gap-2">
                     {wizardTemplate?.label || 'Prompt Wizard'}
                   </p>
-                  <p className="text-[11px] text-teal-600 dark:text-teal-400 font-semibold tracking-wide uppercase">Dự kiến ~5 bước</p>
+                  <p className="text-[11px] text-cyan-600 dark:text-cyan-400 font-semibold tracking-wide uppercase">Dự kiến ~5 bước</p>
                 </div>
               </div>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 rounded-full" onClick={cancelWizard}>
@@ -1439,7 +1449,7 @@ export function VideoGenerationWorkspace() {
                     <div key={i} className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
                       {/* Question bubble */}
                       <div className="flex gap-3">
-                        <div className="h-7 w-7 rounded-full bg-teal-50 dark:bg-teal-900/40 text-teal-600 dark:text-teal-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</div>
+                        <div className="h-7 w-7 rounded-full bg-cyan-50 dark:bg-cyan-900/40 text-cyan-600 dark:text-cyan-400 flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5">{i + 1}</div>
                         <p className="text-[13px] text-zinc-500 dark:text-zinc-400 leading-relaxed pt-1.5">{qa.question}</p>
                       </div>
                       {/* Answer bubble */}
@@ -1458,8 +1468,8 @@ export function VideoGenerationWorkspace() {
                 {wizardLoading ? (
                   <div className="flex flex-col items-center justify-center py-12 gap-4">
                     <div className="relative">
-                      <div className="h-12 w-12 rounded-full border-2 border-teal-100 border-t-teal-500 animate-spin"></div>
-                      <div className="absolute inset-0 flex items-center justify-center"><Wand2 className="h-4 w-4 text-teal-500 opacity-50" /></div>
+                      <div className="h-12 w-12 rounded-full border-2 border-cyan-100 border-t-cyan-500 animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center"><Wand2 className="h-4 w-4 text-cyan-500 opacity-50" /></div>
                     </div>
                     <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">
                       {wizardAnswers.length === 0 ? 'Đang phân tích và khởi tạo...' : wizardCurrentQuestion?.isDone ? 'Đang tổng hợp prompt hoàn chỉnh...' : 'AI đang suy nghĩ câu hỏi tiếp theo...'}
@@ -1478,7 +1488,7 @@ export function VideoGenerationWorkspace() {
                           key={i}
                           variant="outline"
                           onClick={() => handleWizardAnswer(opt)}
-                          className="h-auto py-2.5 px-5 text-[13px] font-semibold rounded-full border border-teal-200 dark:border-teal-800 bg-white dark:bg-zinc-900 text-teal-700 dark:text-teal-400 hover:bg-teal-50 dark:hover:bg-teal-900/40 hover:border-teal-400 dark:hover:border-teal-600 transition-all whitespace-normal text-left shadow-sm hover:shadow-md active:scale-95"
+                          className="h-auto py-2.5 px-5 text-[13px] font-semibold rounded-full border border-cyan-200 dark:border-cyan-800 bg-white dark:bg-zinc-900 text-cyan-700 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-900/40 hover:border-cyan-400 dark:hover:border-cyan-600 transition-all whitespace-normal text-left shadow-sm hover:shadow-md active:scale-95"
                         >
                           {opt}
                         </Button>
@@ -1549,13 +1559,13 @@ export function VideoGenerationWorkspace() {
                           }
                         }}
                         placeholder="Hoặc nhập câu trả lời của bạn..."
-                        className="w-full h-14 pl-5 pr-16 text-sm bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-400/30 focus:border-teal-400 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 transition-all"
+                        className="w-full h-14 pl-5 pr-16 text-sm bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-cyan-400/30 focus:border-cyan-400 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 transition-all"
                       />
                       <Button
                         size="icon"
                         onClick={() => { if (wizardCustomInput.trim()) handleWizardAnswer(wizardCustomInput.trim()); }}
                         disabled={!wizardCustomInput.trim()}
-                        className="absolute right-2 h-10 w-10 rounded-xl bg-teal-400 hover:bg-teal-500 text-white shadow-md disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none transition-all"
+                        className="absolute right-2 h-10 w-10 rounded-xl bg-cyan-400 hover:bg-cyan-500 text-white shadow-md disabled:bg-zinc-200 disabled:text-zinc-400 disabled:shadow-none transition-all"
                       >
                         <ArrowRight className="h-5 w-5" />
                       </Button>
@@ -1563,19 +1573,19 @@ export function VideoGenerationWorkspace() {
                   </div>
                 ) : (
                   <div className="flex flex-col items-center py-10 gap-4 text-center px-4">
-                    <div className="h-16 w-16 rounded-full bg-teal-50 flex items-center justify-center relative">
-                      <div className="absolute inset-0 bg-teal-400/20 blur-xl rounded-full"></div>
-                      <Wand2 className="h-7 w-7 text-teal-500 relative z-10" />
+                    <div className="h-16 w-16 rounded-full bg-cyan-50 flex items-center justify-center relative">
+                      <div className="absolute inset-0 bg-cyan-400/20 blur-xl rounded-full"></div>
+                      <Wand2 className="h-7 w-7 text-cyan-500 relative z-10" />
                     </div>
                     <h3 className="text-xl font-bold text-zinc-800 dark:text-white">Tuyệt vời, đã đủ thông tin!</h3>
                     <p className="text-sm text-zinc-500 max-w-sm">Nhấn Hoàn tất để hệ thống viết ra kịch bản video chuyên nghiệp cho bạn.</p>
 
-                    <div className="w-full max-w-md mt-6 text-left border border-teal-100 dark:border-teal-800/40 p-5 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm transition-all hover:shadow-md">
+                    <div className="w-full max-w-md mt-6 text-left border border-cyan-100 dark:border-cyan-800/40 p-5 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm transition-all hover:shadow-md">
                       <div className="flex items-center gap-2 mb-2">
-                         <div className="bg-teal-100 dark:bg-teal-900/50 p-1.5 rounded-lg"><Mic className="h-4 w-4 text-teal-600 dark:text-teal-400" /></div>
+                         <div className="bg-cyan-100 dark:bg-cyan-900/50 p-1.5 rounded-lg"><Mic className="h-4 w-4 text-cyan-600 dark:text-cyan-400" /></div>
                          <span className="font-bold text-zinc-800 dark:text-zinc-200">Nhân vật phát âm (Tuỳ chọn)</span>
                       </div>
-                      <p className="text-[11px] text-teal-600 dark:text-teal-400 mb-4 bg-teal-50 dark:bg-teal-900/20 px-2.5 py-1.5 rounded-lg border border-teal-100 dark:border-teal-800/30 font-medium">✨ Veo 3 tự động tạo âm thanh & nhép môi nhân vật theo đúng đoạn hội thoại nhập dưới đây!</p>
+                      <p className="text-[11px] text-cyan-600 dark:text-cyan-400 mb-4 bg-cyan-50 dark:bg-cyan-900/20 px-2.5 py-1.5 rounded-lg border border-cyan-100 dark:border-cyan-800/30 font-medium">✨ Veo 3 tự động tạo âm thanh & nhép môi nhân vật theo đúng đoạn hội thoại nhập dưới đây!</p>
                       
                       <div className="space-y-4">
                         <div>
@@ -1584,7 +1594,7 @@ export function VideoGenerationWorkspace() {
                             placeholder="Ví dụ: Xin chào mừng các bạn đã đến với sản phẩm mới..."
                             value={wizardVoiceText}
                             onChange={(e) => setWizardVoiceText(e.target.value)}
-                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl p-3 h-20 resize-none outline-none focus:ring-2 focus:ring-teal-400/50 transition-all text-zinc-800 dark:text-zinc-200"
+                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 rounded-xl p-3 h-20 resize-none outline-none focus:ring-2 focus:ring-cyan-400/50 transition-all text-zinc-800 dark:text-zinc-200"
                           />
                         </div>
                         <div>
@@ -1594,7 +1604,7 @@ export function VideoGenerationWorkspace() {
                             placeholder="VD: Nam tính trầm ấm, Nữ truyền cảm..."
                             value={wizardVoiceType}
                             onChange={(e) => setWizardVoiceType(e.target.value)}
-                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-teal-400/50 transition-all text-zinc-800 dark:text-zinc-200"
+                            className="w-full text-sm border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 px-3 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-cyan-400/50 transition-all text-zinc-800 dark:text-zinc-200"
                           />
                         </div>
                       </div>
@@ -1659,7 +1669,7 @@ export function VideoGenerationWorkspace() {
                       size="sm"
                       disabled={wizardLoading}
                       onClick={() => handleWizardComplete(undefined, true)}
-                      className="text-[13px] font-bold h-10 px-6 rounded-xl bg-gradient-to-r from-teal-400 to-cyan-500 hover:from-teal-500 hover:to-cyan-600 text-white shadow-[0_8px_16px_rgba(45,212,191,0.25)] hover:shadow-[0_8px_20px_rgba(45,212,191,0.35)] hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:translate-y-0 disabled:shadow-none"
+                      className="text-[13px] font-bold h-10 px-6 rounded-xl bg-gradient-to-r from-cyan-400 to-cyan-500 hover:from-cyan-500 hover:to-cyan-600 text-white shadow-[0_8px_16px_rgba(45,212,191,0.25)] hover:shadow-[0_8px_20px_rgba(45,212,191,0.35)] hover:-translate-y-0.5 transition-all disabled:opacity-70 disabled:translate-y-0 disabled:shadow-none"
                     >
                       {wizardLoading ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -1678,14 +1688,14 @@ export function VideoGenerationWorkspace() {
 
       {/* --- EXTEND ALERT --- */}
       {extendingVideoUrl && (
-        <div className="absolute bottom-[110px] left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-200 dark:border-teal-800 rounded-2xl p-2.5 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
+        <div className="absolute bottom-[110px] left-1/2 -translate-x-1/2 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-cyan-200 dark:border-cyan-800 rounded-2xl p-2.5 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5">
           <div className="h-10 w-16 bg-zinc-100 rounded-lg overflow-hidden ring-1 ring-black/5 relative group">
             <video src={extendingVideoUrl} className="w-full h-full object-cover opacity-90 group-hover:opacity-100 transition-opacity" />
           </div>
           <div className="text-sm">
             <div className="flex items-center gap-2 mb-0.5">
-              <div className="h-1.5 w-1.5 bg-teal-500 rounded-full animate-pulse"></div>
-              <span className="font-semibold text-teal-700 dark:text-teal-400 text-xs uppercase tracking-wider">Đang nối tiếp clip</span>
+              <div className="h-1.5 w-1.5 bg-cyan-500 rounded-full animate-pulse"></div>
+              <span className="font-semibold text-cyan-700 dark:text-cyan-400 text-xs uppercase tracking-wider">Đang nối tiếp clip</span>
             </div>
             <span className="text-zinc-500 dark:text-zinc-400 text-[11px]">Cảnh tiếp theo diễn ra thế nào?</span>
           </div>
@@ -1710,7 +1720,7 @@ export function VideoGenerationWorkspace() {
                   variant="ghost"
                   size="sm"
                   onClick={() => setIsBeforeAfterCollapsed(!isBeforeAfterCollapsed)}
-                  className="h-6 px-3 text-[10px] uppercase font-bold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm hover:text-teal-600 hover:border-teal-200 dark:hover:border-teal-800 transition-colors bg-opacity-90 backdrop-blur-sm"
+                  className="h-6 px-3 text-[10px] uppercase font-bold text-zinc-500 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 rounded-full shadow-sm hover:text-cyan-600 hover:border-cyan-200 dark:hover:border-cyan-800 transition-colors bg-opacity-90 backdrop-blur-sm"
                 >
                   {isBeforeAfterCollapsed ? (
                     <><ChevronDown className="h-4 w-4 mr-1" /> Mở rộng ảnh</>
@@ -1766,10 +1776,10 @@ export function VideoGenerationWorkspace() {
 
                 <div
                   className={cn("rounded-xl border-2 border-dashed transition-all group bg-white dark:bg-black/30 relative overflow-hidden",
-                    afterImageUrl ? "border-teal-400 shadow-[0_0_15px_rgba(20,184,166,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-teal-300 flex-1 min-h-[120px] flex items-center justify-center"
+                    afterImageUrl ? "border-cyan-400 shadow-[0_0_15px_rgba(20,184,166,0.1)] flex-none w-fit" : "border-zinc-200 hover:border-cyan-300 flex-1 min-h-[120px] flex items-center justify-center"
                   )}
                 >
-                  {isUploadingAfter ? <Loader2 className="h-4 w-4 animate-spin text-teal-500" />
+                  {isUploadingAfter ? <Loader2 className="h-4 w-4 animate-spin text-cyan-500" />
                     : afterImageUrl ? (
                       <div className="relative flex">
                         <img src={afterImageUrl} alt="A" className="max-h-[350px] w-auto block object-contain transition-opacity" />
@@ -1785,7 +1795,7 @@ export function VideoGenerationWorkspace() {
                           onClick={() => !afterImageUrl && afterFileInputRef.current?.click()}
                           title="Tải ảnh từ thiết bị"
                         >
-                          <UploadCloud className="h-6 w-6 text-teal-500/60 mb-1.5" />
+                          <UploadCloud className="h-6 w-6 text-cyan-500/60 mb-1.5" />
                           <span className="text-[10px] text-zinc-500 font-bold uppercase">Tải Ảnh Sau</span>
                         </div>
                         <div className="w-full border-t border-zinc-200/50 dark:border-white/5 my-3"></div>
@@ -1793,7 +1803,7 @@ export function VideoGenerationWorkspace() {
                           variant="ghost"
                           size="sm"
                           onClick={(e) => { e.stopPropagation(); setLibraryTarget('after'); setIsLibraryOpen(true); }}
-                          className="text-[10px] font-semibold text-teal-600 h-7 w-full rounded-lg hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                          className="text-[10px] font-semibold text-cyan-600 h-7 w-full rounded-lg hover:bg-cyan-50 dark:hover:bg-cyan-950/30"
                         >
                           Mở thư viện
                         </Button>
@@ -1809,15 +1819,15 @@ export function VideoGenerationWorkspace() {
             <div className={cn("px-4 py-3 border-b border-zinc-100 dark:border-white/5 bg-zinc-50/50 dark:bg-zinc-950/20 flex flex-col gap-2 backdrop-blur-md", inputMode === 'standard' ? "rounded-t-2xl" : "border-t border-zinc-200 dark:border-white/10")}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] uppercase tracking-wider font-bold text-teal-600 dark:text-teal-400 bg-teal-100 dark:bg-teal-900/30 px-2 py-0.5 rounded text-center">✨ Kịch bản AI / Prompt</span>
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-900/30 px-2 py-0.5 rounded text-center">✨ Kịch bản AI / Prompt</span>
                 </div>
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={() => setIsEditingScript(!isEditingScript)}><Pencil className="h-3 w-3" /></Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-teal-600 rounded-full hover:bg-teal-50" onClick={handleCopy}><Copy className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-cyan-600 rounded-full hover:bg-cyan-50" onClick={() => setIsEditingScript(!isEditingScript)}><Pencil className="h-3 w-3" /></Button>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-zinc-400 hover:text-cyan-600 rounded-full hover:bg-cyan-50" onClick={handleCopy}><Copy className="h-3 w-3" /></Button>
                 </div>
               </div>
               {isEditingScript ? (
-                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-xs bg-white dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-300 min-h-[60px] max-h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 rounded-lg focus-visible:ring-teal-500/30 p-2.5" />
+                <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} className="text-xs bg-white dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-800 dark:text-zinc-300 min-h-[60px] max-h-[150px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 rounded-lg focus-visible:ring-cyan-500/30 p-2.5" />
               ) : (
                 <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed max-h-[100px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-300 dark:scrollbar-thumb-zinc-700 font-medium">{prompt}</p>
               )}
@@ -1831,7 +1841,7 @@ export function VideoGenerationWorkspace() {
             <Button
               variant="ghost"
               size="icon"
-              className={cn("h-11 w-11 shrink-0 rounded-xl transition-all", showImageUpload ? "bg-teal-50 text-teal-600 dark:bg-white/10 dark:text-white" : "hover:bg-zinc-100 text-zinc-500 bg-zinc-50 dark:bg-black/30")}
+              className={cn("h-11 w-11 shrink-0 rounded-xl transition-all", showImageUpload ? "bg-cyan-50 text-cyan-600 dark:bg-white/10 dark:text-white" : "hover:bg-zinc-100 text-zinc-500 bg-zinc-50 dark:bg-black/30")}
               onClick={() => setShowImageUpload(!showImageUpload)}
             >
               <Plus className={cn("h-5 w-5 transition-transform duration-300", showImageUpload && "rotate-45")} />
@@ -1841,10 +1851,10 @@ export function VideoGenerationWorkspace() {
             {showImageUpload && (
               <div className="absolute bottom-[110%] left-[-4px] sm:left-0 mb-2 p-3 sm:p-4 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200 dark:border-white/10 rounded-2xl shadow-2xl w-[92vw] sm:w-[320px] max-w-[340px] animate-in zoom-in-95 origin-bottom-left z-50">
                 <div className="flex items-center gap-2 mb-3 bg-zinc-100 dark:bg-black/40 p-1 rounded-lg">
-                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'standard' ? "bg-white text-teal-600 shadow-sm" : "text-zinc-500 hover:text-teal-600")} onClick={() => { setInputMode('standard'); }}>
+                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'standard' ? "bg-white text-cyan-600 shadow-sm" : "text-zinc-500 hover:text-cyan-600")} onClick={() => { setInputMode('standard'); }}>
                     Tiêu chuẩn
                   </Button>
-                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'before-after' ? "bg-white text-teal-600 shadow-sm" : "text-zinc-500 hover:text-teal-600")} onClick={() => { setInputMode('before-after'); }}>
+                  <Button variant="ghost" size="sm" className={cn("flex-1 text-xs justify-center h-8 rounded-md transition-colors", inputMode === 'before-after' ? "bg-white text-cyan-600 shadow-sm" : "text-zinc-500 hover:text-cyan-600")} onClick={() => { setInputMode('before-after'); }}>
                     Trước Sau
                   </Button>
                 </div>
@@ -1854,7 +1864,7 @@ export function VideoGenerationWorkspace() {
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Ảnh tham chiếu</p>
                       <div className="flex items-center gap-2">
-                        <Button variant="link" size="sm" className="h-5 text-[10px] text-teal-500 px-0" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }}>Mở thư viện</Button>
+                        <Button variant="link" size="sm" className="h-5 text-[10px] text-cyan-500 px-0" onClick={() => { setLibraryTarget('standard'); setIsLibraryOpen(true); }}>Mở thư viện</Button>
                         <span className="text-zinc-300">|</span>
                         <Button variant="link" size="sm" className="h-5 text-[10px] text-purple-500 px-0" onClick={() => setShowImageUpload(prev => !prev)}>Template</Button>
                       </div>
@@ -1870,7 +1880,7 @@ export function VideoGenerationWorkspace() {
                         <div className="h-14 w-14 shrink-0 rounded-lg border border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 text-zinc-400 transition-colors" onClick={() => fileInputRef.current?.click()}><Plus className="h-4 w-4" /></div>
                       </div>
                     ) : (
-                      <div className="h-20 w-full rounded-xl border border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 text-zinc-400 hover:text-teal-600 transition-colors" onClick={() => fileInputRef.current?.click()}>
+                      <div className="h-20 w-full rounded-xl border border-dashed border-zinc-300 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 text-zinc-400 hover:text-cyan-600 transition-colors" onClick={() => fileInputRef.current?.click()}>
                         <UploadCloud className="h-6 w-6 mb-1 opacity-70" />
                         <span className="text-[10px] font-medium">Tải ảnh tham chiếu</span>
                       </div>
@@ -1885,7 +1895,7 @@ export function VideoGenerationWorkspace() {
                         <input
                           type="text"
                           placeholder="VD: Spa, Nha khoa, Gym..."
-                          className="flex-1 h-8 px-3 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-400/50 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
+                          className="flex-1 h-8 px-3 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-lg focus:outline-none focus:ring-1 focus:ring-cyan-400/50 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && (e.target as HTMLInputElement).value.trim()) {
                               const val = (e.target as HTMLInputElement).value.trim();
@@ -1894,7 +1904,7 @@ export function VideoGenerationWorkspace() {
                             }
                           }}
                         />
-                        <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg bg-teal-500 hover:bg-teal-600 text-white shrink-0 shadow-sm" onClick={(e) => {
+                        <Button size="sm" className="h-8 px-3 text-[10px] rounded-lg bg-cyan-500 hover:bg-cyan-600 text-white shrink-0 shadow-sm" onClick={(e) => {
                           const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
                           if (input?.value.trim()) { setShowImageUpload(false); startWizard({ id: 'custom', label: input.value.trim(), prompt: '' }); }
                         }}>
@@ -1908,9 +1918,9 @@ export function VideoGenerationWorkspace() {
                           <div
                             key={tmpl.id}
                             onClick={() => { setShowImageUpload(false); startWizard(tmpl); }}
-                            className="bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-white/5 hover:border-teal-400/40 hover:bg-teal-50 dark:hover:bg-teal-900/10 p-2 rounded-lg cursor-pointer text-left transition-all group shadow-sm hover:shadow"
+                            className="bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-100 dark:border-white/5 hover:border-cyan-400/40 hover:bg-cyan-50 dark:hover:bg-cyan-900/10 p-2 rounded-lg cursor-pointer text-left transition-all group shadow-sm hover:shadow"
                           >
-                            <p className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors leading-tight">{tmpl.label}</p>
+                            <p className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors leading-tight">{tmpl.label}</p>
                           </div>
                         ))}
                       </div>
@@ -1918,7 +1928,7 @@ export function VideoGenerationWorkspace() {
                       {/* Native Veo 3 Voice Synthesis */}
                       <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/5">
                         <div className="flex items-center gap-1.5 mb-2">
-                           <Mic className="h-3.5 w-3.5 text-teal-500" />
+                           <Mic className="h-3.5 w-3.5 text-cyan-500" />
                            <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Nhân vật phát âm (Veo 3)</p>
                         </div>
                         <input
@@ -1926,14 +1936,14 @@ export function VideoGenerationWorkspace() {
                           placeholder="Nội dung lời thoại (VD: Xin chào...)"
                           value={wizardVoiceText}
                           onChange={(e) => setWizardVoiceText(e.target.value)}
-                          className="w-full mb-1.5 h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-400/50 placeholder:text-zinc-400"
+                          className="w-full mb-1.5 h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-400/50 placeholder:text-zinc-400"
                         />
                         <input
                           type="text"
                           placeholder="Loại giọng (VD: Nam ấm áp...)"
                           value={wizardVoiceType}
                           onChange={(e) => setWizardVoiceType(e.target.value)}
-                          className="w-full h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-teal-400/50 placeholder:text-zinc-400"
+                          className="w-full h-8 px-2.5 text-[11px] bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-md focus:outline-none focus:ring-1 focus:ring-cyan-400/50 placeholder:text-zinc-400"
                         />
                       </div>
 
@@ -1944,7 +1954,7 @@ export function VideoGenerationWorkspace() {
             )}
 
             {/* Input Field */}
-            <div className="flex-1 bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl relative flex items-center focus-within:ring-1 focus-within:ring-teal-400/50 transition-all shadow-inner">
+            <div className="flex-1 bg-zinc-50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl relative flex items-center focus-within:ring-1 focus-within:ring-cyan-400/50 transition-all shadow-inner">
               <Textarea
                 value={scriptDescription}
                 onChange={(e) => setScriptDescription(e.target.value)}
@@ -1966,7 +1976,7 @@ export function VideoGenerationWorkspace() {
                 size="icon"
                 onClick={handleGenerateScript}
                 disabled={isBusy || !scriptDescription.trim() || isGeneratingScript}
-                className={cn("absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg transition-all", isGeneratingScript ? "bg-teal-50 text-teal-500" : "hover:bg-zinc-200 text-zinc-400 hover:text-teal-500", (!scriptDescription.trim() && "opacity-50 grayscale"))}
+                className={cn("absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 rounded-lg transition-all", isGeneratingScript ? "bg-cyan-50 text-cyan-500" : "hover:bg-zinc-200 text-zinc-400 hover:text-cyan-500", (!scriptDescription.trim() && "opacity-50 grayscale"))}
                 title="Viết kịch bản bằng AI"
               >
                 {isGeneratingScript ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
@@ -1978,7 +1988,7 @@ export function VideoGenerationWorkspace() {
               <Button
                 variant="outline"
                 size="sm"
-                className={cn("h-11 px-3 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all gap-1.5 hidden sm:flex bg-white hover:bg-zinc-50 text-zinc-600 hover:text-teal-600 shadow-sm")}
+                className={cn("h-11 px-3 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all gap-1.5 hidden sm:flex bg-white hover:bg-zinc-50 text-zinc-600 hover:text-cyan-600 shadow-sm")}
                 onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
               >
                 <span className="text-xs font-semibold">{videoDuration}s</span>
@@ -1989,7 +1999,7 @@ export function VideoGenerationWorkspace() {
               <Button
                 variant="outline"
                 size="icon"
-                className={cn("h-11 w-11 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all sm:hidden bg-white shadow-sm hover:text-teal-600 text-zinc-600", showAdvancedSettings ? "bg-zinc-100 ring-2 ring-teal-500/20" : "")}
+                className={cn("h-11 w-11 shrink-0 rounded-xl border-zinc-200 dark:border-white/10 relative transition-all sm:hidden bg-white shadow-sm hover:text-cyan-600 text-zinc-600", showAdvancedSettings ? "bg-zinc-100 ring-2 ring-cyan-500/20" : "")}
                 onClick={() => setShowAdvancedSettings(!showAdvancedSettings)}
               >
                 <span className="text-sm font-bold opacity-80">⚙️</span>
@@ -2039,7 +2049,7 @@ export function VideoGenerationWorkspace() {
                     <div className="space-y-1.5">
                       <Label className="text-[10px] text-zinc-500 font-semibold">CỐT LÕI AI</Label>
                       <Select value={videoModel} onValueChange={setVideoModel}>
-                        <SelectTrigger className="h-9 text-xs bg-teal-50 dark:bg-black/40 border-teal-200 dark:border-teal-800/40 text-teal-700 dark:text-teal-300 rounded-lg shadow-sm font-medium"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-9 text-xs bg-cyan-50 dark:bg-black/40 border-cyan-200 dark:border-cyan-800/40 text-cyan-700 dark:text-cyan-300 rounded-lg shadow-sm font-medium"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                           <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
                           <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
@@ -2056,8 +2066,8 @@ export function VideoGenerationWorkspace() {
 
             {/* SEND BUTTON */}
             <Button
-              className={cn("h-11 w-11 sm:w-auto px-0 sm:px-5 shrink-0 rounded-xl font-bold shadow-md transition-all focus:ring-2 ring-teal-500/50 ring-offset-2 ring-offset-white active:scale-95",
-                isGenerateDisabled ? "bg-zinc-100 text-zinc-400" : "bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white shadow-teal-500/20 hover:shadow-lg hover:shadow-teal-500/40"
+              className={cn("h-11 w-11 sm:w-auto px-0 sm:px-5 shrink-0 rounded-xl font-bold shadow-md transition-all focus:ring-2 ring-cyan-500/50 ring-offset-2 ring-offset-white active:scale-95",
+                isGenerateDisabled ? "bg-zinc-100 text-zinc-400" : "bg-gradient-to-r from-cyan-500 to-cyan-500 hover:from-cyan-600 hover:to-cyan-600 text-white shadow-cyan-500/20 hover:shadow-lg hover:shadow-cyan-500/40"
               )}
               onClick={() => handleGenerateRef.current?.(false)}
               disabled={isGenerateDisabled}

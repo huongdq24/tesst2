@@ -16,8 +16,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Loader2, Shield, Users, Image as ImageIcon, Video as VideoIcon, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Shield, Users, Image as ImageIcon, Video as VideoIcon, Pencil, Trash2, BarChart3 } from 'lucide-react';
 import { AdminManageKeysModal } from '@/components/modals/admin-manage-keys-modal';
+import { AdminCostOverview } from '@/components/admin-cost-overview';
+import CostAnalyticsDashboard from '@/components/cost-analytics-dashboard';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -53,6 +57,7 @@ export default function AdminPage() {
   const [isFetching, setIsFetching] = useState(true);
   const [userToEdit, setUserToEdit] = useState<UserRecord | null>(null);
   const [userToDelete, setUserToDelete] = useState<UserRecord | null>(null);
+  const [userToViewCost, setUserToViewCost] = useState<UserRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [totalImages, setTotalImages] = useState(0);
   const [totalVideos, setTotalVideos] = useState(0);
@@ -186,6 +191,18 @@ export default function AdminPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!userToViewCost} onOpenChange={(open) => !open && setUserToViewCost(null)}>
+        <DialogContent className="max-w-6xl max-h-[95vh] overflow-y-auto bg-zinc-950 border-zinc-800 p-0">
+          <DialogTitle className="sr-only">Chi tiết chi phí người dùng</DialogTitle>
+          {userToViewCost && (
+            <CostAnalyticsDashboard 
+              overrideUserId={userToViewCost.uid} 
+              overrideUserEmail={userToViewCost.email || 'User'} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
       <div className="container py-8 space-y-6">
         <div className="flex items-center gap-3">
           <Shield className="h-8 w-8 text-primary" />
@@ -194,7 +211,15 @@ export default function AdminPage() {
             <p className="text-muted-foreground">Quản lý tất cả người dùng và tài sản số</p>
           </div>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-[400px]">
+            <TabsTrigger value="users">Quản lý Người Dùng</TabsTrigger>
+            <TabsTrigger value="costs">Phân tích Chi Phí</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="users" className="space-y-6">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Tổng Users</CardTitle>
@@ -285,6 +310,10 @@ export default function AdminPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setUserToViewCost(u)}>
+                                <BarChart3 className="mr-2 h-3 w-3" />
+                                Chi Phí
+                            </Button>
                             <Button variant="outline" size="sm" onClick={() => setUserToEdit(u)}>
                                 <Pencil className="mr-2 h-3 w-3" />
                                 Sửa Keys
@@ -301,6 +330,12 @@ export default function AdminPage() {
             </div>
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="costs" className="mt-6">
+            <AdminCostOverview />
+          </TabsContent>
+        </Tabs>
       </div>
     </>
   );

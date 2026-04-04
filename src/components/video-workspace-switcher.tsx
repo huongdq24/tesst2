@@ -19,7 +19,7 @@ export function VideoWorkspaceSwitcher() {
       <TabsList className="grid w-full grid-cols-2 h-11 p-1 bg-zinc-100/80 dark:bg-zinc-800/80 backdrop-blur rounded-xl">
         <TabsTrigger 
           value="simple" 
-          className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:text-teal-600 dark:data-[state=active]:text-teal-400 font-semibold text-sm"
+          className="rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-900 data-[state=active]:text-cyan-600 dark:data-[state=active]:text-cyan-400 font-semibold text-sm"
         >
           🌟 Dễ dùng (Cơ bản)
         </TabsTrigger>

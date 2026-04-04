@@ -125,8 +125,8 @@ export default function IgenXGooglePage() {
   };
 
   return (
-    <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-gray-100 to-blue-100 p-4">
-      <div className="absolute inset-0 bg-background bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(38,169,217,0.1),rgba(255,255,255,0))]"></div>
+    <main className="flex min-h-screen w-full items-center justify-center bg-gradient-to-br from-gray-100 to-cyan-100 p-4">
+      <div className="absolute inset-0 bg-background bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(6,182,212,0.1),rgba(255,255,255,0))]"></div>
       <div className="relative w-full max-w-2xl space-y-8">
         <div className="text-center">
           <IGenLogo className="text-4xl" />

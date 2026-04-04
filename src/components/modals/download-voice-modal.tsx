@@ -60,13 +60,13 @@ export function DownloadVoiceModal({ open, onOpenChange, audioUrl, defaultFilena
 
             <Button
               variant="outline"
-              className="h-24 flex flex-col gap-2 items-center justify-center border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/5"
+              className="h-24 flex flex-col gap-2 items-center justify-center border-cyan-500/20 hover:border-cyan-500/50 hover:bg-cyan-500/5"
               onClick={() => handleDownload('mp4')}
               disabled={!!isDownloading}
             >
-              {isDownloading === 'mp4' ? <Loader2 className="h-6 w-6 animate-spin text-emerald-600" /> : <Video className="h-6 w-6 text-emerald-600" />}
-              <span className="font-medium text-emerald-700 dark:text-emerald-500">Đổi đuôi MP4</span>
-              <span className="text-[10px] text-emerald-600/70 font-normal">(Phù hợp up lên Tiktok)</span>
+              {isDownloading === 'mp4' ? <Loader2 className="h-6 w-6 animate-spin text-cyan-600" /> : <Video className="h-6 w-6 text-cyan-600" />}
+              <span className="font-medium text-cyan-700 dark:text-cyan-500">Đổi đuôi MP4</span>
+              <span className="text-[10px] text-cyan-600/70 font-normal">(Phù hợp up lên Tiktok)</span>
             </Button>
           </div>
         </div>

@@ -16,7 +16,7 @@ interface FeatureCardProps {
   themeColor?: string;
 }
 
-export function FeatureCard({ slug, title, icon, description, imageBaseUrl, tag, themeColor = "text-teal-500" }: FeatureCardProps) {
+export function FeatureCard({ slug, title, icon, description, imageBaseUrl, tag, themeColor = "text-cyan-500" }: FeatureCardProps) {
   // Use placeholder image if none provided
   const coverImage = imageBaseUrl || "https://images.unsplash.com/photo-1620641788421-7a1c342ea42e?w=800&q=80";
 
@@ -46,7 +46,7 @@ export function FeatureCard({ slug, title, icon, description, imageBaseUrl, tag,
           {tag && (
             <div className="mb-3">
               <span className={cn(
-                "text-xs font-mono font-medium px-2.5 py-1 rounded-md bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/20"
+                "text-xs font-mono font-medium px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border border-cyan-500/20"
               )}>
                 {tag}
               </span>
@@ -54,7 +54,7 @@ export function FeatureCard({ slug, title, icon, description, imageBaseUrl, tag,
           )}
 
           <h3 className="text-xl font-bold tracking-tight text-foreground mb-2 leading-tight">
-            <span className="text-teal-500 mr-2">iGen</span>
+            <span className="text-cyan-500 mr-2">iGen</span>
             <span className="uppercase inline">{title}</span>
           </h3>
 
@@ -63,7 +63,7 @@ export function FeatureCard({ slug, title, icon, description, imageBaseUrl, tag,
           </p>
 
           {/* Action Link */}
-          <div className="mt-auto flex items-center font-semibold text-sm text-teal-500 uppercase tracking-wider group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+          <div className="mt-auto flex items-center font-semibold text-sm text-cyan-500 uppercase tracking-wider group-hover:text-cyan-600 dark:group-hover:text-cyan-400 transition-colors">
             SỬ DỤNG TÍNH NĂNG
             <ArrowRight className="ml-1 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
           </div>

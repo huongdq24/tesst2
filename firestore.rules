@@ -243,5 +243,20 @@ service cloud.firestore {
       allow list: if isSignedIn(request.auth);
       allow delete: if false;
     }
+
+    //-------------------------------------------------------------------------
+    // Collection: usageLogs (Cost Analytics)
+    //-------------------------------------------------------------------------
+    match /usageLogs/{logId} {
+      // Users can read their own usage logs. Admins can read all.
+      allow get: if isOwner(request.auth, resource.data.userId) || isAdmin(request.auth);
+      // Users can list/query their own logs (via userId filter). Admins can list all.
+      allow list: if isSignedIn(request.auth);
+      // Authenticated users can create usage logs where userId matches their uid.
+      allow create: if isSignedIn(request.auth) && request.resource.data.userId == request.auth.uid;
+      // Usage logs are immutable - no updates or deletes.
+      allow update: if false;
+      allow delete: if isAdmin(request.auth);
+    }
   }
 }

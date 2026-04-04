@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   UploadCloud,
   Sparkles,
+  BarChart3,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -21,8 +22,10 @@ import { VideoWorkspaceSwitcher } from '@/components/video-workspace-switcher';
 import { ContentStudioWorkspace } from '@/components/content-studio-workspace';
 import { VoiceCloningWorkspace } from '@/components/voice-cloning-workspace';
 import { AvatarCloningWorkspace } from '@/components/avatar-cloning-workspace';
+import CostAnalyticsDashboard from '@/components/cost-analytics-dashboard';
+import { TranslationKey } from '@/lib/i18n';
 
-const featureConfig = {
+const featureConfig: Record<string, { icon: React.ReactNode; i18nKey: TranslationKey }> = {
   'voice-cloning': {
     icon: <Voicemail className="h-6 w-6" />,
     i18nKey: 'feature.voiceCloning',
@@ -42,6 +45,10 @@ const featureConfig = {
   'content-studio': {
     icon: <Sparkles className="h-6 w-6" />,
     i18nKey: 'feature.contentStudio',
+  },
+  'cost-analytics': {
+    icon: <BarChart3 className="h-6 w-6" />,
+    i18nKey: 'feature.costAnalytics',
   },
 };
 
@@ -100,6 +107,8 @@ export default function FeatureWorkspacePage() {
             return <VoiceCloningWorkspace />;
         case 'avatar-cloning':
             return <AvatarCloningWorkspace />;
+        case 'cost-analytics':
+            return <CostAnalyticsDashboard />;
         default:
             return <GenericFeatureWorkspace />;
     }
@@ -115,7 +124,7 @@ export default function FeatureWorkspacePage() {
             </Link>
           </Button>
           <div className="flex items-center gap-2.5">
-            <div className="text-teal-500">{feature.icon}</div>
+            <div className="text-cyan-500">{feature.icon}</div>
             <h1 className="text-xl sm:text-2xl font-bold whitespace-nowrap">{t(feature.i18nKey)}</h1>
           </div>
         </div>

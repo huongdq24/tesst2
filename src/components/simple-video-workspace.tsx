@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
+import { recordUsage } from '@/lib/usage-tracker';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, UploadCloud, Video, Heart, Download, Play, Sparkles, ArrowRight, Images, Library, Settings, X, Link2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -190,6 +192,15 @@ export function SimpleVideoWorkspace() {
         aspectRatio: videoAspectRatio,
         modelName: videoModel,
         createdAt: serverTimestamp(),
+      });
+      // Track usage for cost analytics
+      recordUsage({
+        userId: user.uid,
+        userEmail: user.email || '',
+        type: 'video',
+        model: videoModel,
+        amount: Number(videoDuration) || 8,
+        prompt: finalPrompt,
       });
     } catch (err) {
       console.error('Save error', err);
@@ -446,10 +457,10 @@ export function SimpleVideoWorkspace() {
   const isBusy = isGenerating || isUploading;
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 flex-1 w-full max-w-[1400px] mx-auto pt-8 pb-24 px-4">
-      <div className="lg:col-span-2 flex flex-col">
-        <div className="bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden flex-1 flex flex-col">
-          <div className="p-6 flex flex-col flex-1 gap-6">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
+      <div className="lg:col-span-1">
+        <Card className="border shadow-sm">
+          <CardContent className="p-5 space-y-5">
 
             {/* HEADER TABS (Mode Switcher) */}
             <div className="flex justify-center">
@@ -459,7 +470,7 @@ export function SimpleVideoWorkspace() {
                   className={cn(
                     "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
                     activeMode === 'standard'
-                      ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
+                      ? "bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                   )}
                 >
@@ -476,7 +487,7 @@ export function SimpleVideoWorkspace() {
                   className={cn(
                     "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
                     activeMode === 'before-after'
-                      ? "bg-white dark:bg-zinc-900 text-teal-600 dark:text-teal-400 shadow-sm"
+                      ? "bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 shadow-sm"
                       : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
                   )}
                 >
@@ -491,7 +502,7 @@ export function SimpleVideoWorkspace() {
                 <div className="flex flex-col items-center gap-4 w-full">
                   <div
                     onClick={() => { setUploadTarget('standard'); fileInputRef.current?.click(); }}
-                    className="w-full aspect-[21/9] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-teal-400/50 hover:bg-teal-50/30 dark:hover:bg-teal-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                    className="w-full aspect-[21/9] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
                   >
                     {standardImage ? (
                       <>
@@ -506,7 +517,7 @@ export function SimpleVideoWorkspace() {
                     ) : (
                       <>
                         <div className="w-16 h-16 mb-4 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                          {isUploading === 'standard' ? <Loader2 className="w-8 h-8 animate-spin text-teal-500" /> : <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-teal-500 transition-colors" />}
+                          {isUploading === 'standard' ? <Loader2 className="w-8 h-8 animate-spin text-cyan-500" /> : <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-cyan-500 transition-colors" />}
                         </div>
                         <p className="font-bold text-lg text-zinc-700 dark:text-zinc-200">Tải ảnh lên làm khung hình đầu</p>
                         <p className="text-sm text-zinc-400 mt-1">Kéo thả hoặc nhấp để chọn ảnh (Tùy chọn)</p>
@@ -585,7 +596,7 @@ export function SimpleVideoWorkspace() {
             {/* PROMPT INPUT BAR */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Ý tưởng video</label>
-              <div className="flex items-end bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 focus-within:ring-2 focus-within:ring-teal-500/20 transition-all duration-300">
+              <div className="flex items-end bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all duration-300">
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
@@ -676,7 +687,7 @@ export function SimpleVideoWorkspace() {
               size="lg"
               onClick={handleGenerate}
               disabled={isBusy}
-              className="w-full mt-4 bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-bold text-base shadow-md shadow-teal-500/25 h-12 rounded-xl shrink-0"
+              className="w-full mt-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold text-base h-11"
             >
               {isGenerating ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -685,12 +696,12 @@ export function SimpleVideoWorkspace() {
               )}
             </Button>
 
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* RIGHT PANEL: PREVIEW & OUTPUT */}
-      <div className="lg:col-span-3 bg-muted/50 rounded-lg flex flex-col items-center justify-center min-h-[400px] lg:min-h-[600px] p-4 relative overflow-hidden border border-zinc-200 dark:border-zinc-800">
+      <div className="lg:col-span-2 bg-muted/50 rounded-lg flex flex-col items-center justify-center min-h-[400px] lg:min-h-0 p-4 relative overflow-hidden">
 
         {/* GENERATING SKELETON */}
         {isGenerating && (() => {
@@ -733,12 +744,12 @@ export function SimpleVideoWorkspace() {
                   <img src={standardImage || beforeImage!} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-15 blur-lg grayscale scale-110" />
                 ) : null}
 
-                {/* Pulsing gray overlay */}
-                <div className="absolute inset-0 bg-zinc-800 animate-pulse" style={{ animationDuration: '2s' }} />
+                {/* Clean white overlay */}
+                <div className="absolute inset-0 bg-white" />
 
                 {/* Shimmer sweep effect */}
                 <div className="absolute inset-0 overflow-hidden">
-                  <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-white/[0.04] to-transparent" />
+                  <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-cyan-100/40 to-transparent" />
                 </div>
 
                 {/* Content overlay */}
@@ -748,11 +759,11 @@ export function SimpleVideoWorkspace() {
                   <div className="relative w-28 h-28">
                     {/* Background circle */}
                     <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120">
-                      <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(161,161,170,0.15)" strokeWidth="6" />
+                      <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(6,182,212,0.15)" strokeWidth="6" />
                       <circle
                         cx="60" cy="60" r="52"
                         fill="none"
-                        stroke="rgba(161,161,170,0.6)"
+                        stroke="rgb(6,182,212)"
                         strokeWidth="6"
                         strokeLinecap="round"
                         strokeDasharray={`${2 * Math.PI * 52}`}
@@ -762,16 +773,16 @@ export function SimpleVideoWorkspace() {
                     </svg>
                     {/* Percent text */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-bold font-mono text-zinc-200 tabular-nums">{estimatedPercent}%</span>
+                      <span className="text-3xl font-bold font-mono text-cyan-600 tabular-nums">{estimatedPercent}%</span>
                     </div>
                   </div>
 
                   {/* Stage label */}
                   <div className="text-center space-y-1.5">
-                    <h3 className="text-base font-semibold text-zinc-200 tracking-wide animate-pulse" style={{ animationDuration: '1.5s' }}>
+                    <h3 className="text-base font-semibold text-zinc-700 tracking-wide animate-pulse" style={{ animationDuration: '1.5s' }}>
                       {stageLabel}...
                     </h3>
-                    <p className="text-sm text-zinc-500 font-mono tabular-nums">
+                    <p className="text-sm text-zinc-400 font-mono tabular-nums">
                       {estimatedRemaining > 0
                         ? `Còn khoảng ${remainMin > 0 ? `${remainMin} phút ` : ''}${remainSec}s`
                         : 'Sắp hoàn tất...'}
@@ -780,16 +791,16 @@ export function SimpleVideoWorkspace() {
 
                   {/* Progress bar */}
                   <div className="w-full max-w-[240px]">
-                    <div className="h-1.5 bg-zinc-700/50 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-cyan-100 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-zinc-400 to-zinc-300 rounded-full transition-all duration-1000 ease-out"
+                        className="h-full bg-gradient-to-r from-cyan-400 to-cyan-500 rounded-full transition-all duration-1000 ease-out"
                         style={{ width: `${estimatedPercent}%` }}
                       />
                     </div>
                   </div>
 
                   {/* Elapsed time small */}
-                  <p className="text-xs text-zinc-600 font-mono tabular-nums mt-1">
+                  <p className="text-xs text-zinc-400 font-mono tabular-nums mt-1">
                     {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}:{(elapsedTime % 60).toString().padStart(2, '0')} đã trôi qua
                   </p>
                 </div>
@@ -825,7 +836,7 @@ export function SimpleVideoWorkspace() {
               {visibleVideos[0].originalVeoUrl && (
                 <Button
                   onClick={() => activateExtendMode(visibleVideos[0])}
-                  className="bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white"
+                  className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white"
                 >
                   <Link2 className="w-4 h-4 mr-2" />
                   Tạo video nối tiếp

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { recordUsage, estimateAudioDuration } from '@/lib/usage-tracker';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -390,6 +391,18 @@ export function VoiceCloningWorkspace() {
       });
 
       toast({ title: '💾 Đã lưu', description: 'Audio đã được lưu vào thư viện.' });
+      // Track usage for cost analytics (ElevenLabs audio generation)
+      if (user) {
+        const estimatedDuration = estimateAudioDuration(text);
+        recordUsage({
+          userId: user.uid,
+          userEmail: user.email || '',
+          type: 'audio',
+          model: 'gemini-2.5-flash-preview-tts', // Map ElevenLabs usage to equivalent cost
+          amount: estimatedDuration,
+          prompt: text.substring(0, 200),
+        });
+      }
     } catch (error: any) {
       console.error('[VoiceCloning] Save error:', error);
       toast({ variant: 'destructive', title: 'Lỗi lưu', description: error.message });
@@ -1065,7 +1078,7 @@ export function VoiceCloningWorkspace() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                              className="h-7 w-7 text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50"
                               onClick={() => handleCreateVideoFromAudio(item.audioUrl, item.text)}
                               title="Tạo video từ audio này"
                             >

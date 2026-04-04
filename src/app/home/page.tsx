@@ -2,7 +2,7 @@
 
 import { FeatureCard } from '@/components/feature-card';
 import { useI18n } from '@/contexts/i18n-context';
-import { Voicemail, ScanFace, Sparkles } from 'lucide-react';
+import { Voicemail, ScanFace, Sparkles, BarChart3 } from 'lucide-react';
 
 export default function HomePage() {
   const { t } = useI18n();

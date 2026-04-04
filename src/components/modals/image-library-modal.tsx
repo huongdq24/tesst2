@@ -6,7 +6,7 @@ import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/fire
 import { firestore, storage } from '@/lib/firebase/config';
 import { ref, deleteObject } from 'firebase/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2, Wand2 } from 'lucide-react';
+import { Loader2, AlertTriangle, Download, Video, Trash2, CheckCircle2, Wand2, ZoomIn, X as XIcon } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useI18n } from '@/contexts/i18n-context';
@@ -58,6 +58,9 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoEx
   // Delete confirm state
   const [deleteDialogItem, setDeleteDialogItem] = useState<MediaRecord | null>(null);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+
+  // Preview/Zoom state
+  const [previewItem, setPreviewItem] = useState<MediaRecord | null>(null);
 
   useEffect(() => {
     if (open && user) {
@@ -360,6 +363,19 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoEx
               </Button>
             )}
 
+            {/* Zoom/Preview button */}
+            {!isSelectMode && (
+              <Button
+                variant="secondary"
+                size="icon"
+                title="Phóng to xem"
+                className="absolute bottom-2 right-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                onClick={(e) => { e.stopPropagation(); setPreviewItem(item); }}
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+            )}
+
             {/* Download button */}
             {!isSelectMode && (
               <Button
@@ -449,6 +465,62 @@ export function ImageLibraryModal({ open, onOpenChange, onImageSelect, onVideoEx
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Fullscreen Preview Overlay */}
+      {previewItem && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 backdrop-blur-md"
+          onClick={() => setPreviewItem(null)}
+        >
+          {/* Close button */}
+          <button
+            className="absolute top-4 right-4 z-[110] rounded-full bg-white/10 hover:bg-white/20 p-2 text-white transition-colors"
+            onClick={() => setPreviewItem(null)}
+          >
+            <XIcon className="h-6 w-6" />
+          </button>
+          {/* Download button in preview */}
+          <button
+            className="absolute top-4 right-16 z-[110] rounded-full bg-white/10 hover:bg-white/20 p-2 text-white transition-colors"
+            onClick={(e) => { e.stopPropagation(); handleDownload(e, previewItem.url, previewItem.id, previewItem.type); }}
+          >
+            <Download className="h-6 w-6" />
+          </button>
+          {/* Use as reference button */}
+          {previewItem.type === 'image' && (
+            <button
+              className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[110] flex items-center gap-2 rounded-full bg-primary hover:bg-primary/90 px-6 py-2.5 text-sm font-medium text-white shadow-lg transition-colors"
+              onClick={(e) => { e.stopPropagation(); onImageSelect(previewItem.url); setPreviewItem(null); onOpenChange(false); }}
+            >
+              Chọn làm ảnh tham chiếu
+            </button>
+          )}
+          {/* Media content */}
+          <div className="max-w-[90vw] max-h-[85vh] relative" onClick={(e) => e.stopPropagation()}>
+            {previewItem.type === 'image' ? (
+              <img
+                src={previewItem.url}
+                alt={previewItem.prompt || 'Preview'}
+                className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              />
+            ) : (
+              <video
+                src={previewItem.url}
+                className="max-w-[90vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                controls
+                autoPlay
+                loop
+              />
+            )}
+          </div>
+          {/* Prompt info */}
+          {previewItem.prompt && (
+            <div className="absolute bottom-16 left-1/2 -translate-x-1/2 z-[110] max-w-lg bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2">
+              <p className="text-xs text-white/80 text-center line-clamp-3">{previewItem.prompt}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Bulk Delete Confirmation */}
       <AlertDialog open={isBulkDeleteDialogOpen} onOpenChange={setIsBulkDeleteDialogOpen}>

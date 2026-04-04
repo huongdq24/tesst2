@@ -383,20 +383,7 @@ export function VoiceGenerationWorkspace() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-[1400px] flex-1 flex flex-col mx-auto w-full pb-12">
-      
-      {/* PAGE HEADER */}
-      <div className="flex justify-between items-center px-1">
-         <h2 className="text-2xl font-bold tracking-tight">Playground</h2>
-         <Button 
-           variant="outline" 
-           size="sm"
-           onClick={() => document.getElementById('voice-history')?.scrollIntoView({ behavior: 'smooth' })} 
-           className="text-muted-foreground shadow-sm bg-background border-muted-foreground/20"
-         >
-           <Library className="mr-2 h-4 w-4" />
-           Thư viện của bạn
-         </Button>
-      </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
         
@@ -441,50 +428,45 @@ export function VoiceGenerationWorkspace() {
                     <div className="flex flex-col gap-1.5 pt-1">
                        <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">🗺️ Vùng miền</span>
                        <div className="flex flex-wrap gap-1.5">
-                         <button className="px-2 py-0.5 bg-blue-50 flex-1 sm:flex-none hover:bg-blue-100 text-blue-700 text-[10px] font-medium rounded transition-colors border border-blue-200 shadow-sm"
+                         <button className="px-2 py-0.5 bg-cyan-50 flex-1 sm:flex-none hover:bg-cyan-100 text-cyan-700 text-[10px] font-medium rounded transition-colors border border-cyan-200 shadow-sm"
                             onClick={() => setStyleInstructions(prev => prev ? `${prev}, mang âm sắc giọng miền Bắc chuẩn` : 'Đọc bằng giọng miền Bắc phổ thông chuẩn')}
                             disabled={isGenerating}
                          >Miền Bắc</button>
-                         <button className="px-2 py-0.5 bg-amber-50 flex-1 sm:flex-none hover:bg-amber-100 text-amber-700 text-[10px] font-medium rounded transition-colors border border-amber-200 shadow-sm"
+                         <button className="px-2 py-0.5 bg-cyan-50 flex-1 sm:flex-none hover:bg-cyan-100 text-cyan-700 text-[10px] font-medium rounded transition-colors border border-cyan-200 shadow-sm"
                             onClick={() => setStyleInstructions(prev => prev ? `${prev}, mang âm sắc giọng miền Trung` : 'Đọc bằng giọng miền Trung')}
                             disabled={isGenerating}
                          >Miền Trung</button>
-                         <button className="px-2 py-0.5 bg-emerald-50 flex-1 sm:flex-none hover:bg-emerald-100 text-emerald-700 text-[10px] font-medium rounded transition-colors border border-emerald-200 shadow-sm"
+                         <button className="px-2 py-0.5 bg-cyan-50 flex-1 sm:flex-none hover:bg-cyan-100 text-cyan-700 text-[10px] font-medium rounded transition-colors border border-cyan-200 shadow-sm"
                             onClick={() => setStyleInstructions(prev => prev ? `${prev}, mang âm sắc giọng miền Nam` : 'Đọc bằng giọng miền Nam nhẹ nhàng')}
                             disabled={isGenerating}
                          >Miền Nam</button>
                        </div>
                     </div>
 
-                    {/* Age Category */}
-                    <div className="flex flex-col gap-1.5 pt-1">
-                       <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">👤 Độ tuổi</span>
-                       <div className="flex flex-wrap gap-1.5">
-                         <button className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-medium rounded transition-colors border border-indigo-200 shadow-sm"
-                            onClick={() => setStyleInstructions(prev => prev ? `${prev}, sắc thái như một đứa trẻ con` : 'Đọc bằng giọng trẻ con ngây thơ')}
-                            disabled={isGenerating}
-                         >Trẻ con</button>
-                         <button className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-medium rounded transition-colors border border-indigo-200 shadow-sm"
-                            onClick={() => setStyleInstructions(prev => prev ? `${prev}, thanh niên trẻ trung năng động` : 'Đọc bằng giọng thanh niên trẻ trung (khoảng 20t)')}
-                            disabled={isGenerating}
-                         >Thanh niên (20t)</button>
-                         <button className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-medium rounded transition-colors border border-indigo-200 shadow-sm"
-                            onClick={() => setStyleInstructions(prev => prev ? `${prev}, chững chạc và đáng tin cậy của tuổi 30` : 'Đọc bằng giọng điềm tĩnh, vững chãi của độ tuổi 30')}
-                            disabled={isGenerating}
-                         >Trưởng thành (30t)</button>
-                         <button className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-medium rounded transition-colors border border-indigo-200 shadow-sm"
-                            onClick={() => setStyleInstructions(prev => prev ? `${prev}, sắc thái của người trung niên từng trải` : 'Đọc bằng giọng người trung niên từng trải (khoảng 45t)')}
-                            disabled={isGenerating}
-                         >Trung niên (45t)</button>
-                         <button className="px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-medium rounded transition-colors border border-indigo-200 shadow-sm"
-                            onClick={() => setStyleInstructions(prev => prev ? `${prev}, sắc thái người lớn tuổi từ tốn` : 'Đọc chậm rãi bằng giọng người lớn tuổi phúc hậu (60t+)')}
-                            disabled={isGenerating}
-                         >Người già (60t+)</button>
-                       </div>
-                    </div>
                   </div>
                </div>
-               
+               <Separator />
+
+               {/* 2. Model & Mode Select (moved up) */}
+               <div className="space-y-3">
+                 <Label className="text-[13px] font-semibold text-foreground">Model & Mode</Label>
+                 <Select value={model} onValueChange={setModel} disabled={isGenerating}>
+                    <SelectTrigger className="h-9 bg-background focus:ring-1 focus:ring-primary/30 border-muted-foreground/20 text-sm">
+                      <SelectValue placeholder="Chọn model..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gemini-2.5-flash-preview-tts" className="font-medium">2.5 Flash Preview TTS</SelectItem>
+                      <SelectItem value="gemini-2.5-pro-preview-tts" className="font-medium">2.5 Pro Preview TTS</SelectItem>
+                    </SelectContent>
+                 </Select>
+                 <Tabs value={mode} onValueChange={(v: any) => setMode(v)} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 p-1 bg-muted/60 h-auto">
+                      <TabsTrigger value="single" className="text-xs py-1.5">Single-speaker</TabsTrigger>
+                      <TabsTrigger value="multi" className="text-xs py-1.5">Multi-speaker</TabsTrigger>
+                    </TabsList>
+                 </Tabs>
+               </div>
+
                <Separator />
 
                {/* 2. Text Input Area */}
@@ -523,27 +505,7 @@ export function VoiceGenerationWorkspace() {
                   />
                </div>
 
-               <Separator />
 
-               {/* 3. Model & Mode Select */}
-               <div className="space-y-3">
-                 <Label className="text-[13px] font-semibold text-foreground">Model & Mode</Label>
-                 <Select value={model} onValueChange={setModel} disabled={isGenerating}>
-                    <SelectTrigger className="h-9 bg-background focus:ring-1 focus:ring-primary/30 border-muted-foreground/20 text-sm">
-                      <SelectValue placeholder="Chọn model..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="gemini-2.5-flash-preview-tts" className="font-medium">2.5 Flash Preview TTS</SelectItem>
-                      <SelectItem value="gemini-2.5-pro-preview-tts" className="font-medium">2.5 Pro Preview TTS</SelectItem>
-                    </SelectContent>
-                 </Select>
-                 <Tabs value={mode} onValueChange={(v: any) => setMode(v)} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 p-1 bg-muted/60 h-auto">
-                      <TabsTrigger value="single" className="text-xs py-1.5">Single-speaker</TabsTrigger>
-                      <TabsTrigger value="multi" className="text-xs py-1.5">Multi-speaker</TabsTrigger>
-                    </TabsList>
-                 </Tabs>
-               </div>
 
                {/* 4. Voice Selection */}
                <div className="space-y-3 pt-2">
@@ -628,7 +590,7 @@ export function VoiceGenerationWorkspace() {
 
                {/* Generate Button always anchored at bottom of inputs */}
                <div className="pt-2 mt-auto">
-                 <Button onClick={handleGenerate} disabled={isGenerating || isOptimizing || !text.trim()} className="w-full text-[14px] font-semibold h-11">
+                 <Button onClick={handleGenerate} disabled={isGenerating || isOptimizing || !text.trim()} className="w-full text-[14px] font-semibold h-11 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white">
                    {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
                    {isGenerating ? 'Đang tạo âm thanh...' : 'Tạo giọng nói (Ctrl ↵)'}
                  </Button>

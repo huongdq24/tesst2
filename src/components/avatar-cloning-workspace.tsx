@@ -542,7 +542,7 @@ export function AvatarCloningWorkspace() {
               onClick={() => setIsAvatarPanelOpen(true)}
             >
               {/* Selected avatar thumbnail */}
-              <div className="w-12 h-12 rounded-xl border-2 border-teal-500/30 overflow-hidden flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-xl border-2 border-cyan-500/30 overflow-hidden flex-shrink-0 bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center">
                 {(activeScene.avatarSource === 'photo' && activeScene.talkingPhotoUrl) ? (
                   <Image src={activeScene.talkingPhotoUrl} alt="Avatar" width={48} height={48} className="object-cover w-full h-full" />
                 ) : (activeScene.avatarSource === 'heygen' && activeScene.heygenAvatarPreview) ? (
@@ -553,7 +553,7 @@ export function AvatarCloningWorkspace() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-sm flex items-center gap-1.5">
-                  <User className="w-4 h-4 text-teal-500" /> Chọn Avatar
+                  <User className="w-4 h-4 text-cyan-500" /> Chọn Avatar
                 </p>
                 <p className="text-xs text-zinc-400 truncate">
                   {(activeScene.avatarSource === 'photo' && activeScene.talkingPhotoUrl)
@@ -592,20 +592,20 @@ export function AvatarCloningWorkspace() {
                   <button
                     onClick={() => setAvatarPanelTab('my')}
                     className={cn("flex-1 py-3 text-sm font-semibold transition-all relative",
-                      avatarPanelTab === 'my' ? 'text-teal-600 dark:text-teal-400' : 'text-zinc-400 hover:text-zinc-600'
+                      avatarPanelTab === 'my' ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-400 hover:text-zinc-600'
                     )}
                   >
                     Khuôn mặt của tôi
-                    {avatarPanelTab === 'my' && <span className="absolute bottom-0 left-1/4 right-1/4 h-[2px] bg-teal-500 rounded-full" />}
+                    {avatarPanelTab === 'my' && <span className="absolute bottom-0 left-1/4 right-1/4 h-[2px] bg-cyan-500 rounded-full" />}
                   </button>
                   <button
                     onClick={() => setAvatarPanelTab('public')}
                     className={cn("flex-1 py-3 text-sm font-semibold transition-all relative",
-                      avatarPanelTab === 'public' ? 'text-teal-600 dark:text-teal-400' : 'text-zinc-400 hover:text-zinc-600'
+                      avatarPanelTab === 'public' ? 'text-cyan-600 dark:text-cyan-400' : 'text-zinc-400 hover:text-zinc-600'
                     )}
                   >
                     Khuôn mặt công khai
-                    {avatarPanelTab === 'public' && <span className="absolute bottom-0 left-1/4 right-1/4 h-[2px] bg-teal-500 rounded-full" />}
+                    {avatarPanelTab === 'public' && <span className="absolute bottom-0 left-1/4 right-1/4 h-[2px] bg-cyan-500 rounded-full" />}
                   </button>
                 </div>
 
@@ -618,7 +618,7 @@ export function AvatarCloningWorkspace() {
                       value={avatarSearch}
                       onChange={e => setAvatarSearch(e.target.value)}
                       placeholder="Tìm kiếm..."
-                      className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                      className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
                     />
                   </div>
                 </div>
@@ -630,18 +630,18 @@ export function AvatarCloningWorkspace() {
                     <div className="grid grid-cols-2 gap-3 pt-2">
                       {/* Create Avatar card */}
                       <div
-                        className="aspect-[3/4] rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-teal-400 hover:bg-teal-50/30 dark:hover:bg-teal-500/5 transition-all group"
+                        className="aspect-[3/4] rounded-xl border-2 border-dashed border-zinc-300 dark:border-zinc-700 flex flex-col items-center justify-center gap-2 cursor-pointer hover:border-cyan-400 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 transition-all group"
                         onClick={() => fileInputRef.current?.click()}
                         role="button"
                       >
                         {isUploadingImage ? (
-                          <Loader2 className="w-8 h-8 animate-spin text-teal-500" />
+                          <Loader2 className="w-8 h-8 animate-spin text-cyan-500" />
                         ) : (
                           <>
-                            <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-teal-100 dark:group-hover:bg-teal-900/30 transition-colors">
-                              <Plus className="w-6 h-6 text-zinc-400 group-hover:text-teal-500 transition-colors" />
+                            <div className="w-12 h-12 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center group-hover:bg-cyan-100 dark:group-hover:bg-cyan-900/30 transition-colors">
+                              <Plus className="w-6 h-6 text-zinc-400 group-hover:text-cyan-500 transition-colors" />
                             </div>
-                            <p className="text-xs font-semibold text-zinc-500 group-hover:text-teal-600 transition-colors">Tạo Avatar</p>
+                            <p className="text-xs font-semibold text-zinc-500 group-hover:text-cyan-600 transition-colors">Tạo Avatar</p>
                           </>
                         )}
                       </div>
@@ -651,7 +651,7 @@ export function AvatarCloningWorkspace() {
                       {activeScene.talkingPhotoUrl && (
                         <div
                           className={cn("relative aspect-[3/4] rounded-xl overflow-hidden border-2 cursor-pointer transition-all hover:scale-[1.02]",
-                            activeScene.avatarSource === 'photo' ? "border-teal-500 ring-2 ring-teal-500/30 shadow-lg" : "border-zinc-200 dark:border-zinc-800 hover:border-teal-300"
+                            activeScene.avatarSource === 'photo' ? "border-cyan-500 ring-2 ring-cyan-500/30 shadow-lg" : "border-zinc-200 dark:border-zinc-800 hover:border-cyan-300"
                           )}
                           onClick={() => {
                             updateScene(activeSceneIndex, { avatarSource: 'photo' });
@@ -664,7 +664,7 @@ export function AvatarCloningWorkspace() {
                             <p className="text-[11px] text-white font-semibold">Ảnh của tôi</p>
                           </div>
                           {activeScene.avatarSource === 'photo' && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
                               <span className="text-white text-[10px]">✓</span>
                             </div>
                           )}
@@ -689,7 +689,7 @@ export function AvatarCloningWorkspace() {
                     /* ── PUBLIC AVATARS TAB ── */
                     <div>
                       {isLoadingAvatars ? (
-                        <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-teal-500" /></div>
+                        <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-cyan-500" /></div>
                       ) : filteredAvatars.length === 0 ? (
                         <div className="text-center py-8">
                           <p className="text-sm text-zinc-400 mb-3">Không tìm thấy avatar nào.</p>
@@ -703,7 +703,7 @@ export function AvatarCloningWorkspace() {
                             <div
                               key={`${avatar.avatar_id}-${idx}`}
                               className={cn("relative aspect-[3/4] rounded-xl overflow-hidden border-2 cursor-pointer transition-all hover:scale-[1.02]",
-                                activeScene.heygenAvatarId === avatar.avatar_id ? "border-teal-500 ring-2 ring-teal-500/30 shadow-lg" : "border-zinc-200 dark:border-zinc-800 hover:border-teal-300"
+                                activeScene.heygenAvatarId === avatar.avatar_id ? "border-cyan-500 ring-2 ring-cyan-500/30 shadow-lg" : "border-zinc-200 dark:border-zinc-800 hover:border-cyan-300"
                               )}
                               onClick={() => {
                                 updateScene(activeSceneIndex, { heygenAvatarId: avatar.avatar_id, heygenAvatarPreview: avatar.preview_image_url, avatarSource: 'heygen' });
@@ -720,7 +720,7 @@ export function AvatarCloningWorkspace() {
                                 <p className="text-[11px] text-white font-semibold truncate">{avatar.avatar_name}</p>
                               </div>
                               {activeScene.heygenAvatarId === avatar.avatar_id && (
-                                <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-teal-500 rounded-full flex items-center justify-center">
+                                <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-cyan-500 rounded-full flex items-center justify-center">
                                   <span className="text-white text-[10px]">✓</span>
                                 </div>
                               )}
@@ -737,16 +737,16 @@ export function AvatarCloningWorkspace() {
 
           {/* VOICE SELECTION */}
           <div className="bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl border border-white/60 dark:border-zinc-800/60 rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Mic className="w-5 h-5 text-teal-500" /> Chọn Giọng nói</h3>
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Mic className="w-5 h-5 text-cyan-500" /> Chọn Giọng nói</h3>
 
             <div className="flex gap-2 mb-4">
               <button onClick={() => { setVoiceTab('elevenlabs'); updateScene(activeSceneIndex, { voiceSource: 'elevenlabs' }); }}
                 className={cn("px-4 py-2 rounded-xl text-sm font-semibold transition-all",
-                  voiceTab === 'elevenlabs' ? "bg-teal-500 text-white shadow-md" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                  voiceTab === 'elevenlabs' ? "bg-cyan-500 text-white shadow-md" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                 )}>ElevenLabs</button>
               <button onClick={() => { setVoiceTab('heygen'); updateScene(activeSceneIndex, { voiceSource: 'heygen' }); }}
                 className={cn("px-4 py-2 rounded-xl text-sm font-semibold transition-all",
-                  voiceTab === 'heygen' ? "bg-teal-500 text-white shadow-md" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
+                  voiceTab === 'heygen' ? "bg-cyan-500 text-white shadow-md" : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300"
                 )}>HeyGen Voices</button>
             </div>
 
@@ -774,7 +774,7 @@ export function AvatarCloningWorkspace() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                     <input type="text" value={voiceSearch} onChange={e => setVoiceSearch(e.target.value)}
-                      placeholder="Tìm giọng..." className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30" />
+                      placeholder="Tìm giọng..." className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30" />
                   </div>
                   <Select value={voiceLangFilter} onValueChange={setVoiceLangFilter}>
                     <SelectTrigger className="h-10 w-[120px] rounded-xl text-xs"><SelectValue placeholder="Ngôn ngữ" /></SelectTrigger>
@@ -788,7 +788,7 @@ export function AvatarCloningWorkspace() {
                   </Button>
                 </div>
                 {isLoadingHeygenVoices ? (
-                  <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-teal-500" /></div>
+                  <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-cyan-500" /></div>
                 ) : (
                   <div className="flex flex-col gap-1.5 max-h-[200px] overflow-y-auto pr-1">
                     {filteredHeygenVoices.map((voice, idx) => (
@@ -796,9 +796,9 @@ export function AvatarCloningWorkspace() {
                         onClick={() => updateScene(activeSceneIndex, { heygenVoiceId: voice.voice_id, voiceSource: 'heygen' })}
                         role="button"
                         className={cn("flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all text-sm cursor-pointer",
-                          activeScene.heygenVoiceId === voice.voice_id ? "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent"
+                          activeScene.heygenVoiceId === voice.voice_id ? "bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50 border border-transparent"
                         )}>
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-cyan-400 flex items-center justify-center text-white text-xs font-bold">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-cyan-400 to-cyan-400 flex items-center justify-center text-white text-xs font-bold">
                           {voice.gender === 'male' ? '♂' : '♀'}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -810,7 +810,7 @@ export function AvatarCloningWorkspace() {
                             <Play className="w-3.5 h-3.5" />
                           </Button>
                         )}
-                        {activeScene.heygenVoiceId === voice.voice_id && <span className="text-teal-500 font-bold text-xs">✓</span>}
+                        {activeScene.heygenVoiceId === voice.voice_id && <span className="text-cyan-500 font-bold text-xs">✓</span>}
                       </div>
                     ))}
                   </div>
@@ -821,13 +821,13 @@ export function AvatarCloningWorkspace() {
 
           {/* SCRIPT EDITOR */}
           <div className="bg-white/70 dark:bg-zinc-900/50 backdrop-blur-xl border border-white/60 dark:border-zinc-800/60 rounded-2xl p-6 shadow-sm">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-teal-500" /> Kịch bản nói</h3>
+            <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Sparkles className="w-5 h-5 text-cyan-500" /> Kịch bản nói</h3>
             <Textarea
               placeholder="Nhập văn bản mà avatar sẽ nói... Ví dụ: Xin chào! Tôi là đại diện thương hiệu của bạn."
               value={activeScene.script}
               onChange={(e) => updateScene(activeSceneIndex, { script: e.target.value })}
               disabled={isBusy}
-              className="resize-none min-h-[120px] rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30 focus-visible:ring-teal-500/30"
+              className="resize-none min-h-[120px] rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-950/30 focus-visible:ring-cyan-500/30"
             />
             <p className="text-xs text-zinc-400 mt-2">{activeScene.script.length} ký tự · Scene {activeSceneIndex + 1}/{scenes.length}</p>
           </div>
@@ -846,7 +846,7 @@ export function AvatarCloningWorkspace() {
                   onClick={() => setActiveSceneIndex(i)}
                   role="button"
                   className={cn("relative flex-shrink-0 w-[120px] rounded-xl border-2 overflow-hidden transition-all group cursor-pointer",
-                    i === activeSceneIndex ? "border-teal-500 ring-2 ring-teal-500/20 shadow-md" : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300"
+                    i === activeSceneIndex ? "border-cyan-500 ring-2 ring-cyan-500/20 shadow-md" : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300"
                   )}>
                   <div className="aspect-[16/9] bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center relative">
                     {(scene.avatarSource === 'photo' && scene.talkingPhotoUrl) ? (
@@ -881,7 +881,7 @@ export function AvatarCloningWorkspace() {
                 <SelectItem value="9:16">Dọc (9:16)</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={handleGenerate} disabled={isBusy} size="lg" className="flex-1 h-12 rounded-xl bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 text-white font-bold text-base shadow-md shadow-teal-500/25">
+            <Button onClick={handleGenerate} disabled={isBusy} size="lg" className="flex-1 h-12 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-500 hover:from-cyan-600 hover:to-cyan-600 text-white font-bold text-base shadow-md shadow-cyan-500/25">
               {isBusy ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Đang xử lý...</> : <><Sparkles className="mr-2 h-5 w-5" /> Tạo Video Avatar</>}
             </Button>
           </div>
@@ -901,13 +901,13 @@ export function AvatarCloningWorkspace() {
                     const isDone = idx < cur;
                     return (
                       <div key={step.key} className={cn("flex items-center gap-2.5 p-2.5 rounded-xl transition-all text-sm",
-                        isActive && "bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 font-semibold text-teal-700 dark:text-teal-300",
+                        isActive && "bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-800 font-semibold text-cyan-700 dark:text-cyan-300",
                         isDone && "opacity-50 line-through",
                         !isActive && !isDone && "opacity-30"
                       )}>
                         <span className="text-base">{isDone ? '✅' : isActive ? step.icon : '⬜'}</span>
                         <span className="flex-1">{step.label}</span>
-                        {isActive && <Loader2 className="h-3.5 w-3.5 animate-spin text-teal-500" />}
+                        {isActive && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-500" />}
                       </div>
                     );
                   })}
@@ -997,7 +997,7 @@ export function AvatarCloningWorkspace() {
                   type="text" 
                   value={videoTitle} 
                   onChange={e => setVideoTitle(e.target.value)} 
-                  className="w-full h-11 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-teal-500/30 transition-all text-sm" 
+                  className="w-full h-11 px-4 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all text-sm" 
                   placeholder="Untitled Video" 
                 />
               </div>

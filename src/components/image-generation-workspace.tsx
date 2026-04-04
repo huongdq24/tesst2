@@ -1,11 +1,12 @@
 'use client';
 import { useState, useRef, DragEvent, useEffect, useCallback } from 'react';
+import { recordUsage } from '@/lib/usage-tracker';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn, Building2, Check, PenLine } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
@@ -21,16 +22,128 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Slider } from '@/components/ui/slider';
 
+// ===== DESIGN EXPERT OPTIONS CONFIG (ĐA NGÀNH NGHỀ) =====
+type OptionItem = { id: string; label: string; icon: string };
+type OptionGroup = {
+  key: string;
+  title: string;
+  multi?: boolean; // true = chọn nhiều, false = chọn 1 hoặc 0
+  color: string; // tailwind color prefix
+  items: OptionItem[];
+  placeholder?: string; // placeholder cho ô ghi ý kiến
+};
+
+const DESIGN_FIELDS: OptionItem[] = [
+  { id: 'streetwear', label: 'Streetwear / Đời sống', icon: '👟' },
+  { id: 'office', label: 'Công sở / Elegant', icon: '💼' },
+  { id: 'sportswear', label: 'Thể thao / Sportswear', icon: '🚴' },
+  { id: 'highfashion', label: 'High Fashion / Editorial', icon: '💎' },
+  { id: 'accessories', label: 'Phụ kiện / Trang sức', icon: '💍' },
+  { id: 'landscape', label: 'Ngoại cảnh / Cảnh quan', icon: '🌳' },
+  { id: 'interior', label: 'Trong nhà / Studio', icon: '🛋️' },
+  { id: 'other', label: 'Khác', icon: '📋' },
+];
+
+const DESIGN_OPTION_GROUPS: OptionGroup[] = [
+  {
+    key: 'renderStyle',
+    title: 'Phong cách Chụp ảnh',
+    color: 'blue',
+    placeholder: 'VD: "chụp kiểu vintage", "ánh sáng tạp chí"...',
+    items: [
+      { id: 'studio', label: 'Studio Professional', icon: '💡' },
+      { id: 'street', label: 'Street Snapshot', icon: '📸' },
+      { id: 'cinematic', label: 'Cinematic Film', icon: '🎞️' },
+      { id: 'editorial', label: 'Editorial / Magazine', icon: '📰' },
+      { id: 'polaroid', label: 'Vintage Polaroid', icon: '🖼️' },
+      { id: '3dfashion', label: '3D Fashion Render', icon: '👕' },
+    ],
+  },
+  {
+    key: 'viewAngle',
+    title: 'Góc chụp & Pose',
+    color: 'sky',
+    placeholder: 'VD: "đang đi bộ", "ngồi thư giãn"...',
+    items: [
+      { id: 'fullbody', label: 'Toàn cảnh (Full Body)', icon: '🧍' },
+      { id: 'closeup', label: 'Cận cảnh (Detail)', icon: '🔍' },
+      { id: 'medium', label: 'Bán thân (Waist up)', icon: '🧥' },
+      { id: 'dynamic', label: 'Hành động (Action)', icon: '🏃' },
+      { id: 'birdseye', label: 'Góc cao (Top down)', icon: '🦅' },
+      { id: 'lowangle', label: 'Góc thấp (Heroic)', icon: '📐' },
+    ],
+  },
+  {
+    key: 'style',
+    title: 'Phong cách Thời trang',
+    color: 'violet',
+    placeholder: 'VD: "phong cách Y2K", "gothic"...',
+    items: [
+      { id: 'modern', label: 'Hiện đại', icon: '✨' },
+      { id: 'minimalist', label: 'Tối giản', icon: '⬜' },
+      { id: 'vintage', label: 'Vitage / Retro', icon: '🏛️' },
+      { id: 'bohemian', label: 'Bohemian / Boho', icon: '🌿' },
+      { id: 'cyberpunk', label: 'Cyberpunk', icon: '🎋' },
+      { id: 'luxury', label: 'Luxury', icon: '👑' },
+    ],
+  },
+  {
+    key: 'materials',
+    title: 'Chất liệu & Họa tiết',
+    multi: true,
+    color: 'amber',
+    placeholder: 'VD: "vải lụa bóng", "da cá sấu", "họa tiết hoa"...',
+    items: [
+      { id: 'silk', label: 'Lụa / Satin', icon: '🧵' },
+      { id: 'denim', label: 'Denim / Jean', icon: '👖' },
+      { id: 'leather', label: 'Da / Suede', icon: '👢' },
+      { id: 'linen', label: 'Linen / Cotton', icon: '🪡' },
+      { id: 'wool', label: 'Len / Knitwear', icon: '🧶' },
+      { id: 'lace', label: 'Lace / Mesh', icon: '🕸️' },
+    ],
+  },
+  {
+    key: 'lighting',
+    title: 'Ánh sáng',
+    color: 'orange',
+    placeholder: 'VD: "ánh sáng neon ban đêm", "backlight"...',
+    items: [
+      { id: 'natural', label: 'Tự nhiên (Sunlight)', icon: '☀️' },
+      { id: 'goldenhour', label: 'Hoàng hôn', icon: '🌅' },
+      { id: 'softbox', label: 'Softbox (Dịu)', icon: '💡' },
+      { id: 'neon', label: 'Neon / Cyber', icon: '🌈' },
+    ],
+  },
+  {
+    key: 'focus',
+    title: 'Tập trung vào',
+    multi: true,
+    color: 'emerald',
+    placeholder: 'VD: "makeup khuôn mặt", "đường chỉ may"...',
+    items: [
+      { id: 'outfit', label: 'Trang phục', icon: '👗' },
+      { id: 'face', label: 'Khuôn mặt / Makeup', icon: '👁️' },
+      { id: 'accessories', label: 'Phụ kiện', icon: '👜' },
+      { id: 'detail', label: 'Chi tiết vải', icon: '🔍' },
+      { id: 'environment', label: 'Bối cảnh', icon: '🌆' },
+    ],
+  },
+];
+
+// Color utils for option groups — white + teal (xanh ngọc)
+const colorMap: Record<string, { selected: string; unselected: string }> = {
+  blue:    { selected: 'border-cyan-500 bg-cyan-500 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+  sky:     { selected: 'border-cyan-500 bg-cyan-500 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+  violet:  { selected: 'border-cyan-600 bg-cyan-600 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+  amber:   { selected: 'border-cyan-500 bg-cyan-500 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+  orange:  { selected: 'border-cyan-500 bg-cyan-500 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+  emerald: { selected: 'border-cyan-600 bg-cyan-600 text-white shadow-sm', unselected: 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50' },
+};
+
 export function ImageGenerationWorkspace() {
   const IMAGE_TEMPLATES = [
     { id: 'none', label: 'Tùy chỉnh (Tự nhập)', prompt: '' },
-    { id: 'fashion', label: '👗 Thời trang / Lookbook', prompt: 'Chụp ảnh lookbook thời trang chuyên nghiệp cho [SẢN PHẨM/NGƯỜI MẪU], phong cách ấn tượng, ánh sáng studio, chất lượng tạp chí Vogue' },
-    { id: 'fnb', label: '🍔 Ẩm thực / F&B', prompt: 'Chụp ảnh món ăn nghệ thuật (food photography) cho [TÊN MÓN], decor tinh tế, background boke mờ ảo, ánh sáng tự nhiên đầy hấp dẫn, chất lượng 4k' },
-    { id: 'realestate', label: '🏢 Kiến trúc / BĐS', prompt: 'Hình ảnh kiến trúc ngoại thất/nội thất cao cấp của [LOẠI NHÀ/DỰ ÁN], ánh sáng hoàng hôn ấm áp (golden hour), góc chụp rộng, sang trọng và hiện đại' },
-    { id: 'cosmetic', label: '✨ Mỹ phẩm / Beauty', prompt: 'Chụp ảnh sản phẩm mỹ phẩm [TÊN SẢN PHẨM], đặt trên nền lụa hoặc mặt nước gợn sóng mềm mại, ánh sáng trong trẻo, phong cách thanh lịch cao cấp' },
-    { id: 'product', label: '📦 Sản phẩm thương mại', prompt: 'Chụp ảnh quảng cáo sản phẩm 3D [SẢN PHẨM], đặt trên bục trưng bày tối giản, ánh sáng spotlight chiếu rọi tôn vinh chi tiết, không gian studio chuyên nghiệp' },
-    { id: 'logo', label: '🎯 Thiết kế Logo / Branding', prompt: 'Thiết kế logo hiện đại và chuyên nghiệp cho công ty [NGÀNH NGHỀ], phong cách tối giản (minimalist), màu sắc thương hiệu nổi bật, nền trắng' },
-    { id: 'event', label: '🎉 Sự kiện / Không gian', prompt: 'Không gian sự kiện [TÊN SỰ KIỆN] hoành tráng, trang trí hoa tươi sang trọng, ánh sáng lộng lẫy, không khí chuyên nghiệp đẳng cấp' },
+    { id: 'realestate', label: '👗 Chuyên gia Thời trang & Đời sống', prompt: '' },
   ];
 
   const [selectedTemplate, setSelectedTemplate] = useState('none');
@@ -51,6 +164,14 @@ export function ImageGenerationWorkspace() {
   const [temperature, setTemperature] = useState<number>(1);
   const [outputFormat, setOutputFormat] = useState<'IMAGE_ONLY' | 'IMAGE_AND_TEXT'>('IMAGE_ONLY');
   
+  // ===== DESIGN EXPERT STATE (ĐA NGÀNH NGHỀ) =====
+  const [designField, setDesignField] = useState<string | null>(null);
+  const [designFieldCustom, setDesignFieldCustom] = useState('');
+  // Stores selections & custom text per option group key
+  const [designSelections, setDesignSelections] = useState<Record<string, string[]>>({});
+  const [designCustomTexts, setDesignCustomTexts] = useState<Record<string, string>>({});
+  const [archNote, setArchNote] = useState('');
+
   // State for the new state-driven generation logic
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationQueue, setGenerationQueue] = useState<number[]>([]);
@@ -60,10 +181,76 @@ export function ImageGenerationWorkspace() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // ===== REGION SELECTION / INPAINTING STATE =====
+  const [editingImageUrl, setEditingImageUrl] = useState<string | null>(null);
+  const [selection, setSelection] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<{ x: number, y: number } | null>(null);
+  const [selectionPrompt, setSelectionPrompt] = useState('');
+  // Ref for the image tag rendering the full image to calculate relative bounds
+  const regionImageRef = useRef<HTMLImageElement>(null);
+  
   const { user, userData } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Toggle single-select (click again to deselect)
+  const toggleDesignSingle = (groupKey: string, id: string) => {
+    setDesignSelections(prev => {
+      const current = prev[groupKey] || [];
+      if (current.includes(id)) return { ...prev, [groupKey]: [] }; // deselect
+      return { ...prev, [groupKey]: [id] };
+    });
+  };
+  // Toggle multi-select
+  const toggleDesignMulti = (groupKey: string, id: string) => {
+    setDesignSelections(prev => {
+      const current = prev[groupKey] || [];
+      if (current.includes(id)) return { ...prev, [groupKey]: current.filter(x => x !== id) };
+      return { ...prev, [groupKey]: [...current, id] };
+    });
+  };
+  // Set custom text for a group
+  const setGroupCustomText = (groupKey: string, text: string) => {
+    setDesignCustomTexts(prev => ({ ...prev, [groupKey]: text }));
+  };
+
+  // Build design expert prompt from all selections
+  const buildArchitecturePrompt = useCallback(() => {
+    const parts: string[] = [];
+
+    // Field
+    const fieldLabel = DESIGN_FIELDS.find(f => f.id === designField)?.label;
+    const fieldText = fieldLabel || designFieldCustom.trim() || '';
+    parts.push(`[CHUYÊN GIA THỜI TRANG & LIFESTYLE${fieldText ? ` - Lĩnh vực: ${fieldText}` : ''}]`);
+    parts.push('Phân tích ảnh/yêu cầu thời trang. Tạo hình ảnh có tính thẩm mỹ cao, phù hợp với phong cách và đời sống thực tế.');
+
+    // Each option group
+    for (const group of DESIGN_OPTION_GROUPS) {
+      const selected = designSelections[group.key] || [];
+      const custom = designCustomTexts[group.key]?.trim() || '';
+      const selectedLabels = selected
+        .map(id => group.items.find(item => item.id === id)?.label)
+        .filter(Boolean);
+      
+      const combined = [...selectedLabels];
+      if (custom) combined.push(custom);
+      
+      if (combined.length > 0) {
+        parts.push(`${group.title}: ${combined.join(', ')}.`);
+      }
+    }
+
+    parts.push('Giữ nguyên tỷ lệ và kích thước từ bản vẽ gốc. Thêm chi tiết phù hợp vào đúng vị trí. Chất lượng render 8K, photorealistic.');
+
+    if (archNote.trim()) {
+      parts.push(`Yêu cầu thêm: ${archNote.trim()}`);
+    }
+
+    return parts.join(' ');
+  }, [designField, designFieldCustom, designSelections, designCustomTexts, archNote]);
   
   // ===== FIX #1: Use refs to avoid infinite loop in useEffect =====
   // Track successfully generated URIs for saving via ref (not state that triggers re-renders)
@@ -128,6 +315,15 @@ export function ImageGenerationWorkspace() {
                   });
                 }));
                 toast({ title: `Đã lưu ${savedUris.length} ảnh`, description: 'Các ảnh đã được lưu vào thư viện của bạn.' });
+                // Track usage for cost analytics
+                recordUsage({
+                  userId: currentUser.uid,
+                  userEmail: currentUser.email || '',
+                  type: 'image',
+                  model: imageModel,
+                  amount: savedUris.length,
+                  prompt: currentPrompt,
+                });
               } catch (saveError) {
                 console.error('Failed to save image(s):', saveError);
                 toast({ variant: 'destructive', title: 'Lỗi lưu trữ', description: `Tạo ảnh thành công nhưng không thể lưu vào thư viện.` });
@@ -329,8 +525,18 @@ export function ImageGenerationWorkspace() {
   };
 
   const handleGenerate = async () => {
+    // For architecture mode, build prompt from options
+    const isArchMode = selectedTemplate === 'realestate';
+    if (isArchMode) {
+      const archPrompt = buildArchitecturePrompt();
+      setSimplePrompt(archPrompt);
+      // Small delay to let state update
+      await new Promise(r => setTimeout(r, 50));
+    }
+    
     // Validate: need either an existing optimized prompt OR a simplePrompt to auto-optimize
-    if (!prompt.trim() && !simplePrompt.trim()) {
+    const currentSimplePrompt = isArchMode ? buildArchitecturePrompt() : simplePrompt;
+    if (!prompt.trim() && !currentSimplePrompt.trim()) {
       toast({ variant: 'destructive', title: 'Thiếu prompt', description: 'Vui lòng nhập mô tả cho ảnh.' });
       return;
     }
@@ -349,16 +555,21 @@ export function ImageGenerationWorkspace() {
 
     // ===== AUTO STEP 1: If no optimized prompt yet, generate it from simplePrompt =====
     let finalPrompt = prompt.trim();
-    if (!finalPrompt && simplePrompt.trim()) {
+    const activeSimplePrompt = isArchMode ? buildArchitecturePrompt() : simplePrompt;
+    if (!finalPrompt && activeSimplePrompt.trim()) {
       try {
         setIsGeneratingPrompt(true);
-        toast({ title: '🔄 Bước 1/2: Đang tạo prompt tối ưu...', description: 'AI đang phân tích yêu cầu của bạn.' });
+        toast({ 
+          title: isArchMode ? '🏗️ Bước 1/2: AI đang phân tích bản vẽ...' : '🔄 Bước 1/2: Đang tạo prompt tối ưu...', 
+          description: isArchMode ? 'Chuyên gia kiến trúc đang đọc bản vẽ kỹ thuật của bạn.' : 'AI đang phân tích yêu cầu của bạn.' 
+        });
 
         const result = await optimalImagePromptGeneration({
-          description: simplePrompt,
+          description: activeSimplePrompt,
           imageUris: inputImageUrls,
           model: promptModel,
           apiKey: userData?.geminiApiKey,
+          mode: isArchMode ? 'architecture' : undefined,
         });
 
         finalPrompt = result.optimized_english_prompt;
@@ -531,9 +742,9 @@ export function ImageGenerationWorkspace() {
                   onValueChange={(val) => {
                     setSelectedTemplate(val);
                     const tmpl = IMAGE_TEMPLATES.find(t => t.id === val);
-                    if (tmpl && tmpl.id !== 'none') {
+                    if (tmpl && tmpl.id !== 'none' && tmpl.id !== 'realestate') {
                       setSimplePrompt(tmpl.prompt);
-                    } else if (tmpl && tmpl.id === 'none') {
+                    } else if (tmpl && (tmpl.id === 'none' || tmpl.id === 'realestate')) {
                       setSimplePrompt('');
                     }
                   }}
@@ -549,18 +760,131 @@ export function ImageGenerationWorkspace() {
                   </SelectContent>
                 </Select>
               </div>
-              <Textarea
-                id="simple-prompt"
-                placeholder={t('workspace.image.simplePromptPlaceholder')}
-                value={simplePrompt}
-                onChange={(e) => {
-                  setSimplePrompt(e.target.value);
-                  setSelectedTemplate('none');
-                }}
-                rows={3}
-                disabled={isBusy}
-                className="resize-none"
-              />
+
+              {/* ===== FASHION & LIFESTYLE EXPERT OPTIONS PANEL ===== */}
+              {selectedTemplate === 'realestate' ? (
+                <div className="space-y-3 rounded-lg border border-cyan-200 bg-white p-3">
+                  {/* Header */}
+                  <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
+                    <span className="text-base">👗</span>
+                    <span>Chuyên gia Thời trang & Đời sống</span>
+                  </div>
+                  <p className="text-xs text-cyan-600/80">
+                    Tải ảnh mẫu/bản vẽ phác thảo. Chọn phong cách, góc chụp và trang phục. AI sẽ render ra ảnh có tính thẩm mỹ cao cho bạn.
+                  </p>
+
+                  {/* Field / Industry */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700">Lĩnh vực <span className="text-slate-400 font-normal">(tuỳ chọn)</span></Label>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DESIGN_FIELDS.map(field => (
+                        <button
+                          key={field.id}
+                          type="button"
+                          disabled={isBusy}
+                          onClick={() => setDesignField(prev => prev === field.id ? null : field.id)}
+                          className={cn(
+                            'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border',
+                            designField === field.id
+                              ? 'border-cyan-500 bg-cyan-500 text-white shadow-sm'
+                              : 'border-slate-200 bg-white text-slate-600 hover:border-cyan-300 hover:bg-cyan-50'
+                          )}
+                        >
+                          <span>{field.icon}</span>
+                          <span>{field.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      type="text"
+                      placeholder='Hoặc ghi lĩnh vực khác: VD "Nha khoa", "Đóng tàu"...'
+                      value={designFieldCustom}
+                      onChange={(e) => { setDesignFieldCustom(e.target.value); if (e.target.value) setDesignField(null); }}
+                      disabled={isBusy}
+                      className="w-full rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-200"
+                    />
+                  </div>
+
+                  {/* Dynamic Option Groups */}
+                  {DESIGN_OPTION_GROUPS.map(group => {
+                    const selections = designSelections[group.key] || [];
+                    const customText = designCustomTexts[group.key] || '';
+                    const colors = colorMap[group.color] || colorMap['blue'];
+                    const isMulti = group.multi;
+                    return (
+                      <div key={group.key} className="space-y-1.5">
+                        <Label className="text-xs font-medium text-slate-700">
+                          {group.title}
+                          {isMulti && <span className="text-slate-400 font-normal"> (chọn nhiều)</span>}
+                          <span className="text-slate-400 font-normal"> — tuỳ chọn</span>
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {group.items.map(item => {
+                            const isSelected = selections.includes(item.id);
+                            return (
+                              <button
+                                key={item.id}
+                                type="button"
+                                disabled={isBusy}
+                                onClick={() => isMulti
+                                  ? toggleDesignMulti(group.key, item.id)
+                                  : toggleDesignSingle(group.key, item.id)
+                                }
+                                className={cn(
+                                  'flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium transition-all border',
+                                  isSelected ? colors.selected : colors.unselected
+                                )}
+                              >
+                                <span>{item.icon}</span>
+                                <span>{item.label}</span>
+                                {isSelected && <Check className="h-3 w-3" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* Custom text input per group */}
+                        <input
+                          type="text"
+                          placeholder={group.placeholder || 'Hoặc ghi ý kiến khác...'}
+                          value={customText}
+                          onChange={(e) => setGroupCustomText(group.key, e.target.value)}
+                          disabled={isBusy}
+                          className="w-full rounded-md border border-dashed border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 placeholder:text-slate-400 focus:border-cyan-400 focus:outline-none focus:ring-1 focus:ring-cyan-200"
+                        />
+                      </div>
+                    );
+                  })}
+
+                  {/* General Note */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-slate-700 flex items-center gap-1">
+                      <PenLine className="h-3 w-3" />
+                      Ghi chú tổng thêm <span className="text-slate-400 font-normal">(tuỳ chọn)</span>
+                    </Label>
+                    <Textarea
+                      placeholder='VD: "Thêm cây xanh ban công", "Sàn gỗ sáng màu", "Trần cao 3m", "Output giống ảnh mẫu 3D"...'
+                      value={archNote}
+                      onChange={(e) => setArchNote(e.target.value)}
+                      rows={2}
+                      disabled={isBusy}
+                      className="resize-none text-xs bg-white"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <Textarea
+                  id="simple-prompt"
+                  placeholder={t('workspace.image.simplePromptPlaceholder')}
+                  value={simplePrompt}
+                  onChange={(e) => {
+                    setSimplePrompt(e.target.value);
+                    setSelectedTemplate('none');
+                  }}
+                  rows={3}
+                  disabled={isBusy}
+                  className="resize-none"
+                />
+              )}
               <div className="space-y-2">
                 <Label htmlFor="prompt-model">Mô hình tạo Prompt</Label>
                 <Select value={promptModel} onValueChange={setPromptModel} disabled={isBusy}>
@@ -574,10 +898,12 @@ export function ImageGenerationWorkspace() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleGenerateOptimalPrompt} disabled={isGeneratingPrompt || !simplePrompt.trim()} size="sm" className="w-full">
-                {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                {t('workspace.image.generatePromptButton')}
-              </Button>
+              {selectedTemplate !== 'realestate' && (
+                <Button onClick={handleGenerateOptimalPrompt} disabled={isGeneratingPrompt || !simplePrompt.trim()} size="sm" className="w-full">
+                  {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                  {t('workspace.image.generatePromptButton')}
+                </Button>
+              )}
             </div>
             <Separator className="hidden" />
             {/* Main prompt section */}
@@ -628,7 +954,7 @@ export function ImageGenerationWorkspace() {
                 </SelectContent>
               </Select>
               {imageModel.startsWith('imagen-') && (
-                <p className={`text-xs rounded px-2 py-1.5 ${inputImageUrls.length > 0 ? 'text-teal-700 bg-teal-50 border border-teal-200' : 'text-blue-600 bg-blue-50 border border-blue-200'}`}>
+                <p className={`text-xs rounded px-2 py-1.5 ${inputImageUrls.length > 0 ? 'text-cyan-700 bg-cyan-50 border border-cyan-200' : 'text-blue-600 bg-blue-50 border border-blue-200'}`}>
                   {inputImageUrls.length > 0
                     ? '🍌 Nano Banana sẽ phân tích ảnh tham chiếu → tạo prompt chi tiết → Imagen 4 tạo ảnh chất lượng cao.'
                     : '🖼️ Imagen 4 tạo ảnh từ text. Thêm ảnh tham chiếu để kích hoạt pipeline Nano Banana + Imagen 4.'}
@@ -758,9 +1084,9 @@ export function ImageGenerationWorkspace() {
                 </div>
               );
             })()}
-            <Button onClick={handleGenerate} disabled={isBusy || (!prompt.trim() && !simplePrompt.trim())} className="w-full mt-2">
-              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ImageIcon className="mr-2 h-4 w-4" />}
-              {t('workspace.image.generateButton')}
+            <Button onClick={handleGenerate} disabled={isBusy || (!prompt.trim() && !simplePrompt.trim() && selectedTemplate !== 'realestate')} className="w-full mt-2">
+              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : selectedTemplate === 'realestate' ? <span className="mr-2 text-base">✨</span> : <ImageIcon className="mr-2 h-4 w-4" />}
+              {selectedTemplate === 'realestate' ? 'Bắt đầu Sáng tạo' : t('workspace.image.generateButton')}
             </Button>
           </CardContent>
         </Card>
@@ -787,6 +1113,9 @@ export function ImageGenerationWorkspace() {
                   <div key={index} className="relative group rounded-lg overflow-hidden border bg-black/10">
                       <Image src={url} alt={`Generated image ${index + 1}`} fill style={{ objectFit: 'contain' }} className="p-1" />
                       <div className="absolute bottom-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="secondary" size="icon" onClick={() => setEditingImageUrl(url)} title="Sửa vùng">
+                              <PenLine className="h-5 w-5" />
+                          </Button>
                           <Button variant="secondary" size="icon" onClick={() => setPreviewImageUrl(url)} title="Phóng to">
                               <ZoomIn className="h-5 w-5" />
                           </Button>
@@ -804,6 +1133,120 @@ export function ImageGenerationWorkspace() {
           </div>
         )}
       </div>
+
+      {/* ===== REGION EDITOR MODAL ===== */}
+      <Dialog open={!!editingImageUrl} onOpenChange={(v) => { if (!v) { setEditingImageUrl(null); setSelection(null); setSelectionPrompt(''); } }}>
+        <DialogContent className="max-w-4xl lg:h-[90vh] flex flex-col p-4 content-start">
+          <DialogHeader>
+            <DialogTitle>✏️ Tùy chỉnh chi tiết (Inpainting)</DialogTitle>
+            <DialogDescription>
+              Kéo chuột trên ảnh để chọn vùng cần sửa. Sau đó ghi chú bạn muốn thay đổi gì.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 flex flex-col gap-4 overflow-hidden relative">
+            {/* Image Canvas */}
+            <div 
+              className="flex-1 bg-black/5 rounded-lg overflow-hidden relative flex items-center justify-center cursor-crosshair select-none"
+              onMouseDown={(e) => {
+                if (!regionImageRef.current) return;
+                const rect = regionImageRef.current.getBoundingClientRect();
+                const x = Math.max(0, e.clientX - rect.left);
+                const y = Math.max(0, e.clientY - rect.top);
+                setIsSelecting(true);
+                setSelectionStart({ x, y });
+                setSelection({ x, y, w: 0, h: 0 });
+              }}
+              onMouseMove={(e) => {
+                if (!isSelecting || !selectionStart || !regionImageRef.current) return;
+                const rect = regionImageRef.current.getBoundingClientRect();
+                const currentX = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                const currentY = Math.max(0, Math.min(e.clientY - rect.top, rect.height));
+
+                setSelection({
+                  x: Math.min(selectionStart.x, currentX),
+                  y: Math.min(selectionStart.y, currentY),
+                  w: Math.abs(currentX - selectionStart.x),
+                  h: Math.abs(currentY - selectionStart.y)
+                });
+              }}
+              onMouseUp={() => {
+                setIsSelecting(false);
+              }}
+              onMouseLeave={() => {
+                if (isSelecting) setIsSelecting(false);
+              }}
+            >
+              {editingImageUrl && (
+                <div className="relative inline-block max-w-full max-h-full">
+                  <img
+                    ref={regionImageRef}
+                    src={editingImageUrl}
+                    alt="Edit preview"
+                    className="max-w-full max-h-full object-contain pointer-events-none"
+                  />
+                  {selection && (
+                    <div 
+                      className="absolute border-2 border-primary bg-primary/20"
+                      style={{
+                        left: `${selection.x}px`,
+                        top: `${selection.y}px`,
+                        width: `${selection.w}px`,
+                        height: `${selection.h}px`,
+                      }}
+                    >
+                      <span className="absolute -top-6 bg-primary text-primary-foreground text-[10px] px-1 rounded whitespace-nowrap">
+                        {Math.floor(selection.w)}x{Math.floor(selection.h)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Prompt input */}
+            <div className="flex gap-2">
+              <Textarea 
+                placeholder='VD: "Thêm kính râm", "Đổi màu áo thành xanh", "Xóa vật thể này"...'
+                value={selectionPrompt}
+                onChange={e => setSelectionPrompt(e.target.value)}
+                className="h-[60px] resize-none"
+              />
+              <Button 
+                className="h-[60px]" 
+                disabled={!selection || selection.w < 10 || !selectionPrompt.trim()}
+                onClick={() => {
+                  if (!selection || !regionImageRef.current) return;
+                  const rect = regionImageRef.current.getBoundingClientRect();
+                  
+                  const ymin = Math.floor((selection.y / rect.height) * 1000);
+                  const xmin = Math.floor((selection.x / rect.width) * 1000);
+                  const ymax = Math.floor(((selection.y + selection.h) / rect.height) * 1000);
+                  const xmax = Math.floor(((selection.x + selection.w) / rect.width) * 1000);
+
+                  const editInstruction = `\n\n[REGION EDIT: [ymin:${ymin}, xmin:${xmin}, ymax:${ymax}, xmax:${xmax}]] -> ${selectionPrompt.trim()}`;
+                  
+                  if (selectedTemplate === 'none') {
+                    setSimplePrompt(prev => prev.trim() + editInstruction);
+                  } else {
+                    setArchNote(prev => prev.trim() + editInstruction);
+                  }
+                  
+                  setEditingImageUrl(null);
+                  setSelection(null);
+                  setSelectionPrompt('');
+                  
+                  toast({
+                    title: "Đã thêm yêu cầu sửa vùng",
+                    description: "Bấm 'Bắt đầu Sáng tạo' để AI xử lý",
+                  });
+                }}
+              >
+                Xác nhận
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
