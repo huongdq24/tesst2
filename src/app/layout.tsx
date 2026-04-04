@@ -20,10 +20,10 @@ export const metadata: Metadata = {
     siteName: 'iGen Official',
     images: [
       {
-        url: '/opengraph-image',
+        url: 'https://res.cloudinary.com/dgaofuhmv/image/upload/v1775301001/unnamed_tcmlmp.png',
         width: 1200,
         height: 630,
-        alt: 'iGen - AI Personal Brand Assistant',
+        alt: 'iGen - AI Personal Brand Assistant Logo',
       },
     ],
     locale: 'vi_VN',
@@ -33,11 +33,11 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'iGen - Trợ lý AI Xây dựng thương hiệu cá nhân',
     description: 'Nền tảng AI xây dựng thương hiệu cá nhân chuyên nghiệp.',
-    images: ['/opengraph-image'],
+    images: ['https://res.cloudinary.com/dgaofuhmv/image/upload/v1775301001/unnamed_tcmlmp.png'],
   },
   icons: {
-    icon: '/icon',
-    apple: '/icon',
+    icon: 'https://res.cloudinary.com/dgaofuhmv/image/upload/v1775301001/unnamed_tcmlmp.png',
+    apple: 'https://res.cloudinary.com/dgaofuhmv/image/upload/v1775301001/unnamed_tcmlmp.png',
   },
 };
 
