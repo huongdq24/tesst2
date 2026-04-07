@@ -52,7 +52,7 @@ export function Header() {
               {/* Credit Display */}
               {user && (
                 <div className="flex items-center gap-1.5">
-                  <Link href="/home/feature/cost-analytics" className={cn(
+                  <Link href="/home/cost-analytics" className={cn(
                     "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer",
                     (userData?.credits ?? 0) > 0
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"

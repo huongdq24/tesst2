@@ -41,6 +41,7 @@ import { collection, query, where, orderBy, getDocs, Timestamp } from 'firebase/
 import { firestore } from '@/lib/firebase/config';
 import { Button } from '@/components/ui/button';
 import { DateRangePicker, type DateRange } from '@/components/ui/date-range-picker';
+import { PricingTable } from './pricing-table';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -52,6 +53,7 @@ interface UsageLog {
   modelLabel: string;
   amount: number;
   unit: string;
+  estimatedCostUSD: number;
   estimatedCostVND: number;
   prompt: string;
   createdAt: Timestamp;
@@ -101,6 +103,11 @@ function formatCompact(value: number): string {
 
 function formatDateRangeLabel(range: DateRange): string {
   return `${format(range.from, 'dd/MM/yyyy', { locale: vi })} – ${format(range.to, 'dd/MM/yyyy', { locale: vi })}`;
+}
+
+function formatCredit(value: number): string {
+  if (value < 0.0001) return value.toFixed(6) + ' Credit';
+  return value.toFixed(3) + ' Credit';
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -179,7 +186,7 @@ function EmptyState() {
 // ─── Main Dashboard ──────────────────────────────────────────────────────────
 
 export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEmail }: { overrideUserId?: string, overrideUserEmail?: string } = {}) {
-  const { user } = useAuth();
+  const { user, userData } = useAuth();
   const targetUserId = overrideUserId || user?.uid;
   const [activeTab, setActiveTab] = useState('overview');
   const [dateRange, setDateRange] = useState<DateRange>({
@@ -354,11 +361,88 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
         {/* Data content */}
         {!isLoading && usageLogs.length > 0 && (
           <>
-            {/* ─── Summary Cards ───────────────────────────────────────── */}
-            <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {/* Total */}
-              <Card className="relative overflow-hidden border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
-                <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-transparent to-transparent" />
+            {/* ─── Simplified User View (Only Price List + History) ─────── */}
+            {userData?.role !== 'Admin' && !overrideUserId ? (
+              <div className="space-y-12">
+                {/* Section 1: Service Pricing Table */}
+                <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur-sm overflow-hidden">
+                  <CardHeader className="border-b border-zinc-800 bg-zinc-800/20">
+                    <CardTitle className="text-xl flex items-center gap-2">
+                       <Zap className="h-5 w-5 text-cyan-400" />
+                       Bảng giá dịch vụ iGen
+                    </CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      Chi phí được tính dựa trên số lượng Credit tiêu thụ cho mỗi đơn vị sử dụng.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0 sm:p-6">
+                    <PricingTable showTitle={false} />
+                  </CardContent>
+                </Card>
+
+                {/* Section 2: Transaction History in Credits */}
+                <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur-sm">
+                  <CardHeader>
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-emerald-400" />
+                      Lịch sử sử dụng dịch vụ
+                    </CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      Chi tiết các lượt sử dụng model AI và credit đã tiêu thụ
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="max-h-[800px] overflow-y-auto pr-1 space-y-3 scrollbar-thin">
+                      {recentLogs.map((log, idx) => {
+                        const time = log.createdAt?.toDate?.();
+                        const timeStr = time
+                          ? `${time.getDate()}/${time.getMonth() + 1} ${time.getHours()}:${time.getMinutes().toString().padStart(2, '0')}`
+                          : '—';
+
+                        return (
+                          <div
+                            key={idx}
+                            className="group flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-zinc-800/50 bg-zinc-800/20 px-4 py-4 transition-all hover:bg-zinc-800/40"
+                          >
+                            <div
+                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-lg"
+                              style={{ backgroundColor: (CATEGORY_COLORS[log.type] || '#71717a') + '20' }}
+                            >
+                              <span style={{ color: CATEGORY_COLORS[log.type] || '#71717a' }}>{CATEGORY_ICONS[log.type]}</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-bold text-zinc-100 truncate">
+                                  {(log.modelLabel || log.model).replace('Gemini', 'iGen')}
+                                </p>
+                                <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded uppercase">
+                                  {log.type}
+                                </span>
+                              </div>
+                              <p className="text-xs text-zinc-500 truncate mt-1">
+                                {log.prompt || '—'} • {log.amount} {log.unit}
+                              </p>
+                            </div>
+                            <div className="flex items-center justify-between sm:text-right sm:flex-col sm:gap-1">
+                                <p className="text-sm font-black tracking-tight" style={{ color: CATEGORY_COLORS[log.type] || '#a1a1aa' }}>
+                                    {formatCredit(log.estimatedCostUSD || 0)}
+                                </p>
+                                <p className="text-[10px] text-zinc-600 font-medium">{timeStr}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : (
+              <>
+                {/* ─── Summary Cards (Admin Only) ─────────────────────── */}
+                <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  {/* Total */}
+                  <Card className="relative overflow-hidden border-zinc-800 bg-zinc-900/80 backdrop-blur-sm">
+                    <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 via-transparent to-transparent" />
                 <CardHeader className="relative pb-2">
                   <CardDescription className="text-zinc-400 text-xs font-medium uppercase tracking-wider">Tổng Chi Phí</CardDescription>
                 </CardHeader>
@@ -688,6 +772,8 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
               <p className="text-center text-xs text-zinc-600 mt-8">
                 Cập nhật lần cuối: {lastRefresh.toLocaleTimeString('vi-VN')}
               </p>
+            )}
+              </>
             )}
           </>
         )}
