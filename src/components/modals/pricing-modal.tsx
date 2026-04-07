@@ -23,21 +23,15 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-2">
           <DialogTitle className="text-2xl font-bold flex items-center gap-2">
-            🚀 Bảng giá dịch vụ iGen
+            Bảng giá dịch vụ
           </DialogTitle>
           <p className="text-muted-foreground text-sm">
             Chi phí được tính dựa trên số lượng Credit tiêu thụ cho mỗi đơn vị sử dụng.
           </p>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 px-6 pb-6">
+        <div className="flex-1 overflow-y-auto px-6 pb-6 pt-2">
            <PricingTable showTitle={false} />
-        </ScrollArea>
-
-        <div className="p-4 bg-muted/30 border-t text-center">
-          <p className="text-[11px] text-muted-foreground italic">
-            * Bảng giá có thể thay đổi tùy theo chính sách của nhà cung cấp dịch vụ AI.
-          </p>
         </div>
       </DialogContent>
     </Dialog>

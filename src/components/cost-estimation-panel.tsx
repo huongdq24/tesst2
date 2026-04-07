@@ -7,12 +7,23 @@ import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Calculator, Info } from 'lucide-react';
 
-interface CostEstimationPanelProps {
+interface CostEstimationItem {
   model: string;
   amount: number;
+  inputAmount?: number;
   options?: {
     resolution?: string;
   };
+}
+
+interface CostEstimationPanelProps {
+  model?: string; // Legacy support
+  amount?: number; // Legacy support
+  inputAmount?: number;
+  options?: { // Legacy support
+    resolution?: string;
+  };
+  items?: CostEstimationItem[];
   title?: string;
   className?: string;
 }
@@ -20,20 +31,26 @@ interface CostEstimationPanelProps {
 export function CostEstimationPanel({
   model,
   amount,
+  inputAmount,
   options,
+  items = [],
   title = "Chi phí ước tính",
   className
 }: CostEstimationPanelProps) {
-  const pricing = PRICING_TABLE[model];
-  if (!pricing) return null;
+  // Combine legacy props with items array
+  const allItems: CostEstimationItem[] = [...items];
+  if (model && amount !== undefined) {
+    allItems.unshift({ model, amount, inputAmount, options });
+  }
 
-  const { costUSD } = estimateCost(model, amount, options);
+  if (allItems.length === 0) return null;
 
   const getUnitLabel = (unit: string) => {
     switch (unit) {
       case 'seconds': return 'giây';
       case 'count': return 'ảnh';
       case 'tokens': return 'token';
+      case '1k tokens': return '1000 tokens';
       default: return unit;
     }
   };
@@ -63,33 +80,68 @@ export function CostEstimationPanel({
         </Badge>
       </div>
 
-      <div className="space-y-2.5">
-        <div className="space-y-1">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-            {getCategoryLabel(pricing.category)}
-          </p>
-          <div className="flex justify-between items-baseline">
-            <span className="text-[12px] text-slate-600 dark:text-slate-300">Model:</span>
-            <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">{pricing.label}</span>
-          </div>
-          <div className="flex justify-between items-baseline">
-            <span className="text-[12px] text-slate-600 dark:text-slate-300">Giá / {getUnitLabel(pricing.unit)}:</span>
-            <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
-              {pricing.costPerUnitUSD < 0.001 ? pricing.costPerUnitUSD.toFixed(6) : pricing.costPerUnitUSD.toFixed(3)} Credit
-            </span>
-          </div>
-          <div className="flex justify-between items-baseline">
-            <span className="text-[12px] text-slate-600 dark:text-slate-300">Số lượng:</span>
-            <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
-              x{amount}
-            </span>
-          </div>
-        </div>
+      <div className="space-y-4">
+        {allItems.map((item, idx) => {
+          const pricing = PRICING_TABLE[item.model];
+          if (!pricing) return null;
+          return (
+            <div key={`${item.model}-${idx}`} className="space-y-1">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                {getCategoryLabel(pricing.category)}
+              </p>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[12px] text-slate-600 dark:text-slate-300">Model:</span>
+                <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200">{pricing.label}</span>
+              </div>
+              
+              {pricing.category === 'text' && pricing.inputCostPerUnitUSD ? (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[12px] text-slate-600 dark:text-slate-300">Giá Input / Output:</span>
+                  <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                    {parseFloat(pricing.inputCostPerUnitUSD.toFixed(8))} / {parseFloat(pricing.costPerUnitUSD.toFixed(8))}
+                  </span>
+                </div>
+              ) : null}
+              {(!pricing.inputCostPerUnitUSD || pricing.category !== 'text') && (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[12px] text-slate-600 dark:text-slate-300">Giá / {getUnitLabel(pricing.unit)}:</span>
+                  <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                    {parseFloat(pricing.costPerUnitUSD.toFixed(6))}
+                  </span>
+                </div>
+              )}
+
+              {item.inputAmount ? (
+                <>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-[12px] text-slate-600 dark:text-slate-300">Input Tokens:</span>
+                    <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                      {item.inputAmount}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-[12px] text-slate-600 dark:text-slate-300">Output Tokens:</span>
+                    <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                      {item.amount}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[12px] text-slate-600 dark:text-slate-300">Số lượng:</span>
+                  <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
+                    x{item.amount}
+                  </span>
+                </div>
+              )}
+            </div>
+          );
+        })}
 
         <div className="border-t border-cyan-200/50 pt-2 flex items-center justify-between">
           <span className="text-[12px] font-bold text-slate-700 dark:text-slate-200">Tổng chi phí:</span>
           <span className="text-[14px] font-mono font-bold text-cyan-700 dark:text-cyan-400">
-            {costUSD.toFixed(3)} Credit
+            {parseFloat(allItems.reduce((sum, item) => sum + estimateCost(item.model, item.amount, { resolution: item.options?.resolution, inputAmount: item.inputAmount }).costUSD, 0).toFixed(6))} Credit
           </span>
         </div>
       </div>

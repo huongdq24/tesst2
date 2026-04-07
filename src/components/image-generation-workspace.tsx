@@ -636,10 +636,10 @@ export function ImageGenerationWorkspace() {
       setNegativePrompt(result.negative_prompt);
 
       // Update cost estimation for prompt optimization
-      const inputTokens = estimateTokens(activeDescription);
+      const imageCount = inputImageUrls.length;
+      const inputTokens = estimateTokens(activeDescription) + (imageCount * 262);
       const outputTokens = estimateTokens(result.optimized_english_prompt + (result.negative_prompt || ''));
-      const promptPricing = PRICING_TABLE[promptModel];
-      const promptCostUSD = promptPricing ? (inputTokens + outputTokens) * promptPricing.costPerUnitUSD : 0;
+      const promptCostUSD = estimateCost(promptModel, outputTokens, { inputAmount: inputTokens }).costUSD;
       const imgCostUSD = estimateCost(imageModel, numberOfImages, { resolution }).costUSD;
 
       setCostInfo({
@@ -657,8 +657,9 @@ export function ImageGenerationWorkspace() {
           userId: user.uid,
           userEmail: user.email || '',
           type: 'text',
+          amount: outputTokens,
+          inputAmount: inputTokens,
           model: promptModel,
-          amount: inputTokens + outputTokens,
           prompt: activeDescription,
         });
       }
@@ -1218,18 +1219,8 @@ export function ImageGenerationWorkspace() {
                 <SelectContent>
                   <SelectItem value="gemini-3.1-flash-image-preview">iGen-3.1-flash-image-preview</SelectItem>
                   <SelectItem value="gemini-3-pro-image-preview">iGen-3-pro-image-preview</SelectItem>
-                  <SelectItem value="imagen-4.0-fast-generate-001">Imagen 4 Fast ⚡</SelectItem>
-                  <SelectItem value="imagen-4.0-generate-001">Imagen 4 Standard</SelectItem>
-                  <SelectItem value="imagen-4.0-ultra-generate-001">Imagen 4 Ultra 🔥</SelectItem>
                 </SelectContent>
               </Select>
-              {imageModel.startsWith('imagen-') && (
-                <p className={`text-xs rounded px-2 py-1.5 ${inputImageUrls.length > 0 ? 'text-cyan-700 bg-cyan-50 border border-cyan-200' : 'text-blue-600 bg-blue-50 border border-blue-200'}`}>
-                  {inputImageUrls.length > 0
-                    ? '🍌 Nano Banana sẽ phân tích ảnh tham chiếu → tạo prompt chi tiết → Imagen 4 tạo ảnh chất lượng cao.'
-                    : '🖼️ Imagen 4 tạo ảnh từ text. Thêm ảnh tham chiếu để kích hoạt pipeline Nano Banana + Imagen 4.'}
-                </p>
-              )}
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -1364,7 +1355,8 @@ export function ImageGenerationWorkspace() {
               {(costInfo?.promptOutputTokens ?? 0) > 0 && (
                 <CostEstimationPanel 
                   model={promptModel} 
-                  amount={(costInfo?.promptInputTokens ?? 0) + (costInfo?.promptOutputTokens ?? 0)} 
+                  amount={costInfo?.promptOutputTokens ?? 0}
+                  inputAmount={costInfo?.promptInputTokens ?? 0}
                   title="Chi phí Token (Prompt AI)"
                   className="bg-zinc-50/50 border-zinc-100"
                 />

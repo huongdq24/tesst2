@@ -28,8 +28,11 @@ type VideoClip = { url: string; duration: string; geminiFileUri?: string | null;
 
 // Model definitions for display
 const MODEL_OPTIONS = [
-  { value: 'veo-3.1-fast-generate-preview', label: 'iGen Veo 3.1 Nhanh', desc: 'Tốc độ nhanh, chất lượng tốt' },
   { value: 'veo-3.1-generate-preview', label: 'iGen Veo 3.1 HQ', desc: 'Chất lượng cao nhất' },
+  { value: 'veo-3.1-fast-generate-preview', label: 'iGen Veo 3.1 Nhanh', desc: 'Tốc độ nhanh, chất lượng tốt' },
+  { value: 'veo-3.1-lite-generate-preview', label: 'iGen Veo 3.1 Lite', desc: 'Tiết kiệm chi phí' },
+  { value: 'veo-3.0-generate-001', label: 'iGen Veo 3.0', desc: 'Phiên bản Veo 3 chuẩn' },
+  { value: 'veo-3.0-fast-generate-001', label: 'iGen Veo 3.0 Fast', desc: 'Veo 3 tốc độ cao' },
   { value: 'veo-2.0-generate-001', label: 'iGen Veo 2.0', desc: 'Phiên bản ổn định cũ (chỉ 720p)' },
 ];
 
@@ -47,6 +50,7 @@ const DURATION_OPTIONS_VEO2 = [
 ];
 
 const QUALITY_OPTIONS = [
+  { value: '4K', label: '4K (UHD)' },
   { value: '1080p', label: '1080p (Full HD)' },
   { value: '720p', label: '720p (HD)' },
 ];
@@ -345,14 +349,16 @@ export function SimpleVideoWorkspace() {
       setPrompt(result.optimized_english_prompt);
       
       if (user) {
-        const inputTokens = estimateTokens(prompt);
+        const imageCount = referenceImageUris.length;
+        const inputTokens = estimateTokens(prompt) + (imageCount * 262);
         const outputTokens = estimateTokens(result.optimized_english_prompt);
         recordUsage({
           userId: user.uid,
           userEmail: user.email || '',
           type: 'text',
           model: promptModel,
-          amount: inputTokens + outputTokens,
+          amount: outputTokens,
+          inputAmount: inputTokens,
           prompt: prompt,
         });
       }
@@ -789,9 +795,13 @@ export function SimpleVideoWorkspace() {
             <div className="pt-2">
               <CostEstimationPanel 
                 items={[
-                  { model: videoModel, amount: parseInt(videoDuration) || 0 },
-                  // If prompt is not empty, estimate input+output tokens (approx 3x input for a good AI script extension)
-                  ...(prompt.trim() ? [{ model: promptModel, amount: estimateTokens(prompt) * 4 + 150 }] : [])
+                  { model: videoModel, amount: parseInt(videoDuration) || 0, options: { resolution: videoQuality } },
+                  // Dựa trên text hiện tại + số ảnh đang có để ước tính token input, output khoảng 3x-4x text
+                  ...(prompt.trim() || standardImage || beforeImage ? [{ 
+                    model: promptModel, 
+                    amount: estimateTokens(prompt) * 4 + 150,
+                    inputAmount: estimateTokens(prompt) + ((activeMode === 'standard' && standardImage ? 1 : 0) + (activeMode === 'before-after' && (beforeImage || afterImage) ? 2 : 0)) * 262
+                  }] : [])
                 ]}
                 title="Dự kiến tiêu thụ"
               />

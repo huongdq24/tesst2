@@ -4,18 +4,14 @@ import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from '
 import { firestore } from '@/lib/firebase/config';
 
 // ─── Exchange Rate ───────────────────────────────────────────────────────────
-export const USD_TO_VND = 25_500;
+export const USD_TO_VND = 100; // 100 VNĐ = 1 Credit
+const REAL_USD_TO_CREDIT = 255; // 1 USD = 25.500 VNĐ = 255 Credits
 
 // ─── Pricing Table ───────────────────────────────────────────────────────────
-// Source: https://ai.google.dev/pricing (Updated 2026-04-07)
-// All prices are in USD. VNĐ is calculated at runtime using USD_TO_VND.
-//
-// For token-based models: costPerUnitUSD = output cost per token (USD)
-// For per-second models:  costPerUnitUSD = cost per second (USD)
-// For per-image models:   costPerUnitUSD = cost per image (USD)
-
+// costPerUnitUSD actually represents costPerUnitCREDIT now to avoid widespread refactoring.
 export const PRICING_TABLE: Record<string, {
   costPerUnitUSD: number;
+  inputCostPerUnitUSD?: number;
   unit: string;
   label: string;
   category: 'video' | 'audio' | 'image' | 'text';
@@ -25,165 +21,110 @@ export const PRICING_TABLE: Record<string, {
   // ── VIDEO (per second of generated video) ──
   // ══════════════════════════════════════════════════════════════════════════
   'veo-3.1-generate-preview': {
-    costPerUnitUSD: 0.40, // $0.40/second
+    costPerUnitUSD: 0.40 * REAL_USD_TO_CREDIT, // 102 Credits
     unit: 'seconds',
-    label: 'Veo 3.1 HQ Video',
+    label: 'iGen Veo 3.1 HQ',
     category: 'video',
-    note: 'Standard quality, highest fidelity',
+    note: '0.40 USD base (720p/1080p). 4K is higher.',
   },
   'veo-3.1-fast-generate-preview': {
-    costPerUnitUSD: 0.15, // $0.15/second
+    costPerUnitUSD: 0.15 * REAL_USD_TO_CREDIT, // 38.25 Credits
     unit: 'seconds',
-    label: 'Veo 3.1 Fast Video',
+    label: 'iGen Veo 3.1 Nhanh',
     category: 'video',
-    note: 'Fast generation, good quality',
+    note: '0.15 USD base (720p/1080p). 4K is higher.',
   },
   'veo-3.1-lite-generate-preview': {
-    costPerUnitUSD: 0.05, // $0.05/second (720p)
+    costPerUnitUSD: 0.05 * REAL_USD_TO_CREDIT, // 12.75 Credits
     unit: 'seconds',
-    label: 'Veo 3.1 Lite Video',
+    label: 'iGen Veo 3.1 Lite',
     category: 'video',
-    note: '720p, budget-friendly',
+    note: '0.05 USD base (720p). 1080p is higher.',
   },
   'veo-3.0-generate-001': {
-    costPerUnitUSD: 0.40, // same tier as 3.1 standard
+    costPerUnitUSD: 0.40 * REAL_USD_TO_CREDIT,
     unit: 'seconds',
-    label: 'Veo 3.0 Video',
+    label: 'iGen Veo 3.0',
     category: 'video',
+    note: '0.40 USD base',
   },
   'veo-3.0-fast-generate-001': {
-    costPerUnitUSD: 0.15, // same tier as 3.1 fast
+    costPerUnitUSD: 0.10 * REAL_USD_TO_CREDIT,
     unit: 'seconds',
-    label: 'Veo 3.0 Fast Video',
+    label: 'iGen Veo 3.0 Fast',
     category: 'video',
+    note: '0.10 USD base (720p).',
   },
   'veo-2.0-generate-001': {
-    costPerUnitUSD: 0.35, // $0.35/second
+    costPerUnitUSD: 0.35 * REAL_USD_TO_CREDIT,
     unit: 'seconds',
-    label: 'Veo 2.0 Video',
+    label: 'iGen Veo 2.0',
     category: 'video',
-  },
-  'heygen-avatar-standard': {
-    costPerUnitUSD: 0.10, // $0.10/second
-    unit: 'seconds',
-    label: 'HeyGen Avatar Pro',
-    category: 'video',
-    note: 'High-quality AI Avatar',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
   // ── AUDIO / TTS (token-based pricing) ──
-  // Output audio tokens are the primary cost driver.
-  // We estimate: ~50 output tokens per second of generated audio.
-  // So we convert to a per-second cost for simplicity.
-  //
-  // iGen-2.5-flash-preview-tts:
-  //   Input: $0.50/1M tokens, Output: $10.00/1M tokens
-  //   → Output per token: $0.000010
-  //   → ~50 tokens/sec → $0.0005/sec
-  //
-  // iGen-2.5-pro-preview-tts:
-  //   Input: $1.00/1M tokens, Output: $20.00/1M tokens
-  //   → Output per token: $0.000020
-  //   → ~50 tokens/sec → $0.001/sec
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-2.5-flash-preview-tts': {
-    costPerUnitUSD: 0.0005, // ~$0.0005/second of audio
+    costPerUnitUSD: 0.0005 * REAL_USD_TO_CREDIT,
     unit: 'seconds',
     label: 'iGen 2.5 Flash TTS',
     category: 'audio',
-    note: 'Output: $10/1M tokens, ~50 tokens/sec',
+    note: 'Quy đổi từ $0.0005/giây gốc',
   },
   'gemini-2.5-pro-preview-tts': {
-    costPerUnitUSD: 0.001, // ~$0.001/second of audio
+    costPerUnitUSD: 0.001 * REAL_USD_TO_CREDIT,
     unit: 'seconds',
     label: 'iGen 2.5 Pro TTS',
     category: 'audio',
-    note: 'Output: $20/1M tokens, ~50 tokens/sec',
+    note: 'Quy đổi từ $0.001/giây gốc',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ── IMAGE (iGen native image generation) ──
-  // Pricing is per output image based on resolution/token count.
-  //
-  // iGen-3.1-flash-image-preview: $60/1M output tokens
-  //   0.5K→747 tokens=$0.045, 1K→1120=$0.067, 2K→1680=$0.101, 4K→2520=$0.151
-  //   Default (1K): $0.067/image
-  //
-  // iGen-3-pro-image-preview: $120/1M output tokens
-  //   1K→1120 tokens=$0.134, 2K→1120=$0.134, 4K→2000=$0.24
-  //   Default (1K): $0.134/image
-  //
-  // iGen-2.5-flash-image: $30/1M output tokens
-  //   1K→1290 tokens=$0.039
-  //   Default: $0.039/image
+  // ── IMAGE (iGen native image generation, in Credits from Spreadsheet) ──
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-flash-image-preview': {
-    costPerUnitUSD: 0.067, // $0.067/image at 1K resolution (default)
+    costPerUnitUSD: 27.5,
     unit: 'count',
-    label: 'iGen 3.1 Flash Image',
+    label: 'iGen-3.1-flash-image-preview',
     category: 'image',
-    note: '$60/1M output tokens. 1K=1120tk=$0.067',
+    note: '1K: 27.5| 2K: 42 (Tính theo Credit)',
   },
   'gemini-3-pro-image-preview': {
-    costPerUnitUSD: 0.134, // $0.134/image at 1K resolution
+    costPerUnitUSD: 57,
     unit: 'count',
-    label: 'iGen 3 Pro Image',
+    label: 'iGen-3-pro-image-preview',
     category: 'image',
-    note: '$120/1M output tokens. 1K=1120tk=$0.134',
-  },
-
-
-  // ── IMAGE (Imagen 4 — flat per-image pricing) ──
-  'imagen-4.0-fast-generate-001': {
-    costPerUnitUSD: 0.02, // $0.02/image
-    unit: 'count',
-    label: 'Imagen 4 Fast',
-    category: 'image',
-  },
-  'imagen-4.0-generate-001': {
-    costPerUnitUSD: 0.04, // $0.04/image
-    unit: 'count',
-    label: 'Imagen 4 Standard',
-    category: 'image',
-  },
-  'imagen-4.0-ultra-generate-001': {
-    costPerUnitUSD: 0.06, // $0.06/image
-    unit: 'count',
-    label: 'Imagen 4 Ultra',
-    category: 'image',
+    note: '1K: 57 | 2K: 57 (Tính theo Credit)',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ── TEXT (Prompt optimization, script generation) ──
-  // Cost is per OUTPUT token (the main cost driver).
-  // Input tokens are much cheaper and are omitted for simplicity.
-  //
-  // iGen-3.1-pro-preview:       Output $12.00/1M → $0.000012/token
-  // iGen-3.1-flash-lite-preview: Output $1.50/1M  → $0.0000015/token
-  // iGen-3-flash-preview:       Output $3.00/1M  → $0.000003/token
+  // ── TEXT (Prompt optimization, Custom Spreadsheet mapping) ──
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-pro-preview': {
-    costPerUnitUSD: 0.000012, // $12.00/1M output tokens
-    unit: 'tokens',
-    label: 'iGen 3.1 Pro Text',
+    costPerUnitUSD: 10, 
+    inputCostPerUnitUSD: 10 / 6,
+    unit: '1k tokens',
+    label: 'iGen-3.1-pro-preview',
     category: 'text',
-    note: 'Input: $2/1M, Output: $12/1M',
+    note: '',
   },
   'gemini-3.1-flash-lite-preview': {
-    costPerUnitUSD: 0.0000015, // $1.50/1M output tokens
-    unit: 'tokens',
-    label: 'iGen 3.1 Flash Lite Text',
+    costPerUnitUSD: 1.5,
+    inputCostPerUnitUSD: 1.5 / 6,
+    unit: '1k tokens',
+    label: 'iGen-3.1-flash-lite-preview',
     category: 'text',
-    note: 'Input: $0.25/1M, Output: $1.50/1M',
+    note: '',
   },
   'gemini-3-flash-preview': {
-    costPerUnitUSD: 0.000003, // $3.00/1M output tokens
-    unit: 'tokens',
-    label: 'iGen 3 Flash Text',
+    costPerUnitUSD: 2.5,
+    inputCostPerUnitUSD: 2.5 / 6,
+    unit: '1k tokens',
+    label: 'iGen-3-flash-preview',
     category: 'text',
-    note: 'Input: $0.50/1M, Output: $3.00/1M',
-  },
+    note: '',
+  }
 };
 
 // ─── Usage Record Interface ─────────────────────────────────────────────────
@@ -204,7 +145,7 @@ export interface UsageRecord {
 
 // ─── Helper: Estimate cost ──────────────────────────────────────────────────
 
-export function estimateCost(model: string, amount: number, options?: { resolution?: string }): {
+export function estimateCost(model: string, amount: number, options?: { resolution?: string; inputAmount?: number }): {
   costUSD: number;
   costVND: number;
   unit: string;
@@ -223,12 +164,42 @@ export function estimateCost(model: string, amount: number, options?: { resoluti
     };
   }
 
-  let costUSD = pricing.costPerUnitUSD * amount;
+  const multiplier = pricing.unit === '1k tokens' ? 1000 : 1;
+  const scaledAmount = amount / multiplier;
+  
+  let costUSD = pricing.costPerUnitUSD * scaledAmount;
+  
+  if (options?.inputAmount && pricing.inputCostPerUnitUSD) {
+    const scaledInputAmount = options.inputAmount / multiplier;
+    costUSD += pricing.inputCostPerUnitUSD * scaledInputAmount;
+  }
 
-  // Apply resolution-based pricing multipliers for Gemini image models
+  // 1. Resolution-based pricing for image models (mapped from spreadsheet)
   if (options?.resolution && pricing.category === 'image') {
     if (model === 'gemini-3.1-flash-image-preview') {
-      if (options.resolution === '2K') costUSD = 0.101 * amount;
+      if (options.resolution === '2K') costUSD = 42 * amount;
+      // 1K default is 27.5
+    }
+    // Pro is always 57 for both 1K and 2K based on spreadsheet, so no change needed
+  }
+
+  // 2. Resolution-based pricing for video models (mapped from USD)
+  if (options?.resolution && pricing.category === 'video') {
+    const is4K = options.resolution.includes('4K') || options.resolution.includes('UHD');
+    const is1080p = options.resolution === '1080p';
+    
+    if (model === 'veo-3.1-generate-preview' && is4K) {
+       costUSD = (0.60 * 255) * amount;
+    }
+    if (model === 'veo-3.1-fast-generate-preview' && is4K) {
+       costUSD = (0.35 * 255) * amount;
+    }
+    if (model === 'veo-3.1-lite-generate-preview' && is1080p) {
+       costUSD = (0.08 * 255) * amount;
+    }
+    if (model === 'veo-3.0-fast-generate-001') {
+       if (is1080p) costUSD = (0.12 * 255) * amount;
+       if (is4K) costUSD = (0.30 * 255) * amount;
     }
   }
 
@@ -268,12 +239,16 @@ export async function recordUsage(params: {
   userEmail: string;
   type: 'image' | 'video' | 'audio' | 'text';
   model: string;
-  amount: number;
+  amount: number; // Output amount or generic amount
+  inputAmount?: number; // Added for separate input cost tracking
   prompt?: string;
   resolution?: string;
 }): Promise<void> {
   try {
-    const { costUSD, costVND, unit, label } = estimateCost(params.model, params.amount, { resolution: params.resolution });
+    const { costUSD, costVND, unit, label } = estimateCost(params.model, params.amount, { 
+      resolution: params.resolution, 
+      inputAmount: params.inputAmount 
+    });
 
     const record: Omit<UsageRecord, 'createdAt'> = {
       userId: params.userId,
@@ -281,7 +256,7 @@ export async function recordUsage(params: {
       type: params.type,
       model: params.model,
       modelLabel: label,
-      amount: params.amount,
+      amount: params.amount + (params.inputAmount ? params.inputAmount : 0), // Combined size for logs
       unit,
       estimatedCostUSD: costUSD,
       estimatedCostVND: costVND,
