@@ -1,12 +1,12 @@
 'use client';
 import { useState, useRef, DragEvent, useEffect, useCallback } from 'react';
-import { recordUsage } from '@/lib/usage-tracker';
+import { recordUsage, estimateCost, estimateTokens, PRICING_TABLE, USD_TO_VND } from '@/lib/usage-tracker';
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn, Building2, Check, PenLine } from 'lucide-react';
+import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn, Building2, Check, PenLine, Sparkles, DollarSign, Coins } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { brandedImageGeneration } from '@/ai/flows/branded-image-generation-flow';
 import { optimalImagePromptGeneration } from '@/ai/flows/optimal-image-prompt-generation-flow';
@@ -143,7 +143,7 @@ const colorMap: Record<string, { selected: string; unselected: string }> = {
 export function ImageGenerationWorkspace() {
   const IMAGE_TEMPLATES = [
     { id: 'none', label: 'Tùy chỉnh (Tự nhập)', prompt: '' },
-    { id: 'realestate', label: '👗 Chuyên gia Thời trang & Đời sống', prompt: '' },
+    { id: 'fashion_expert', label: '👗 Chuyên gia Thời trang & Đời sống', prompt: '' },
   ];
 
   const [selectedTemplate, setSelectedTemplate] = useState('none');
@@ -153,7 +153,6 @@ export function ImageGenerationWorkspace() {
   const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
   const [imageModel, setImageModel] = useState('gemini-3.1-flash-image-preview');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
-  const [rawJsonOutput, setRawJsonOutput] = useState<string | null>(null);
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [numberOfImages, setNumberOfImages] = useState(1);
   const [inputImageUrls, setInputImageUrls] = useState<string[]>([]);
@@ -175,6 +174,16 @@ export function ImageGenerationWorkspace() {
   // State for the new state-driven generation logic
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationQueue, setGenerationQueue] = useState<number[]>([]);
+
+  // ===== COST ESTIMATION STATE =====
+  const [costInfo, setCostInfo] = useState<{
+    promptInputTokens: number;
+    promptOutputTokens: number;
+    promptCostUSD: number;
+    imageCostUSD: number;
+    totalCostUSD: number;
+    imageCount: number;
+  } | null>(null);
 
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
@@ -295,14 +304,15 @@ export function ImageGenerationWorkspace() {
   };
 
   // Build design expert prompt from all selections
-  const buildArchitecturePrompt = useCallback(() => {
+  const buildFashionExpertPrompt = useCallback(() => {
     const parts: string[] = [];
 
     // Field
     const fieldLabel = DESIGN_FIELDS.find(f => f.id === designField)?.label;
     const fieldText = fieldLabel || designFieldCustom.trim() || '';
     parts.push(`[CHUYÊN GIA THỜI TRANG & LIFESTYLE${fieldText ? ` - Lĩnh vực: ${fieldText}` : ''}]`);
-    parts.push('Phân tích ảnh/yêu cầu thời trang. Tạo hình ảnh có tính thẩm mỹ cao, phù hợp với phong cách và đời sống thực tế.');
+    parts.push('NHIỆM VỤ: Phân tích kỹ ảnh tham chiếu để xác định chính xác kiểu dáng trang phục, chất liệu và form dáng người mẫu.');
+    parts.push('YÊU CẦU: Giữ nguyên các đặc điểm đặc thù của sản phẩm trong ảnh tham chiếu. Kết hợp phong cách và bối cảnh được chọn để tạo ra hình ảnh quảng cáo/lifestyle chuyên nghiệp.');
 
     // Each option group
     for (const group of DESIGN_OPTION_GROUPS) {
@@ -320,10 +330,10 @@ export function ImageGenerationWorkspace() {
       }
     }
 
-    parts.push('Giữ nguyên tỷ lệ và kích thước từ bản vẽ gốc. Thêm chi tiết phù hợp vào đúng vị trí. Chất lượng render 8K, photorealistic.');
+    parts.push('Sử dụng ánh sáng và góc chụp chuẩn studio hoặc ngoại cảnh thực tế. Chất lượng render 8K, photorealistic.');
 
     if (archNote.trim()) {
-      parts.push(`Yêu cầu thêm: ${archNote.trim()}`);
+      parts.push(`Ghi chú thêm: ${archNote.trim()}`);
     }
 
     return parts.join(' ');
@@ -400,6 +410,23 @@ export function ImageGenerationWorkspace() {
                   model: imageModel,
                   amount: savedUris.length,
                   prompt: currentPrompt,
+                  resolution,
+                });
+
+                // Update cost panel with actual image count
+                const actualImgCostUSD = estimateCost(imageModel, savedUris.length, { resolution }).costUSD;
+                setCostInfo(prev => prev ? {
+                  ...prev,
+                  imageCostUSD: actualImgCostUSD,
+                  totalCostUSD: prev.promptCostUSD + actualImgCostUSD,
+                  imageCount: savedUris.length,
+                } : {
+                  promptInputTokens: 0,
+                  promptOutputTokens: 0,
+                  promptCostUSD: 0,
+                  imageCostUSD: actualImgCostUSD,
+                  totalCostUSD: actualImgCostUSD,
+                  imageCount: savedUris.length,
                 });
               } catch (saveError) {
                 console.error('Failed to save image(s):', saveError);
@@ -586,23 +613,53 @@ export function ImageGenerationWorkspace() {
   };
 
   const handleGenerateOptimalPrompt = async () => {
-    if (!simplePrompt.trim()) return;
+    const isFashionMode = selectedTemplate === 'fashion_expert';
+    const activeDescription = isFashionMode ? buildFashionExpertPrompt() : simplePrompt;
+    
+    if (!activeDescription.trim()) return;
     
     setIsGeneratingPrompt(true);
     setNegativePrompt('');
     setPrompt('');
-    setRawJsonOutput(null);
 
     try {
       const result = await optimalImagePromptGeneration({
-        description: simplePrompt,
+        description: activeDescription,
         imageUris: inputImageUrls,
         model: promptModel,
         apiKey: userData?.geminiApiKey,
+        mode: isFashionMode ? 'architecture' : undefined,
       });
       setPrompt(result.optimized_english_prompt);
       setNegativePrompt(result.negative_prompt);
-      setRawJsonOutput(JSON.stringify(result, null, 2));
+
+      // Update cost estimation for prompt optimization
+      const inputTokens = estimateTokens(activeDescription);
+      const outputTokens = estimateTokens(result.optimized_english_prompt + (result.negative_prompt || ''));
+      const promptPricing = PRICING_TABLE[promptModel];
+      const promptCostUSD = promptPricing ? (inputTokens + outputTokens) * promptPricing.costPerUnitUSD : 0;
+      const imgCostUSD = estimateCost(imageModel, numberOfImages, { resolution }).costUSD;
+
+      setCostInfo({
+        promptInputTokens: inputTokens,
+        promptOutputTokens: outputTokens,
+        promptCostUSD,
+        imageCostUSD: imgCostUSD,
+        totalCostUSD: promptCostUSD + imgCostUSD,
+        imageCount: numberOfImages,
+      });
+
+      // Deduct credits for prompt optimization
+      if (user) {
+        recordUsage({
+          userId: user.uid,
+          userEmail: user.email || '',
+          type: 'text',
+          model: promptModel,
+          amount: inputTokens + outputTokens,
+          prompt: activeDescription,
+        });
+      }
     } catch (error: any) {
       console.error(error);
       let errorMsg = error.message;
@@ -616,21 +673,17 @@ export function ImageGenerationWorkspace() {
   };
 
   const handleGenerate = async () => {
-    // For architecture mode, build prompt from options
-    const isArchMode = selectedTemplate === 'realestate';
-    if (isArchMode) {
-      const archPrompt = buildArchitecturePrompt();
-      setSimplePrompt(archPrompt);
-      // Small delay to let state update
-      await new Promise(r => setTimeout(r, 50));
-    }
+    // For fashion mode, sync current selections
+    const isFashionMode = selectedTemplate === 'fashion_expert';
     
-    // Validate: need either an existing optimized prompt OR a simplePrompt to auto-optimize
-    const currentSimplePrompt = isArchMode ? buildArchitecturePrompt() : simplePrompt;
-    if (!prompt.trim() && !currentSimplePrompt.trim()) {
-      toast({ variant: 'destructive', title: 'Thiếu prompt', description: 'Vui lòng nhập mô tả cho ảnh.' });
+    // Validate: need either an existing optimized prompt OR a basis to auto-optimize
+    const currentBasis = isFashionMode ? buildFashionExpertPrompt() : simplePrompt;
+    
+    if (!prompt.trim() && !currentBasis.trim()) {
+      toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Vui lòng nhập mô tả hoặc chọn các tùy chọn chuyên gia.' });
       return;
     }
+    
     if (!userData?.geminiApiKey) {
       toast({
         variant: 'destructive',
@@ -644,31 +697,33 @@ export function ImageGenerationWorkspace() {
       return;
     }
 
-    // ===== AUTO STEP 1: If no optimized prompt yet, generate it from simplePrompt =====
+    // ===== AUTO STEP 1: Optimization logic =====
     let finalPrompt = prompt.trim();
-    const activeSimplePrompt = isArchMode ? buildArchitecturePrompt() : simplePrompt;
-    if (!finalPrompt && activeSimplePrompt.trim()) {
+    const activeBasis = isFashionMode ? buildFashionExpertPrompt() : simplePrompt;
+    
+    // If no optimized prompt OR if reference images were changed after previous optimization
+    // (We assume if prompt exists but user is in expert mode, they might want to re-run if it looks stale)
+    if (!finalPrompt && activeBasis.trim()) {
       try {
         setIsGeneratingPrompt(true);
         toast({ 
-          title: isArchMode ? '🏗️ Bước 1/2: AI đang phân tích bản vẽ...' : '🔄 Bước 1/2: Đang tạo prompt tối ưu...', 
-          description: isArchMode ? 'Chuyên gia kiến trúc đang đọc bản vẽ kỹ thuật của bạn.' : 'AI đang phân tích yêu cầu của bạn.' 
+          title: isFashionMode ? '👗 Bước 1/2: AI đang phân tích yêu cầu fashion...' : '🔄 Bước 1/2: Đang tạo prompt tối ưu...', 
+          description: isFashionMode ? 'Chuyên gia đang xác định sản phẩm và phong cách trong ảnh của bạn.' : 'AI đang phân tích yêu cầu của bạn.' 
         });
 
         const result = await optimalImagePromptGeneration({
-          description: activeSimplePrompt,
+          description: activeBasis,
           imageUris: inputImageUrls,
           model: promptModel,
           apiKey: userData?.geminiApiKey,
-          mode: isArchMode ? 'architecture' : undefined,
+          mode: isFashionMode ? 'architecture' : undefined,
         });
 
         finalPrompt = result.optimized_english_prompt;
         setPrompt(finalPrompt);
         setNegativePrompt(result.negative_prompt);
-        setRawJsonOutput(JSON.stringify(result, null, 2));
         
-        toast({ title: '✅ Prompt tối ưu đã sẵn sàng!', description: 'Đang chuyển sang bước tạo ảnh...' });
+        toast({ title: '✅ Phân tích hoàn tất!', description: 'Đang tiến hành tạo ảnh...' });
       } catch (error: any) {
         console.error(error);
         let errorMsg = error.message;
@@ -857,7 +912,8 @@ export function ImageGenerationWorkspace() {
     }
   };
   
-  const isBusy = isGenerating || isGeneratingPrompt || isUploading;
+  const hasNoCredit = (userData?.credits ?? 0) <= 0 && userData?.role !== 'Admin';
+  const isBusy = isGenerating || isGeneratingPrompt || isUploading || hasNoCredit;
   
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
@@ -980,7 +1036,7 @@ export function ImageGenerationWorkspace() {
               </div>
 
               {/* ===== FASHION & LIFESTYLE EXPERT OPTIONS PANEL ===== */}
-              {selectedTemplate === 'realestate' ? (
+              {selectedTemplate === 'fashion_expert' ? (
                 <div className="space-y-3 rounded-lg border border-cyan-200 bg-white p-3">
                   {/* Header */}
                   <div className="flex items-center gap-2 text-sm font-semibold text-cyan-700">
@@ -988,7 +1044,7 @@ export function ImageGenerationWorkspace() {
                     <span>Chuyên gia Thời trang & Đời sống</span>
                   </div>
                   <p className="text-xs text-cyan-600/80">
-                    Tải ảnh mẫu/bản vẽ phác thảo. Chọn phong cách, góc chụp và trang phục. AI sẽ render ra ảnh có tính thẩm mỹ cao cho bạn.
+                    Hãy tải ảnh sản phẩm hoặc người mẫu lên. Chọn các tùy chỉnh bên dưới để AI phân tích và tạo ảnh lifestyle chuyên nghiệp.
                   </p>
 
                   {/* Field / Industry */}
@@ -1116,46 +1172,41 @@ export function ImageGenerationWorkspace() {
                   </SelectContent>
                 </Select>
               </div>
-              {selectedTemplate !== 'realestate' && (
-                <Button onClick={handleGenerateOptimalPrompt} disabled={isGeneratingPrompt || !simplePrompt.trim()} size="sm" className="w-full">
-                  {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
-                  {t('workspace.image.generatePromptButton')}
-                </Button>
-              )}
+              <Button 
+                onClick={handleGenerateOptimalPrompt} 
+                disabled={isGeneratingPrompt || (selectedTemplate === 'none' && !simplePrompt.trim())} 
+                size="sm" 
+                className="w-full"
+              >
+                {isGeneratingPrompt ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+                {selectedTemplate === 'fashion_expert' ? 'Phân tích & Tối ưu Thiết kế' : t('workspace.image.generatePromptButton')}
+              </Button>
             </div>
-            <Separator className="hidden" />
-            {/* Main prompt section */}
-            <div className="space-y-2 flex-1 flex flex-col hidden">
-              <Label htmlFor="prompt">{t('workspace.image.promptLabel')}</Label>
-              <Textarea
-                id="prompt"
-                placeholder={t('workspace.image.promptPlaceholder')}
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                disabled={isBusy}
-                className="resize-none flex-1"
-              />
-            </div>
-            {negativePrompt && (
-              <div className="space-y-2 flex-1 flex flex-col hidden">
-                <Label htmlFor="negative-prompt">Negative Prompt (Dành cho AI khác)</Label>
-                <Textarea
-                  id="negative-prompt"
-                  value={negativePrompt}
-                  onChange={(e) => setNegativePrompt(e.target.value)}
-                  disabled={isBusy}
-                  className="resize-none h-20 text-muted-foreground"
-                />
-              </div>
-            )}
-            {rawJsonOutput && (
+             <div className="space-y-3 flex flex-col pt-2">
               <div className="space-y-2">
-                <Label>Raw JSON (Structured Output)</Label>
-                <pre className="bg-muted p-4 rounded-md overflow-x-auto text-xs font-mono text-muted-foreground border">
-                  {rawJsonOutput}
-                </pre>
+                <Label htmlFor="prompt" className="text-cyan-700 font-bold flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Mô tả tối ưu (Tiếng Anh)
+                </Label>
+                <Textarea
+                  id="prompt"
+                  placeholder={t('workspace.image.promptPlaceholder')}
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  disabled={isBusy}
+                  className="resize-y min-h-[120px] bg-cyan-50/30 border-cyan-100 hover:border-cyan-300 focus:border-cyan-500 transition-all font-medium text-slate-800"
+                />
+                {negativePrompt && (
+                  <Textarea
+                    id="negative-prompt"
+                    value={negativePrompt}
+                    onChange={(e) => setNegativePrompt(e.target.value)}
+                    disabled={isBusy}
+                    className="resize-y h-16 bg-slate-50 border-slate-200 text-slate-500 text-[11px] italic"
+                  />
+                )}
               </div>
-            )}
+            </div>
             <div className="space-y-2">
               <Label htmlFor="image-model">Mô hình tạo ảnh</Label>
               <Select value={imageModel} onValueChange={setImageModel} disabled={isBusy}>
@@ -1165,7 +1216,6 @@ export function ImageGenerationWorkspace() {
                 <SelectContent>
                   <SelectItem value="gemini-3.1-flash-image-preview">iGen-3.1-flash-image-preview</SelectItem>
                   <SelectItem value="gemini-3-pro-image-preview">iGen-3-pro-image-preview</SelectItem>
-                  <SelectItem value="gemini-2.5-flash-image">iGen-2.5-flash-image</SelectItem>
                   <SelectItem value="imagen-4.0-fast-generate-001">Imagen 4 Fast ⚡</SelectItem>
                   <SelectItem value="imagen-4.0-generate-001">Imagen 4 Standard</SelectItem>
                   <SelectItem value="imagen-4.0-ultra-generate-001">Imagen 4 Ultra 🔥</SelectItem>
@@ -1275,9 +1325,9 @@ export function ImageGenerationWorkspace() {
                 - gemini-3-pro-image-preview:      1K / 2K / 4K  (no 512)
                 - gemini-2.5-flash-image:          hidden
             */}
-            {!imageModel.startsWith('imagen-') && imageModel !== 'gemini-2.5-flash-image' && (() => {
-              const resOptions = ['1K', '2K', '4K'] as const;
-              const cols = 'grid-cols-3';
+            {!imageModel.startsWith('imagen-') && (() => {
+              const resOptions = ['1K', '2K'] as const;
+              const cols = 'grid-cols-2';
               return (
                 <div className="space-y-2">
                   <Label>Độ phân giải</Label>
@@ -1302,10 +1352,92 @@ export function ImageGenerationWorkspace() {
                 </div>
               );
             })()}
-            <Button onClick={handleGenerate} disabled={isBusy || (!prompt.trim() && !simplePrompt.trim() && selectedTemplate !== 'realestate')} className="w-full mt-2">
-              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : selectedTemplate === 'realestate' ? <span className="mr-2 text-base">✨</span> : <ImageIcon className="mr-2 h-4 w-4" />}
-              {selectedTemplate === 'realestate' ? 'Bắt đầu Sáng tạo' : t('workspace.image.generateButton')}
+            <Button onClick={handleGenerate} disabled={isBusy || (!prompt.trim() && !simplePrompt.trim() && selectedTemplate !== 'fashion_expert')} className="w-full mt-2">
+              {isGenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : selectedTemplate === 'fashion_expert' ? <span className="mr-2 text-base">✨</span> : <ImageIcon className="mr-2 h-4 w-4" />}
+              {selectedTemplate === 'fashion_expert' ? 'Bắt đầu Sáng tạo' : t('workspace.image.generateButton')}
             </Button>
+
+            {/* ═══ COST ESTIMATION PANEL ═══ */}
+            {(() => {
+              // Always show a live preview of estimated cost based on current selections
+              const promptPricing = PRICING_TABLE[promptModel];
+              const imgPricing = PRICING_TABLE[imageModel];
+              const imgUnitCostUSD = estimateCost(imageModel, 1, { resolution }).costUSD;
+              const imgTotalUSD = estimateCost(imageModel, numberOfImages, { resolution }).costUSD;
+
+              // If we have real cost data from a completed generation, show that
+              const hasRealData = costInfo !== null;
+              const displayPromptInput = hasRealData ? costInfo.promptInputTokens : 0;
+              const displayPromptOutput = hasRealData ? costInfo.promptOutputTokens : 0;
+              const displayPromptCost = hasRealData ? costInfo.promptCostUSD : 0;
+              const displayImgCost = hasRealData ? costInfo.imageCostUSD : imgTotalUSD;
+              const displayTotal = hasRealData ? costInfo.totalCostUSD : imgTotalUSD;
+              const displayImgCount = hasRealData ? costInfo.imageCount : numberOfImages;
+
+              const formatUSD = (v: number) => v < 0.001 ? `$${v.toFixed(6)}` : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(3)}`;
+              const formatVND = (v: number) => {
+                const vnd = Math.round(v * USD_TO_VND);
+                return vnd > 0 ? `~${vnd.toLocaleString('vi-VN')} ₫` : '0 ₫';
+              };
+
+              return (
+                <div className="mt-3 rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-50/40 to-white p-3.5 space-y-3">
+                  {/* Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 text-[13px] font-bold text-cyan-800">
+                      <Coins className="h-3.5 w-3.5" />
+                      Chi phí ước tính
+                    </div>
+                    <span className="text-[10px] font-medium text-cyan-600/70 bg-cyan-100/60 px-1.5 py-0.5 rounded-full">Google API Pricing</span>
+                  </div>
+
+                  {/* Token usage - only shown after prompt generation */}
+                  {hasRealData && (displayPromptInput > 0 || displayPromptOutput > 0) && (
+                    <div className="space-y-1.5">
+                      <p className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wider">Token Usage (Prompt AI)</p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] pl-1">
+                        <span className="text-slate-500">Input tokens:</span>
+                        <span className="text-right font-mono font-semibold text-slate-700">{displayPromptInput.toLocaleString()}</span>
+                        <span className="text-slate-500">Output tokens:</span>
+                        <span className="text-right font-mono font-semibold text-slate-700">{displayPromptOutput.toLocaleString()}</span>
+                        <span className="text-slate-500">Prompt cost:</span>
+                        <span className="text-right font-mono font-semibold text-cyan-700">{formatUSD(displayPromptCost)}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image generation cost */}
+                  <div className="space-y-1.5">
+                    <p className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wider">Image Generation</p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] pl-1">
+                      <span className="text-slate-500">Model:</span>
+                      <span className="text-right font-mono text-[11px] font-medium text-slate-600 truncate">{imgPricing?.label || imageModel}</span>
+                      <span className="text-slate-500">Giá / ảnh:</span>
+                      <span className="text-right font-mono font-semibold text-slate-700">{formatUSD(imgUnitCostUSD)}</span>
+                      <span className="text-slate-500">Số ảnh:</span>
+                      <span className="text-right font-mono font-semibold text-slate-700">×{displayImgCount}</span>
+                      <span className="text-slate-500">Tổng ảnh:</span>
+                      <span className="text-right font-mono font-semibold text-cyan-700">{formatUSD(displayImgCost)}</span>
+                    </div>
+                  </div>
+
+                  {/* Total */}
+                  <div className="border-t border-cyan-200/50 pt-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px] font-bold text-slate-700">Tổng chi phí:</span>
+                      <div className="text-right">
+                        <span className="text-[14px] font-bold text-cyan-700">{formatUSD(displayTotal)}</span>
+                        <span className="text-[11px] text-slate-400 ml-1.5">{formatVND(displayTotal)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-[10px] text-slate-400 leading-snug">
+                    * Chi phí ước tính dựa trên <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener noreferrer" className="text-cyan-600 underline hover:text-cyan-800">Google AI pricing</a>. Miễn phí khi không dùng API key.
+                  </p>
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>

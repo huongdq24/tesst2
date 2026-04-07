@@ -412,8 +412,8 @@ export function AvatarCloningWorkspace() {
       setPipelineMessage('Đang gửi yêu cầu tạo video HeyGen...');
 
       let width = 1280; let height = 720;
-      if (videoResolution === '1080p') { width = 1920; height = 1080; }
-      else if (videoResolution === '4k') { width = 3840; height = 2160; }
+      if (videoResolution === '720p') { width = 1280; height = 720; }
+      else if (videoResolution === '1080p') { width = 1920; height = 1080; }
       if (aspectRatio === '9:16') { const temp = width; width = height; height = temp; }
 
       const genRes = await fetch('/api/heygen/generate', {
@@ -1017,8 +1017,7 @@ export function AvatarCloningWorkspace() {
                     <SelectTrigger className="h-11 rounded-xl bg-white dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 shadow-sm"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="720p">720p</SelectItem>
-                      <SelectItem value="1080p">1080p <span className="ml-1 text-[10px] text-amber-500">💎</span></SelectItem>
-                      <SelectItem value="4k">4k <span className="ml-1 text-[10px] text-amber-500">💎</span></SelectItem>
+                      <SelectItem value="1080p">1080p <span className="ml-1 text-[10px] text-amber-500">✨</span></SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

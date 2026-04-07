@@ -314,7 +314,7 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
             </div>
             <div>
               <h1 className="text-3xl font-bold tracking-tight">
-                {overrideUserEmail ? `Chi Phí: ${overrideUserEmail}` : 'Chi Phí API Analytics'}
+                Chi Phí: {overrideUserEmail || user?.email || 'API Analytics'}
               </h1>
               <p className="text-sm text-zinc-400">
                 Phân tích chi phí thực tế • {formatDateRangeLabel(dateRange)}

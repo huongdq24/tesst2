@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, increment } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/config';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -16,7 +16,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
-import { Loader2, Shield, Users, Image as ImageIcon, Video as VideoIcon, Pencil, Trash2, BarChart3 } from 'lucide-react';
+import { Loader2, Shield, Users, Image as ImageIcon, Video as VideoIcon, Pencil, Trash2, BarChart3, Coins, Plus } from 'lucide-react';
 import { AdminManageKeysModal } from '@/components/modals/admin-manage-keys-modal';
 import { AdminCostOverview } from '@/components/admin-cost-overview';
 import CostAnalyticsDashboard from '@/components/cost-analytics-dashboard';
@@ -34,6 +34,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { deleteUser } from '@/app/actions/user-management';
 import { cn } from '@/lib/utils';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 
 interface UserRecord {
@@ -41,6 +43,7 @@ interface UserRecord {
   email: string | null;
   displayName?: string;
   role: 'Admin' | 'User';
+  credits?: number;
   geminiApiKey?: string;
   elevenLabsApiKey?: string;
   heyGenApiKey?: string;
@@ -61,6 +64,10 @@ export default function AdminPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [totalImages, setTotalImages] = useState(0);
   const [totalVideos, setTotalVideos] = useState(0);
+  // Credit management
+  const [creditUser, setCreditUser] = useState<UserRecord | null>(null);
+  const [creditAmount, setCreditAmount] = useState('');
+  const [isAddingCredit, setIsAddingCredit] = useState(false);
 
   const fetchUsersAndMedia = useCallback(async () => {
     setIsFetching(true);
@@ -150,6 +157,29 @@ export default function AdminPage() {
     setIsDeleting(false);
     setUserToDelete(null);
 };
+
+  const handleAddCredit = async () => {
+    if (!creditUser) return;
+    const amount = parseFloat(creditAmount);
+    if (!amount || amount <= 0) {
+      toast({ variant: 'destructive', title: 'Số tiền không hợp lệ', description: 'Vui lòng nhập số tiền lớn hơn 0.' });
+      return;
+    }
+    setIsAddingCredit(true);
+    try {
+      await updateDoc(doc(firestore, 'users', creditUser.uid), {
+        credits: increment(amount),
+      });
+      toast({ title: '✅ Nạp credit thành công!', description: `Đã nạp $${amount.toFixed(2)} cho ${creditUser.email}` });
+      setCreditUser(null);
+      setCreditAmount('');
+      fetchUsersAndMedia();
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Lỗi nạp credit', description: error.message });
+    } finally {
+      setIsAddingCredit(false);
+    }
+  };
   
   if (loading || (isFetching && users.length === 0)) {
     return (
@@ -276,6 +306,7 @@ export default function AdminPage() {
                     <TableHead>Email</TableHead>
                     <TableHead>Tên</TableHead>
                     <TableHead>Vai trò</TableHead>
+                    <TableHead>Credit</TableHead>
                     <TableHead>Ảnh</TableHead>
                     <TableHead>Video</TableHead>
                     <TableHead>API Keys</TableHead>
@@ -291,6 +322,24 @@ export default function AdminPage() {
                         <Badge variant={u.role === 'Admin' ? 'default' : 'secondary'}>
                           {u.role}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span className={cn(
+                            'font-mono text-sm font-semibold',
+                            (u.credits ?? 0) > 0 ? 'text-emerald-600' : 'text-red-500'
+                          )}>
+                            ${(u.credits ?? 0).toFixed(2)}
+                          </span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-cyan-600 hover:text-cyan-800 hover:bg-cyan-50"
+                            onClick={() => { setCreditUser(u); setCreditAmount(''); }}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">{u.imageCount}</TableCell>
                       <TableCell className="text-center">{u.videoCount}</TableCell>
@@ -337,6 +386,46 @@ export default function AdminPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Credit Dialog */}
+      <Dialog open={!!creditUser} onOpenChange={(open) => !open && setCreditUser(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Nạp Credit cho {creditUser?.email}</DialogTitle>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Credit hiện tại</Label>
+              <p className={cn(
+                'text-lg font-bold font-mono',
+                (creditUser?.credits ?? 0) > 0 ? 'text-emerald-600' : 'text-red-500'
+              )}>
+                ${(creditUser?.credits ?? 0).toFixed(2)}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="credit-amount">Số tiền nạp thêm (USD)</Label>
+              <Input
+                id="credit-amount"
+                type="text"
+                placeholder="VD: 10"
+                value={creditAmount}
+                onChange={(e) => setCreditAmount(e.target.value)}
+                className="font-mono text-lg"
+              />
+              <div className="flex flex-wrap gap-1.5">
+                {[1, 5, 10, 50, 100].map(val => (
+                  <Button key={val} variant="outline" size="sm" className="text-xs" onClick={() => setCreditAmount(String(val))}>
+                    ${val}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <Button onClick={handleAddCredit} disabled={isAddingCredit} className="w-full">
+              {isAddingCredit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Coins className="mr-2 h-4 w-4" />}
+              Nạp Credit
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

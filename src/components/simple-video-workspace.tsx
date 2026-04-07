@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
-import { recordUsage } from '@/lib/usage-tracker';
+import { recordUsage, estimateTokens } from '@/lib/usage-tracker';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, UploadCloud, Video, Heart, Download, Play, Sparkles, ArrowRight, Images, Library, Settings, X, Link2, Plus, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, UploadCloud, Video, Heart, Download, Play, Sparkles, ArrowRight, Images, Library, Settings, X, Link2, Plus, ChevronUp, ChevronDown, Wand2, ImageIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { startVideoGeneration } from '@/app/actions/video-generation';
 import { checkVideoStatus } from '@/app/actions/check-video-status';
@@ -18,6 +18,8 @@ import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot 
 import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
 // Types
 type InputMode = 'standard' | 'before-after';
@@ -48,6 +50,13 @@ const QUALITY_OPTIONS = [
   { value: '720p', label: '720p (HD)' },
 ];
 
+const VIDEO_TEMPLATES = [
+  { id: 'none', label: 'Tùy chỉnh (Tự nhập)', prompt: '' },
+  { id: 'cinematic', label: '🎬 Điện ảnh (Cinematic)', prompt: 'Cảnh quan hùng vĩ, ánh sáng hoàng hôn ấm áp, máy quay bay cao lướt qua những ngọn núi tuyết, phong cách Flycam.' },
+  { id: 'product', label: '📦 Quay sản phẩm (Creative)', prompt: 'Quay cận cảnh sản phẩm thời trang, máy quay xoay tròn 360 độ, ánh sáng studio chuyên nghiệp, phông nền tối giản, chuyển động mượt mà.' },
+  { id: 'fashion', label: '👗 Fashion Walk', prompt: 'Người mẫu đi bộ trên sàn runway, ánh sáng đèn flash lung linh, bối cảnh studio cao cấp, chuyển động slow-motion.' },
+];
+
 export function SimpleVideoWorkspace() {
   const [activeMode, setActiveMode] = useState<InputMode>('standard');
   const [prompt, setPrompt] = useState('');
@@ -62,6 +71,11 @@ export function SimpleVideoWorkspace() {
   const [videoAspectRatio, setVideoAspectRatio] = useState<'16:9' | '9:16'>('16:9');
   const [videoDuration, setVideoDuration] = useState('4');
   const [videoQuality, setVideoQuality] = useState('1080p');
+
+  // Prompt generation states
+  const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
+  const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState('none');
 
   // Extend Video state
   const [extendingVideoUrl, setExtendingVideoUrl] = useState<string | null>(null);
@@ -294,7 +308,49 @@ export function SimpleVideoWorkspace() {
     setGenerationStage(null);
     stopTimer();
     setElapsedTime(0);
-  }
+  };
+
+  const handleGenerateOptimalPrompt = async () => {
+    if (!prompt.trim()) {
+      toast({ variant: 'destructive', title: 'Thiếu mô tả', description: 'Vui lòng nhập mô tả ý tưởng trước khi tối ưu.' });
+      return;
+    }
+    
+    setIsGeneratingPrompt(true);
+    try {
+      const referenceImageUris: string[] = [];
+      if (activeMode === 'standard' && standardImage) referenceImageUris.push(standardImage);
+      if (activeMode === 'before-after' && beforeImage) referenceImageUris.push(beforeImage);
+
+      const result = await videoScriptGeneration({
+        description: prompt,
+        imageUris: referenceImageUris.length > 0 ? referenceImageUris : undefined,
+        model: promptModel,
+        apiKey: userData?.geminiApiKey,
+      });
+      setPrompt(result.optimized_english_prompt);
+      
+      if (user) {
+        const inputTokens = estimateTokens(prompt);
+        const outputTokens = estimateTokens(result.optimized_english_prompt);
+        recordUsage({
+          userId: user.uid,
+          userEmail: user.email || '',
+          type: 'text',
+          model: promptModel,
+          amount: inputTokens + outputTokens,
+          prompt: prompt,
+        });
+      }
+      
+      toast({ title: '✅ Đã tối ưu kịch bản!' });
+    } catch (error: any) {
+      console.error(error);
+      toast({ variant: 'destructive', title: 'Lỗi tạo prompt', description: error.message });
+    } finally {
+      setIsGeneratingPrompt(false);
+    }
+  };
 
   const handleGenerate = async () => {
     if (!user || !userData?.geminiApiKey) {
@@ -451,358 +507,362 @@ export function SimpleVideoWorkspace() {
     }
   };
 
-  // Helper to get current model label
+  // Helpers
   const currentModelLabel = MODEL_OPTIONS.find(m => m.value === videoModel)?.label || videoModel;
-
-  const isBusy = isGenerating || isUploading;
+  const hasNoCredit = (userData?.credits ?? 0) <= 0 && userData?.role !== 'Admin';
+  const isBusy = !!isGenerating || !!isUploading || hasNoCredit;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
       <div className="lg:col-span-1">
-        <Card className="border shadow-sm">
-          <CardContent className="p-5 space-y-5">
+        <Card className="border shadow-sm overflow-hidden">
+          <CardContent className="p-5 space-y-6">
 
-            {/* HEADER TABS (Mode Switcher) */}
-            <div className="flex justify-center">
-              <div className="inline-flex items-center p-1.5 bg-zinc-100/80 dark:bg-zinc-800/60 backdrop-blur-md rounded-full border border-zinc-200/80 dark:border-white/5 shadow-inner">
+            {/* MODE SWITCHER */}
+            <div className="flex justify-center mb-2">
+              <div className="inline-flex items-center p-1 bg-zinc-100 dark:bg-zinc-800 rounded-lg">
                 <button
                   onClick={() => setActiveMode('standard')}
                   className={cn(
-                    "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
-                    activeMode === 'standard'
-                      ? "bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    "px-4 py-1.5 text-[11px] font-bold rounded-md transition-all",
+                    activeMode === 'standard' ? "bg-white dark:bg-zinc-900 shadow-sm text-cyan-600" : "text-zinc-500 hover:text-zinc-700"
                   )}
                 >
-                  <Video className="w-4 h-4 mr-2" /> Tiêu chuẩn (1 Ảnh)
+                  Tiêu chuẩn
                 </button>
                 <button
-                  onClick={() => {
-                    setActiveMode('before-after');
-                    if (videoModel.includes('veo-2')) {
-                      setVideoModel('veo-3.1-fast-generate-preview');
-                      toast({ title: 'Đã tự động chuyển model', description: 'Tính năng Trước/Sau (2 Ảnh) chỉ khả dụng với model từ Veo 3.1.' });
-                    }
-                  }}
+                  onClick={() => setActiveMode('before-after')}
                   className={cn(
-                    "flex items-center rounded-full px-6 py-2.5 text-sm font-semibold transition-all duration-300",
-                    activeMode === 'before-after'
-                      ? "bg-white dark:bg-zinc-900 text-cyan-600 dark:text-cyan-400 shadow-sm"
-                      : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-zinc-200"
+                    "px-4 py-1.5 text-[11px] font-bold rounded-md transition-all",
+                    activeMode === 'before-after' ? "bg-white dark:bg-zinc-900 shadow-sm text-cyan-600" : "text-zinc-500 hover:text-zinc-700"
                   )}
                 >
-                  <Images className="w-4 h-4 mr-2" /> Trước / Sau
+                  Trước / Sau
                 </button>
               </div>
             </div>
 
-            {/* UPLOAD AREA */}
-            <div className="space-y-4">
-              {activeMode === 'standard' ? (
-                <div className="flex flex-col items-center gap-4 w-full">
-                  <div
-                    onClick={() => { setUploadTarget('standard'); fileInputRef.current?.click(); }}
-                    className="w-full aspect-[21/9] bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+            {/* SECTION: INPUT IMAGE */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Ảnh đầu vào</Label>
+                {activeMode === 'standard' && (
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => { setUploadTarget('standard'); setIsLibraryOpen(true); }}
+                    className="h-8 px-3 rounded-lg border-zinc-200 bg-zinc-50/50 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:border-zinc-800"
                   >
-                    {standardImage ? (
-                      <>
-                        <Image src={standardImage} alt="Standard" fill className="object-cover" />
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setStandardImage(null); }}
-                          className="absolute top-3 right-3 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-16 h-16 mb-4 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                          {isUploading === 'standard' ? <Loader2 className="w-8 h-8 animate-spin text-cyan-500" /> : <UploadCloud className="w-8 h-8 text-zinc-400 group-hover:text-cyan-500 transition-colors" />}
-                        </div>
-                        <p className="font-bold text-lg text-zinc-700 dark:text-zinc-200">Tải ảnh lên làm khung hình đầu</p>
-                        <p className="text-sm text-zinc-400 mt-1">Kéo thả hoặc nhấp để chọn ảnh (Tùy chọn)</p>
-                      </>
-                    )}
-                  </div>
-                  <Button variant="ghost" onClick={() => { setUploadTarget('standard'); setIsLibraryOpen(true); }} className="w-full text-zinc-500 hover:text-zinc-800 hover:bg-zinc-100/50 rounded-xl px-6">
-                    <Library className="w-4 h-4 mr-2" /> Chọn từ thư viện tài nguyên
+                    <Library className="w-3.5 h-3.5 mr-2 text-zinc-500" />
+                    <span className="text-xs font-semibold">Thư viện</span>
                   </Button>
+                )}
+              </div>
+
+              {activeMode === 'standard' ? (
+                <div
+                  onClick={() => { setUploadTarget('standard'); fileInputRef.current?.click(); }}
+                  onDragOver={(e) => { e.preventDefault(); }}
+                  onDrop={(e) => { e.preventDefault(); if(e.dataTransfer.files?.[0]) handleFileUpload(e.dataTransfer.files[0], 'standard'); }}
+                  className="w-full aspect-[2/1] bg-zinc-50/30 dark:bg-zinc-950/20 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group"
+                >
+                  {standardImage ? (
+                    <>
+                      <Image src={standardImage} alt="Input" fill className="object-cover" />
+                      <button onClick={(e) => { e.stopPropagation(); setStandardImage(null); }} className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md z-10"><X className="w-3.5 h-3.5" /></button>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center text-center px-4">
+                      <div className="w-10 h-10 mb-2 rounded-xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        {isUploading === 'standard' ? <Loader2 className="w-5 h-5 animate-spin text-cyan-500" /> : <UploadCloud className="w-5 h-5 text-zinc-400 group-hover:text-cyan-500" />}
+                      </div>
+                      <p className="text-[10px] text-zinc-400 font-medium">Nhấp hoặc kéo thả ảnh để tải lên</p>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="w-full">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex-1 w-full flex flex-col gap-3">
-                      <div
-                        onClick={() => { setUploadTarget('before'); fileInputRef.current?.click(); }}
-                        className="w-full aspect-square bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-orange-400/50 hover:bg-orange-50/30 dark:hover:bg-orange-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                <div className="grid grid-cols-2 gap-3">
+                  {/* BEFORE SLOT */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tight">Bắt đầu</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => { e.stopPropagation(); setUploadTarget('before'); setIsLibraryOpen(true); }}
+                        className="h-7 px-2 rounded-md hover:bg-cyan-50 hover:text-cyan-600 text-zinc-400"
                       >
-                        {beforeImage ? (
-                          <>
-                            <Image src={beforeImage} alt="Before" fill className="object-cover" />
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setBeforeImage(null); }}
-                              className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                              {isUploading === 'before' ? <Loader2 className="w-6 h-6 animate-spin text-orange-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-orange-500" />}
-                            </div>
-                            <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Bắt đầu</p>
-                          </>
-                        )}
-                      </div>
-                      <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('before'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
-                        <Library className="w-4 h-4 mr-2" /> Thư viện
+                        <Library className="w-3.5 h-3.5 mr-1" />
+                        <span className="text-[10px] font-bold">Thư viện</span>
                       </Button>
                     </div>
+                    <div
+                      onClick={() => { setUploadTarget('before'); fileInputRef.current?.click(); }}
+                      className="aspect-square bg-zinc-50/30 dark:bg-zinc-950/20 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group"
+                    >
+                      {beforeImage ? (
+                        <>
+                          <Image src={beforeImage} alt="Before" fill className="object-cover" />
+                          <button onClick={(e) => { e.stopPropagation(); setBeforeImage(null); }} className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-sm z-10 transition-colors"><X className="w-3 h-3" /></button>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <UploadCloud className="w-4 h-4 text-zinc-400 mb-1 group-hover:text-cyan-500 transition-colors" />
+                          <span className="text-[8px] text-zinc-400 font-medium">Tải lên</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-                    <div className="flex-1 w-full flex flex-col gap-3">
-                      <div
-                        onClick={() => { setUploadTarget('after'); fileInputRef.current?.click(); }}
-                        className="w-full aspect-square bg-zinc-50/50 dark:bg-zinc-950/30 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 hover:bg-cyan-50/30 dark:hover:bg-cyan-500/5 rounded-3xl flex flex-col items-center justify-center cursor-pointer transition-all duration-300 relative overflow-hidden group shadow-sm"
+                  {/* AFTER SLOT */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                      <span className="text-[9px] text-zinc-400 font-bold uppercase tracking-tight">Kết thúc</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={(e) => { e.stopPropagation(); setUploadTarget('after'); setIsLibraryOpen(true); }}
+                        className="h-7 px-2 rounded-md hover:bg-cyan-50 hover:text-cyan-600 text-zinc-400"
                       >
-                        {afterImage ? (
-                          <>
-                            <Image src={afterImage} alt="After" fill className="object-cover" />
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setAfterImage(null); }}
-                              className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-md transition-colors z-10"
-                            >
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-14 h-14 mb-3 rounded-2xl bg-white dark:bg-zinc-900 shadow-sm border border-zinc-100 dark:border-zinc-800 flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
-                              {isUploading === 'after' ? <Loader2 className="w-6 h-6 animate-spin text-cyan-500" /> : <UploadCloud className="w-6 h-6 text-zinc-400 group-hover:text-cyan-500" />}
-                            </div>
-                            <p className="font-bold text-zinc-700 dark:text-zinc-200">Ảnh Kết thúc</p>
-                          </>
-                        )}
-                      </div>
-                      <Button size="sm" variant="ghost" onClick={() => { setUploadTarget('after'); setIsLibraryOpen(true); }} className="text-zinc-500 rounded-full mx-auto w-fit">
-                        <Library className="w-4 h-4 mr-2" /> Thư viện
+                        <Library className="w-3.5 h-3.5 mr-1" />
+                        <span className="text-[10px] font-bold">Thư viện</span>
                       </Button>
+                    </div>
+                    <div
+                      onClick={() => { setUploadTarget('after'); fileInputRef.current?.click(); }}
+                      className="aspect-square bg-zinc-50/30 dark:bg-zinc-950/20 border-2 border-dashed border-zinc-200 dark:border-zinc-800 hover:border-cyan-400/50 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all relative overflow-hidden group"
+                    >
+                      {afterImage ? (
+                        <>
+                          <Image src={afterImage} alt="After" fill className="object-cover" />
+                          <button onClick={(e) => { e.stopPropagation(); setAfterImage(null); }} className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500 text-white rounded-full backdrop-blur-sm z-10 transition-colors"><X className="w-3 h-3" /></button>
+                        </>
+                      ) : (
+                        <div className="flex flex-col items-center">
+                          <UploadCloud className="w-4 h-4 text-zinc-400 mb-1 group-hover:text-cyan-500 transition-colors" />
+                          <span className="text-[8px] text-zinc-400 font-medium">Tải lên</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* PROMPT INPUT BAR */}
-            <div className="space-y-2">
-              <label className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Ý tưởng video</label>
-              <div className="flex items-end bg-white dark:bg-zinc-950 rounded-xl border border-zinc-200 dark:border-zinc-800 focus-within:ring-2 focus-within:ring-cyan-500/20 transition-all duration-300">
-                <Textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={activeMode === 'standard' ? "Máy quay lướt qua sản phẩm..." : "Chuyển đổi từ cũ sang mới..."}
-                  className="flex-1 resize-none border-0 focus-visible:ring-0 bg-transparent text-sm min-h-[80px] py-3 shadow-none scrollbar-hide"
-                  style={{ boxShadow: 'none' }}
-                />
+            <Separator className="bg-zinc-100 dark:bg-zinc-800" />
+
+            {/* SECTION: IDEAS */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-bold text-zinc-800 dark:text-zinc-200">Ý tưởng của bạn</Label>
+                <Select 
+                  value={selectedTemplate} 
+                  onValueChange={(val) => {
+                    setSelectedTemplate(val);
+                    const template = VIDEO_TEMPLATES.find(t => t.id === val);
+                    if (template && template.prompt) setPrompt(template.prompt);
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-32 text-[10px] font-bold rounded-md border-zinc-200 bg-zinc-50/50">
+                    <SelectValue placeholder="Chọn mẫu" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    {VIDEO_TEMPLATES.map(t => <SelectItem key={t.id} value={t.id} className="text-[10px] font-medium">{t.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
+              
+              <Textarea
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="Mô tả ngắn gọn nội dung video bạn muốn..."
+                className="min-h-[90px] text-xs rounded-xl border-zinc-200 bg-white dark:bg-zinc-900/50 dark:border-zinc-800 focus:ring-cyan-500/20 transition-all resize-none p-3"
+              />
             </div>
 
-            {/* SETTINGS PANEL */}
-            <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Aspect Ratio */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Khung hình</label>
+            {/* SECTION: PROMPT MODEL & OPTIMIZER */}
+            <div className="space-y-3 bg-zinc-50/50 dark:bg-zinc-900/30 p-3 rounded-2xl border border-zinc-100 dark:border-zinc-800/50">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-tight">Model tối ưu</Label>
+                <Select value={promptModel} onValueChange={setPromptModel}>
+                  <SelectTrigger className="h-6 w-32 text-[9px] font-bold border-none bg-transparent shadow-none p-0 flex justify-end">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-lg">
+                    <SelectItem value="gemini-3.1-pro-preview" className="text-[10px]">iGen Pro</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview" className="text-[10px]">iGen Lite</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <Button 
+                onClick={handleGenerateOptimalPrompt} 
+                disabled={isGeneratingPrompt || !prompt.trim()}
+                className="w-full h-9 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 border border-cyan-500/20 font-bold text-xs transition-all shadow-none"
+              >
+                {isGeneratingPrompt ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <Wand2 className="w-3.5 h-3.5 mr-2" />}
+                Tối ưu kịch bản
+              </Button>
+            </div>
+
+            <Separator className="bg-zinc-100 dark:bg-zinc-800" />
+
+            {/* SECTION: VIDEO SETTINGS */}
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold text-zinc-500 uppercase tracking-tight">Mô hình AI</Label>
+                <Select value={videoModel} onValueChange={setVideoModel}>
+                  <SelectTrigger className="h-9 rounded-xl border-zinc-200 bg-zinc-50/50 text-xs font-semibold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    {(activeMode === 'before-after' ? MODEL_OPTIONS.filter(opt => !opt.value.includes('veo-2')) : MODEL_OPTIONS).map(opt => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-xs font-medium">{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">Khung hình</Label>
                   <Select value={videoAspectRatio} onValueChange={(val: any) => setVideoAspectRatio(val)}>
-                    <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
+                    <SelectTrigger className="h-9 rounded-xl border-zinc-200 bg-zinc-50/50 text-xs font-semibold">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
-                      <SelectItem value="16:9" className="rounded-lg cursor-pointer">16:9 (Ngang)</SelectItem>
-                      <SelectItem value="9:16" className="rounded-lg cursor-pointer">9:16 (Dọc)</SelectItem>
+                    <SelectContent className="rounded-xl text-xs">
+                      <SelectItem value="16:9">16:9 Ngang</SelectItem>
+                      <SelectItem value="9:16">9:16 Dọc</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-
-                {/* Model */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Model AI</label>
-                  <Select value={videoModel} onValueChange={setVideoModel}>
-                    <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
-                      {(activeMode === 'before-after' ? MODEL_OPTIONS.filter(opt => !opt.value.includes('veo-2')) : MODEL_OPTIONS).map(opt => (
-                        <SelectItem key={opt.value} value={opt.value} className="rounded-lg cursor-pointer">
-                          <div>
-                            <span className="font-medium">{opt.label}</span>
-                            <span className="text-xs text-zinc-400 ml-2">({opt.desc})</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Duration */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Thời lượng</label>
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">Thời lượng</Label>
                   <Select value={videoDuration} onValueChange={setVideoDuration}>
-                    <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
+                    <SelectTrigger className="h-9 rounded-xl border-zinc-200 bg-zinc-50/50 text-xs font-semibold">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
-                      {durationOptions.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value} className="rounded-lg cursor-pointer">{opt.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Quality */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Chất lượng</label>
-                  <Select value={videoQuality} onValueChange={setVideoQuality} disabled={videoModel.includes('veo-2')}>
-                    <SelectTrigger className="h-11 rounded-xl border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 focus:ring-0 font-medium text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="rounded-xl shadow-xl">
-                      {QUALITY_OPTIONS.map(opt => (
-                        <SelectItem key={opt.value} value={opt.value} className="rounded-lg cursor-pointer">{opt.label}</SelectItem>
-                      ))}
+                    <SelectContent className="rounded-xl text-xs">
+                      {durationOptions.map(opt => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              {/* Current config summary */}
-              <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-zinc-800">
-                <p className="text-xs text-zinc-400 dark:text-zinc-500 text-center">
-                  Cấu hình: <strong className="text-zinc-600 dark:text-zinc-300">{videoAspectRatio === '16:9' ? 'Ngang' : 'Dọc'}</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{currentModelLabel}</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{videoDuration}s</strong> · <strong className="text-zinc-600 dark:text-zinc-300">{isVeo2Selected ? '720p (mặc định)' : videoQuality}</strong>
-                </p>
+              <div className="space-y-2">
+                <Label className="text-[10px] font-bold text-zinc-400 uppercase tracking-tight">Độ phân giải</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {QUALITY_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => !isVeo2Selected && setVideoQuality(opt.value)}
+                      disabled={isVeo2Selected}
+                      className={cn(
+                        "h-9 rounded-xl border text-[10px] font-bold transition-all",
+                        videoQuality === opt.value 
+                          ? "bg-cyan-50 border-cyan-500 text-cyan-600 shadow-sm" 
+                          : "border-zinc-200 bg-zinc-50/50 text-zinc-400 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:border-zinc-800",
+                        isVeo2Selected && "opacity-40 cursor-not-allowed grayscale"
+                      )}
+                    >
+                      {opt.label.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
+            {/* ACTION BUTTON */}
             <Button
               size="lg"
               onClick={handleGenerate}
               disabled={isBusy}
-              className="w-full mt-4 bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white font-bold text-base h-11"
+              className="w-full h-11 rounded-2xl bg-cyan-600 hover:bg-cyan-700 text-white font-bold text-xs shadow-lg shadow-cyan-500/20 transition-all mt-4"
             >
               {isGenerating ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <><Sparkles className="w-5 h-5 mr-2" /> Tạo Video</>
+                <><Sparkles className="w-4 h-4 mr-2" /> Tạo Video Ngay</>
               )}
             </Button>
+
+            <p className="text-[9px] text-zinc-400 text-center font-medium">
+              Model: <span className="text-zinc-600 dark:text-zinc-300 uppercase">{currentModelLabel}</span>
+            </p>
 
           </CardContent>
         </Card>
       </div>
 
       {/* RIGHT PANEL: PREVIEW & OUTPUT */}
-      <div className="lg:col-span-2 bg-muted/50 rounded-lg flex flex-col items-center justify-center min-h-[400px] lg:min-h-0 p-4 relative overflow-hidden">
+      <div className="lg:col-span-2 bg-muted/30 dark:bg-zinc-900/30 rounded-[32px] border border-zinc-200/50 dark:border-zinc-800/50 flex flex-col items-center justify-center min-h-[450px] lg:min-h-0 p-6 relative overflow-hidden backdrop-blur-sm">
 
         {/* GENERATING SKELETON */}
         {isGenerating && (() => {
-          // Estimated times per stage (seconds)
           const STAGE_TIMES = { script: 10, uploading: 5, rendering: 120 };
-          const TOTAL_ESTIMATED = STAGE_TIMES.script + STAGE_TIMES.uploading + STAGE_TIMES.rendering; // 135s
+          const TOTAL_ESTIMATED = STAGE_TIMES.script + STAGE_TIMES.uploading + STAGE_TIMES.rendering;
 
-          // Calculate estimated progress percentage based on stage + elapsed time
           let estimatedPercent = 0;
           if (generationStage === 'script') {
-            estimatedPercent = Math.min((elapsedTime / STAGE_TIMES.script) * 7, 7); // 0-7%
+            estimatedPercent = Math.min((elapsedTime / STAGE_TIMES.script) * 7, 7);
           } else if (generationStage === 'uploading') {
-            estimatedPercent = 7 + Math.min(((elapsedTime - STAGE_TIMES.script) / STAGE_TIMES.uploading) * 5, 5); // 7-12%
+            estimatedPercent = 7 + Math.min(((elapsedTime - STAGE_TIMES.script) / STAGE_TIMES.uploading) * 5, 5);
           } else if (generationStage === 'rendering') {
             const renderStart = STAGE_TIMES.script + STAGE_TIMES.uploading;
             const renderElapsed = Math.max(0, elapsedTime - renderStart);
-            estimatedPercent = 12 + Math.min((renderElapsed / STAGE_TIMES.rendering) * 83, 83); // 12-95%
+            estimatedPercent = 12 + Math.min((renderElapsed / STAGE_TIMES.rendering) * 83, 83);
           }
           estimatedPercent = Math.min(Math.round(estimatedPercent), 95);
 
-          // Estimated time remaining
           const estimatedRemaining = Math.max(0, TOTAL_ESTIMATED - elapsedTime);
           const remainMin = Math.floor(estimatedRemaining / 60);
           const remainSec = estimatedRemaining % 60;
 
           const stageLabel = generationStage === 'script' ? 'Đang tối ưu kịch bản'
             : generationStage === 'uploading' ? 'Đang gửi yêu cầu'
-            : generationStage === 'rendering' ? 'Google AI đang render'
-            : 'Đang khởi tạo';
+            : generationStage === 'rendering' ? 'Đang render video'
+            : 'Đang chuẩn bị';
 
           return (
-            <div className="flex flex-col items-center w-full z-10 max-w-3xl animate-in fade-in duration-500">
+            <div className="flex flex-col items-center w-full z-10 max-w-xl animate-in fade-in zoom-in-95 duration-500">
               <div className={cn(
-                "relative rounded-2xl overflow-hidden shadow-2xl w-full flex flex-col items-center justify-center",
-                videoAspectRatio === '9:16' ? "max-w-[320px] aspect-[9/16] mx-auto" : "aspect-video"
+                "relative rounded-[2rem] overflow-hidden shadow-2xl w-full flex flex-col items-center justify-center border-4 border-white dark:border-zinc-800 bg-white dark:bg-zinc-950",
+                videoAspectRatio === '9:16' ? "max-w-[280px] aspect-[9/16] mx-auto" : "aspect-video"
               )}>
-                {/* Background: reference image blurred or solid gray */}
-                {(standardImage || beforeImage) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={standardImage || beforeImage!} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-15 blur-lg grayscale scale-110" />
-                ) : null}
+                {(standardImage || beforeImage) && (
+                  <img src={standardImage || beforeImage!} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-10 blur-xl scale-110" />
+                )}
 
-                {/* Clean white overlay */}
-                <div className="absolute inset-0 bg-white" />
-
-                {/* Shimmer sweep effect */}
-                <div className="absolute inset-0 overflow-hidden">
-                  <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-cyan-100/40 to-transparent" />
-                </div>
-
-                {/* Content overlay */}
-                <div className="relative z-10 flex flex-col items-center justify-center gap-5 px-6 py-10 w-full">
-
-                  {/* Percentage circle */}
-                  <div className="relative w-28 h-28">
-                    {/* Background circle */}
-                    <svg className="w-28 h-28 -rotate-90" viewBox="0 0 120 120">
-                      <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(6,182,212,0.15)" strokeWidth="6" />
+                <div className="relative z-10 flex flex-col items-center justify-center gap-6 p-8 w-full text-center">
+                  <div className="relative w-24 h-24">
+                    <svg className="w-24 h-24 -rotate-90" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="45" fill="none" stroke="currentColor" strokeWidth="4" className="text-zinc-100 dark:text-zinc-800" />
                       <circle
-                        cx="60" cy="60" r="52"
+                        cx="50" cy="50" r="45"
                         fill="none"
-                        stroke="rgb(6,182,212)"
-                        strokeWidth="6"
+                        stroke="currentColor"
+                        strokeWidth="4"
                         strokeLinecap="round"
-                        strokeDasharray={`${2 * Math.PI * 52}`}
-                        strokeDashoffset={`${2 * Math.PI * 52 * (1 - estimatedPercent / 100)}`}
-                        className="transition-all duration-1000 ease-out"
+                        strokeDasharray={283}
+                        strokeDashoffset={283 * (1 - estimatedPercent / 100)}
+                        className="text-cyan-500 transition-all duration-1000 ease-out"
                       />
                     </svg>
-                    {/* Percent text */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-bold font-mono text-cyan-600 tabular-nums">{estimatedPercent}%</span>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-2xl font-black text-zinc-800 dark:text-zinc-100 tabular-nums">{estimatedPercent}%</span>
                     </div>
                   </div>
 
-                  {/* Stage label */}
-                  <div className="text-center space-y-1.5">
-                    <h3 className="text-base font-semibold text-zinc-700 tracking-wide animate-pulse" style={{ animationDuration: '1.5s' }}>
-                      {stageLabel}...
-                    </h3>
-                    <p className="text-sm text-zinc-400 font-mono tabular-nums">
-                      {estimatedRemaining > 0
-                        ? `Còn khoảng ${remainMin > 0 ? `${remainMin} phút ` : ''}${remainSec}s`
-                        : 'Sắp hoàn tất...'}
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold text-zinc-800 dark:text-zinc-100 tracking-tight animate-pulse">{stageLabel}...</h3>
+                    <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest">
+                      {estimatedRemaining > 0 ? `~ ${remainMin > 0 ? `${remainMin}P ` : ''}${remainSec}S còn lại` : 'Sắp xong...'}
                     </p>
                   </div>
 
-                  {/* Progress bar */}
-                  <div className="w-full max-w-[240px]">
-                    <div className="h-1.5 bg-cyan-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-400 to-cyan-500 rounded-full transition-all duration-1000 ease-out"
-                        style={{ width: `${estimatedPercent}%` }}
-                      />
-                    </div>
+                  <div className="w-full max-w-[180px] h-1 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-cyan-500 transition-all duration-1000 ease-out" style={{ width: `${estimatedPercent}%` }} />
                   </div>
-
-                  {/* Elapsed time small */}
-                  <p className="text-xs text-zinc-400 font-mono tabular-nums mt-1">
-                    {Math.floor(elapsedTime / 60).toString().padStart(2, '0')}:{(elapsedTime % 60).toString().padStart(2, '0')} đã trôi qua
-                  </p>
                 </div>
               </div>
             </div>
@@ -811,53 +871,46 @@ export function SimpleVideoWorkspace() {
 
         {/* ERROR MESSAGE */}
         {errorDetails && (
-          <div className="w-full mt-8 bg-red-50/80 dark:bg-red-900/20 backdrop-blur-md border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 p-5 rounded-2xl flex items-start gap-4 shadow-sm">
-            <div className="p-2 bg-red-100 dark:bg-red-900/50 rounded-lg shrink-0">
-              <Video className="w-5 h-5" />
+          <div className="w-full max-w-lg bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 p-6 rounded-[2rem] flex flex-col items-center text-center gap-3 animate-in slide-in-from-bottom-4 duration-500">
+            <div className="w-12 h-12 bg-red-100 dark:bg-red-900/50 rounded-2xl flex items-center justify-center text-red-600">
+              <X className="w-6 h-6" />
             </div>
-            <div>
-              <strong className="block mb-1 text-lg">Đã xảy ra lỗi</strong>
-              <span className="text-sm">{errorDetails}</span>
-            </div>
+            <h4 className="text-lg font-bold text-red-800 dark:text-red-400">Không thể tạo video</h4>
+            <p className="text-sm text-red-600/80 dark:text-red-400/80">{errorDetails}</p>
+            <Button onClick={() => setErrorDetails(null)} variant="outline" className="mt-2 rounded-xl text-red-600 border-red-200">Thử lại</Button>
           </div>
         )}
 
-        {/* LATEST GENERATED VIDEO */}
+        {/* OUTPUT */}
         {!isGenerating && visibleVideos.length > 0 && (
-          <div className="flex flex-col items-center w-full z-10 max-w-3xl">
+          <div className="flex flex-col items-center w-full z-10 max-w-2xl animate-in fade-in zoom-in-95 duration-500">
             <div className={cn(
-              "relative bg-black rounded-lg overflow-hidden shadow-xl border border-zinc-200/20 w-full",
-              visibleVideos[0].aspectRatio === '9:16' ? "max-w-[320px] aspect-[9/16] mx-auto" : "aspect-video"
+              "relative bg-black rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white dark:border-zinc-800 w-full",
+              visibleVideos[0].aspectRatio === '9:16' ? "max-w-[280px] aspect-[9/16] mx-auto" : "aspect-video"
             )}>
               <video src={visibleVideos[0].url} className="w-full h-full object-cover" controls playsInline autoPlay muted loop />
             </div>
 
-            <div className="mt-6 flex flex-wrap justify-center gap-4 w-full">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               {visibleVideos[0].originalVeoUrl && (
                 <Button
                   onClick={() => activateExtendMode(visibleVideos[0])}
-                  className="bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-600 hover:to-cyan-700 text-white"
+                  className="bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-100 rounded-xl px-6 font-bold text-xs"
                 >
-                  <Link2 className="w-4 h-4 mr-2" />
-                  Tạo video nối tiếp
+                  <Link2 className="w-4 h-4 mr-2" /> Nối tiếp
                 </Button>
               )}
-              <Button
-                variant="outline"
-                asChild
-              >
+              <Button asChild variant="outline" className="rounded-xl px-6 font-bold text-xs border-zinc-200">
                 <a href={visibleVideos[0].url} download target="_blank" rel="noopener noreferrer">
-                  <Download className="w-4 h-4 mr-2" />
-                  Tải xuống
+                  <Download className="w-4 h-4 mr-2" /> Tải về
                 </a>
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={() => setHiddenVideoUrls(prev => new Set(prev).add(visibleVideos[0].url))}
-                className="text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 dark:border-red-900/50"
+                className="text-zinc-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/50 rounded-xl"
               >
-                <X className="w-4 h-4 mr-2" />
-                Đóng video này
+                <X className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -865,28 +918,20 @@ export function SimpleVideoWorkspace() {
 
         {/* EMPTY STATE */}
         {!isGenerating && visibleVideos.length === 0 && !errorDetails && (
-          <div className="text-center text-muted-foreground z-10">
-            <Video className="h-16 w-16 mx-auto mb-4 text-zinc-300 dark:text-zinc-700" />
-            <p>Video tạo thành công sẽ hiển thị ở đây</p>
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 bg-zinc-100 dark:bg-zinc-900 rounded-3xl flex items-center justify-center mx-auto transition-transform hover:scale-105 duration-300">
+              <Video className="w-10 h-10 text-zinc-300 dark:text-zinc-700" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Sẵn sàng sáng tạo</h3>
+              <p className="text-xs text-zinc-400/60">Tải ảnh và nhập ý tưởng để bắt đầu</p>
+            </div>
           </div>
         )}
-
       </div>
 
-      <ImageLibraryModal
-        open={isLibraryOpen}
-        onOpenChange={setIsLibraryOpen}
-        onImageSelect={handleLibrarySelect}
-      />
-
-      {/* HIDDEN INPUT */}
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={onFileInputChange}
-        accept="image/*"
-        className="hidden"
-      />
+      <ImageLibraryModal open={isLibraryOpen} onOpenChange={setIsLibraryOpen} onImageSelect={handleLibrarySelect} />
+      <input type="file" ref={fileInputRef} onChange={onFileInputChange} accept="image/*" className="hidden" />
     </div>
   );
 }

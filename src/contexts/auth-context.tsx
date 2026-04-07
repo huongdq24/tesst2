@@ -21,6 +21,7 @@ export interface UserData {
   uid: string;
   email: string | null;
   role: 'Admin' | 'User';
+  credits?: number;
   hasClaimedCredit?: boolean;
   geminiApiKey?: string;
   elevenLabsApiKey?: string;

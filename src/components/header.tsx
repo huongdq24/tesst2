@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase/config';
 import { useRouter } from 'next/navigation';
-import { LogOut, User as UserIcon } from 'lucide-react';
+import { LogOut, User as UserIcon, Wallet } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { IGenLogo } from '@/components/igen-logo';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useI18n } from '@/contexts/i18n-context';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 export function Header() {
   const { user, userData } = useAuth();
@@ -43,6 +44,19 @@ export function Header() {
           <div className="flex flex-1 items-center justify-end space-x-4">
             <nav className="flex items-center space-x-2">
               <LanguageSwitcher />
+              {/* Credit Display */}
+              {/* Credit Display */}
+              {user && (
+                <Link href="/home/feature/cost-analytics" className={cn(
+                  "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer",
+                  (userData?.credits ?? 0) > 0
+                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                    : "bg-red-50 text-red-600 border-red-200 animate-pulse hover:bg-red-100"
+                )} title="Xem chi phí của bạn">
+                  <Wallet className="h-3.5 w-3.5" />
+                  <span>{((userData?.credits ?? 0) > 0) ? `$${(userData?.credits ?? 0).toFixed(2)}` : 'Hết credit'}</span>
+                </Link>
+              )}
               {/* Admin Panel Link */}
               {userData?.role === 'Admin' && (
                 <Link href="/admin">

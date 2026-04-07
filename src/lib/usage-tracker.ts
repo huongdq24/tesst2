@@ -1,108 +1,181 @@
 'use client';
 
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { firestore } from '@/lib/firebase/config';
 
-// ─── Pricing Table (VNĐ) ────────────────────────────────────────────────────
-// Based on actual Google Cloud Billing data provided by the user.
-// These are cost-per-unit rates in VNĐ.
+// ─── Exchange Rate ───────────────────────────────────────────────────────────
+export const USD_TO_VND = 25_500;
+
+// ─── Pricing Table ───────────────────────────────────────────────────────────
+// Source: https://ai.google.dev/pricing (Updated 2026-04-07)
+// All prices are in USD. VNĐ is calculated at runtime using USD_TO_VND.
+//
+// For token-based models: costPerUnitUSD = output cost per token (USD)
+// For per-second models:  costPerUnitUSD = cost per second (USD)
+// For per-image models:   costPerUnitUSD = cost per image (USD)
 
 export const PRICING_TABLE: Record<string, {
-  costPerUnit: number;
+  costPerUnitUSD: number;
   unit: string;
   label: string;
   category: 'video' | 'audio' | 'image' | 'text';
+  note?: string;
 }> = {
-  // ── VIDEO ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── VIDEO (per second of generated video) ──
+  // ══════════════════════════════════════════════════════════════════════════
   'veo-3.1-generate-preview': {
-    costPerUnit: 9141, // ₫/giây
+    costPerUnitUSD: 0.40, // $0.40/second
     unit: 'seconds',
     label: 'Veo 3.1 HQ Video',
     category: 'video',
+    note: 'Standard quality, highest fidelity',
   },
   'veo-3.1-fast-generate-preview': {
-    costPerUnit: 5223, // ₫/giây (tương đương upsampler rate)
+    costPerUnitUSD: 0.15, // $0.15/second
     unit: 'seconds',
     label: 'Veo 3.1 Fast Video',
     category: 'video',
+    note: 'Fast generation, good quality',
+  },
+  'veo-3.1-lite-generate-preview': {
+    costPerUnitUSD: 0.05, // $0.05/second (720p)
+    unit: 'seconds',
+    label: 'Veo 3.1 Lite Video',
+    category: 'video',
+    note: '720p, budget-friendly',
+  },
+  'veo-3.0-generate-001': {
+    costPerUnitUSD: 0.40, // same tier as 3.1 standard
+    unit: 'seconds',
+    label: 'Veo 3.0 Video',
+    category: 'video',
+  },
+  'veo-3.0-fast-generate-001': {
+    costPerUnitUSD: 0.15, // same tier as 3.1 fast
+    unit: 'seconds',
+    label: 'Veo 3.0 Fast Video',
+    category: 'video',
   },
   'veo-2.0-generate-001': {
-    costPerUnit: 9141, // ₫/giây
+    costPerUnitUSD: 0.35, // $0.35/second
     unit: 'seconds',
     label: 'Veo 2.0 Video',
     category: 'video',
   },
 
-  // ── AUDIO (TTS) ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── AUDIO / TTS (token-based pricing) ──
+  // Output audio tokens are the primary cost driver.
+  // We estimate: ~50 output tokens per second of generated audio.
+  // So we convert to a per-second cost for simplicity.
+  //
+  // gemini-2.5-flash-preview-tts:
+  //   Input: $0.50/1M tokens, Output: $10.00/1M tokens
+  //   → Output per token: $0.000010
+  //   → ~50 tokens/sec → $0.0005/sec
+  //
+  // gemini-2.5-pro-preview-tts:
+  //   Input: $1.00/1M tokens, Output: $20.00/1M tokens
+  //   → Output per token: $0.000020
+  //   → ~50 tokens/sec → $0.001/sec
+  // ══════════════════════════════════════════════════════════════════════════
   'gemini-2.5-flash-preview-tts': {
-    costPerUnit: 3917, // ₫/giây (Fast Audio rate)
+    costPerUnitUSD: 0.0005, // ~$0.0005/second of audio
     unit: 'seconds',
     label: 'Gemini 2.5 Flash TTS',
     category: 'audio',
+    note: 'Output: $10/1M tokens, ~50 tokens/sec',
   },
   'gemini-2.5-pro-preview-tts': {
-    costPerUnit: 10447, // ₫/giây (Standard Audio rate)
+    costPerUnitUSD: 0.001, // ~$0.001/second of audio
     unit: 'seconds',
     label: 'Gemini 2.5 Pro TTS',
     category: 'audio',
+    note: 'Output: $20/1M tokens, ~50 tokens/sec',
   },
 
-  // ── IMAGE ──
+  // ══════════════════════════════════════════════════════════════════════════
+  // ── IMAGE (Gemini native image generation) ──
+  // Pricing is per output image based on resolution/token count.
+  //
+  // gemini-3.1-flash-image-preview: $60/1M output tokens
+  //   0.5K→747 tokens=$0.045, 1K→1120=$0.067, 2K→1680=$0.101, 4K→2520=$0.151
+  //   Default (1K): $0.067/image
+  //
+  // gemini-3-pro-image-preview: $120/1M output tokens
+  //   1K→1120 tokens=$0.134, 2K→1120=$0.134, 4K→2000=$0.24
+  //   Default (1K): $0.134/image
+  //
+  // gemini-2.5-flash-image: $30/1M output tokens
+  //   1K→1290 tokens=$0.039
+  //   Default: $0.039/image
+  // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-flash-image-preview': {
-    costPerUnit: 1.57, // ₫/output token
+    costPerUnitUSD: 0.067, // $0.067/image at 1K resolution (default)
     unit: 'count',
     label: 'Gemini 3.1 Flash Image',
     category: 'image',
+    note: '$60/1M output tokens. 1K=1120tk=$0.067',
   },
   'gemini-3-pro-image-preview': {
-    costPerUnit: 3.0, // ₫/output token (estimated)
+    costPerUnitUSD: 0.134, // $0.134/image at 1K resolution
     unit: 'count',
     label: 'Gemini 3 Pro Image',
     category: 'image',
+    note: '$120/1M output tokens. 1K=1120tk=$0.134',
   },
-  'gemini-2.5-flash-image': {
-    costPerUnit: 0.78, // ₫/output token
-    unit: 'count',
-    label: 'Gemini 2.5 Flash Image',
-    category: 'image',
-  },
+
+
+  // ── IMAGE (Imagen 4 — flat per-image pricing) ──
   'imagen-4.0-fast-generate-001': {
-    costPerUnit: 500, // ₫/ảnh (estimated per image)
+    costPerUnitUSD: 0.02, // $0.02/image
     unit: 'count',
     label: 'Imagen 4 Fast',
     category: 'image',
   },
   'imagen-4.0-generate-001': {
-    costPerUnit: 1000, // ₫/ảnh
+    costPerUnitUSD: 0.04, // $0.04/image
     unit: 'count',
     label: 'Imagen 4 Standard',
     category: 'image',
   },
   'imagen-4.0-ultra-generate-001': {
-    costPerUnit: 2000, // ₫/ảnh
+    costPerUnitUSD: 0.06, // $0.06/image
     unit: 'count',
     label: 'Imagen 4 Ultra',
     category: 'image',
   },
 
+  // ══════════════════════════════════════════════════════════════════════════
   // ── TEXT (Prompt optimization, script generation) ──
+  // Cost is per OUTPUT token (the main cost driver).
+  // Input tokens are much cheaper and are omitted for simplicity.
+  //
+  // gemini-3.1-pro-preview:       Output $12.00/1M → $0.000012/token
+  // gemini-3.1-flash-lite-preview: Output $1.50/1M  → $0.0000015/token
+  // gemini-3-flash-preview:       Output $3.00/1M  → $0.000003/token
+  // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-pro-preview': {
-    costPerUnit: 0.31, // ₫/token output
+    costPerUnitUSD: 0.000012, // $12.00/1M output tokens
     unit: 'tokens',
     label: 'Gemini 3.1 Pro Text',
     category: 'text',
+    note: 'Input: $2/1M, Output: $12/1M',
   },
   'gemini-3.1-flash-lite-preview': {
-    costPerUnit: 0.08, // ₫/token output
+    costPerUnitUSD: 0.0000015, // $1.50/1M output tokens
     unit: 'tokens',
     label: 'Gemini 3.1 Flash Lite Text',
     category: 'text',
+    note: 'Input: $0.25/1M, Output: $1.50/1M',
   },
   'gemini-3-flash-preview': {
-    costPerUnit: 0.08, // ₫/token output
+    costPerUnitUSD: 0.000003, // $3.00/1M output tokens
     unit: 'tokens',
     label: 'Gemini 3 Flash Text',
     category: 'text',
+    note: 'Input: $0.50/1M, Output: $3.00/1M',
   },
 };
 
@@ -116,6 +189,7 @@ export interface UsageRecord {
   modelLabel: string;
   amount: number;
   unit: string;
+  estimatedCostUSD: number;
   estimatedCostVND: number;
   prompt: string;
   createdAt: any; // Firestore Timestamp
@@ -123,7 +197,8 @@ export interface UsageRecord {
 
 // ─── Helper: Estimate cost ──────────────────────────────────────────────────
 
-export function estimateCost(model: string, amount: number): {
+export function estimateCost(model: string, amount: number, options?: { resolution?: string }): {
+  costUSD: number;
   costVND: number;
   unit: string;
   category: 'video' | 'audio' | 'image' | 'text';
@@ -133,6 +208,7 @@ export function estimateCost(model: string, amount: number): {
   if (!pricing) {
     console.warn(`[UsageTracker] No pricing found for model: ${model}. Using fallback.`);
     return {
+      costUSD: 0,
       costVND: 0,
       unit: 'unknown',
       category: 'text',
@@ -140,8 +216,20 @@ export function estimateCost(model: string, amount: number): {
     };
   }
 
+  let costUSD = pricing.costPerUnitUSD * amount;
+
+  // Apply resolution-based pricing multipliers for Gemini image models
+  if (options?.resolution && pricing.category === 'image') {
+    if (model === 'gemini-3.1-flash-image-preview') {
+      if (options.resolution === '2K') costUSD = 0.101 * amount;
+    }
+  }
+
+  const costVND = Math.round(costUSD * USD_TO_VND);
+
   return {
-    costVND: Math.round(pricing.costPerUnit * amount),
+    costUSD: Math.round(costUSD * 1_000_000) / 1_000_000, // 6 decimal places
+    costVND,
     unit: pricing.unit,
     category: pricing.category,
     label: pricing.label,
@@ -175,9 +263,10 @@ export async function recordUsage(params: {
   model: string;
   amount: number;
   prompt?: string;
+  resolution?: string;
 }): Promise<void> {
   try {
-    const { costVND, unit, label } = estimateCost(params.model, params.amount);
+    const { costUSD, costVND, unit, label } = estimateCost(params.model, params.amount, { resolution: params.resolution });
 
     const record: Omit<UsageRecord, 'createdAt'> = {
       userId: params.userId,
@@ -187,6 +276,7 @@ export async function recordUsage(params: {
       modelLabel: label,
       amount: params.amount,
       unit,
+      estimatedCostUSD: costUSD,
       estimatedCostVND: costVND,
       prompt: (params.prompt || '').substring(0, 200), // Truncate for storage
     };
@@ -196,8 +286,20 @@ export async function recordUsage(params: {
       createdAt: serverTimestamp(),
     });
 
+    // Deduct credits from user in USD (atomic decrement)
+    if (costUSD > 0) {
+      try {
+        await updateDoc(doc(firestore, 'users', params.userId), {
+          credits: increment(-costUSD),
+        });
+        console.log(`[UsageTracker] 💳 Deducted $${costUSD.toFixed(4)} credit from user ${params.userId}`);
+      } catch (creditError) {
+        console.error('[UsageTracker] ❌ Failed to deduct credits:', creditError);
+      }
+    }
+
     console.log(
-      `[UsageTracker] ✅ Recorded: ${params.type} | ${label} | ${params.amount} ${unit} | ~${costVND.toLocaleString()} ₫`
+      `[UsageTracker] ✅ Recorded: ${params.type} | ${label} | ${params.amount} ${unit} | $${costUSD.toFixed(4)} (~${costVND.toLocaleString()} ₫)`
     );
   } catch (error) {
     // Non-blocking: don't let tracking failure break generation

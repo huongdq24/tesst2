@@ -2,6 +2,7 @@
 
 import { useParams } from 'next/navigation';
 import { useI18n } from '@/contexts/i18n-context';
+import { useAuth } from '@/contexts/auth-context';
 import {
   Voicemail,
   ScanFace,
@@ -11,6 +12,7 @@ import {
   UploadCloud,
   Sparkles,
   BarChart3,
+  ShieldAlert,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -92,6 +94,7 @@ function GenericFeatureWorkspace() {
 export default function FeatureWorkspacePage() {
   const params = useParams();
   const { t } = useI18n();
+  const { userData } = useAuth();
   const slug = (params.slug as string) as FeatureSlug;
   const feature = featureConfig[slug] || featureConfig['image-generation'];
 
@@ -113,6 +116,12 @@ export default function FeatureWorkspacePage() {
             return <GenericFeatureWorkspace />;
     }
   }
+
+  // Credit check: block workspace if credits ≤ 0 (except admin & cost-analytics)
+  const isAdmin = userData?.role === 'Admin';
+  const isExemptPage = slug === 'cost-analytics';
+  const hasCredits = (userData?.credits ?? 0) > 0;
+  const isBlocked = !isAdmin && !isExemptPage && !hasCredits;
 
   return (
     <div className="container py-4 md:py-8 h-full flex flex-col px-4 md:px-8">

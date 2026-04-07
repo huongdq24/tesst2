@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, ChangeEvent, DragEvent, useEffect, useCallback } from 'react';
-import { recordUsage } from '@/lib/usage-tracker';
+import { recordUsage, estimateTokens } from '@/lib/usage-tracker';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
@@ -456,12 +456,12 @@ export function VideoGenerationWorkspace() {
       }
     } else { // For Veo 3.x models
       // If resolution is high, duration MUST be 8s.
-      if ((outputResolution === '1080p' || outputResolution === '4k')) {
+      if (outputResolution === '1080p') {
         if (videoDuration !== '8') {
           setVideoDuration('8');
           toast({
             title: 'Thời lượng đã tự động điều chỉnh',
-            description: 'Độ phân giải 1080p và 4k yêu cầu thời lượng video là 8 giây.',
+            description: 'Độ phân giải 1080p yêu cầu thời lượng video là 8 giây.',
           });
         }
       }
@@ -1016,6 +1016,19 @@ export function VideoGenerationWorkspace() {
       setPrompt(result.optimized_english_prompt);
       setMotionAnalysis(result.motion_analysis);
       setCameraMovement(result.camera_movement);
+      
+      if (user) {
+        const inputTokens = estimateTokens(enhancedDescription);
+        const outputTokens = estimateTokens(result.optimized_english_prompt);
+        recordUsage({
+          userId: user.uid,
+          userEmail: user.email || '',
+          type: 'text',
+          model: scriptModel,
+          amount: inputTokens + outputTokens,
+          prompt: scriptDescription,
+        });
+      }
     } catch (error: any) {
       console.error(error);
       let errorMsg = error.message || t('toast.image.unexpectedError');
@@ -1182,7 +1195,8 @@ export function VideoGenerationWorkspace() {
     setFavorites(prev => prev.includes(url) ? prev.filter(f => f !== url) : [...prev, url]);
   };
 
-  const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isUploadingBefore || isUploadingAfter || isSaving;
+  const hasNoCredit = (userData?.credits ?? 0) <= 0 && userData?.role !== 'Admin';
+  const isBusy = jobStatus === 'processing' || isGeneratingScript || isUploading || isUploadingBefore || isUploadingAfter || isSaving || hasNoCredit;
   const isGenerateDisabled = isBusy || (inputMode === 'standard' && !prompt.trim() && !scriptDescription.trim()) || (inputMode === 'before-after' && (!beforeImageUrl || !afterImageUrl));
 
   return (
@@ -1408,7 +1422,7 @@ export function VideoGenerationWorkspace() {
             </div>
             <div>
               <h1 className="text-4xl sm:text-5xl font-bold tracking-tight mb-4 text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 to-cyan-500">iGen +</h1>
-              <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">Không gian làm việc vô cực. Chỉ cần mô tả ý tưởng, AI sẽ kết xuất video chuẩn điện ảnh với độ phân giải lên đến 4k.</p>
+              <p className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base max-w-lg mx-auto leading-relaxed">Không gian làm việc vô cực. Chỉ cần mô tả ý tưởng, AI sẽ kết xuất video chuẩn điện ảnh với độ phân giải lên đến 1080p.</p>
               <p className="text-zinc-400 dark:text-zinc-500 text-xs mt-4">Ấn nút <span className="inline-flex items-center justify-center h-5 w-5 rounded bg-zinc-100 text-zinc-500 mx-1"><Plus className="h-3 w-3" /></span> để chọn ảnh tham chiếu và mẫu prompt</p>
             </div>
           </div>
@@ -2030,7 +2044,6 @@ export function VideoGenerationWorkspace() {
                           <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                             <SelectItem value="720p">720p</SelectItem>
                             <SelectItem value="1080p">1080p</SelectItem>
-                            <SelectItem value="4k">4k HDR</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

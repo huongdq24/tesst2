@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { recordUsage, estimateAudioDuration } from '@/lib/usage-tracker';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -319,6 +320,16 @@ export function VoiceGenerationWorkspace() {
            } catch (saveErr) {
               console.error(saveErr);
            }
+
+           // Track usage cost
+           recordUsage({
+             userId: user.uid,
+             userEmail: user.email || '',
+             type: 'audio',
+             model: model,
+             amount: estimateAudioDuration(text),
+             prompt: text.substring(0, 200),
+           });
         }
       }
     } catch (error: any) {
