@@ -117,6 +117,17 @@ export function SimpleVideoWorkspace() {
   const promptRef = useRef(prompt);
   useEffect(() => { promptRef.current = prompt; }, [prompt]);
 
+  // Use refs for stable callback dependencies
+  const userRef = useRef(user);
+  const videoModelRef = useRef(videoModel);
+  const videoAspectRatioRef = useRef(videoAspectRatio);
+  const videoDurationRef = useRef(videoDuration);
+
+  useEffect(() => { userRef.current = user; }, [user]);
+  useEffect(() => { videoModelRef.current = videoModel; }, [videoModel]);
+  useEffect(() => { videoAspectRatioRef.current = videoAspectRatio; }, [videoAspectRatio]);
+  useEffect(() => { videoDurationRef.current = videoDuration; }, [videoDuration]);
+
   // Firebase Realtime Listener Removed. Workspace now acts as a temporary session.
 
   // Adjust quality & duration settings based on selected model
@@ -185,8 +196,9 @@ export function SimpleVideoWorkspace() {
     setIsLibraryOpen(false);
   };
 
-  const saveVideoToFirebase = async (videoUrl: string, finalPrompt: string) => {
-    if (!user) return;
+  const saveVideoToFirebase = useCallback(async (videoUrl: string, finalPrompt: string) => {
+    const currentUser = userRef.current;
+    if (!currentUser) return;
     try {
       // Store the ORIGINAL Veo URL for future video extension (Veo requires its own generated URLs)
       const originalVeoUrl = videoUrl;
@@ -195,32 +207,32 @@ export function SimpleVideoWorkspace() {
       const response = await fetch(proxyUrl);
       const blob = await response.blob();
       const fileName = `generated-video-${Date.now()}.mp4`;
-      const videoRef = storageRef(storage, `users/${user.uid}/generated-videos/${fileName}`);
+      const videoRef = storageRef(storage, `users/${currentUser.uid}/generated-videos/${fileName}`);
       await uploadBytes(videoRef, blob);
       const downloadURL = await getDownloadURL(videoRef);
 
       await addDoc(collection(firestore, 'generatedVideos'), {
-        ownerId: user.uid,
+        ownerId: currentUser.uid,
         prompt: finalPrompt,
         videoUrl: downloadURL,
         originalVeoUrl: originalVeoUrl, // CRITICAL: needed for extend/continuation
-        aspectRatio: videoAspectRatio,
-        modelName: videoModel,
+        aspectRatio: videoAspectRatioRef.current,
+        modelName: videoModelRef.current,
         createdAt: serverTimestamp(),
       });
       // Track usage for cost analytics
       recordUsage({
-        userId: user.uid,
-        userEmail: user.email || '',
+        userId: currentUser.uid,
+        userEmail: currentUser.email || '',
         type: 'video',
-        model: videoModel,
-        amount: Number(videoDuration) || 8,
+        model: videoModelRef.current,
+        amount: Number(videoDurationRef.current) || 8,
         prompt: finalPrompt,
       });
     } catch (err) {
       console.error('Save error', err);
     }
-  };
+  }, []);
 
   const cleanupPolling = () => {
     if (pollingRef.current) {
@@ -244,10 +256,10 @@ export function SimpleVideoWorkspace() {
             if (result.videoUrl) {
               setVideoProject(prev => [{
                 url: `/api/proxy-video?url=${encodeURIComponent(result.videoUrl!)}`,
-                duration: videoDuration + 's',
+                duration: videoDurationRef.current + 's',
                 prompt: promptRef.current,
                 originalVeoUrl: result.videoUrl,
-                aspectRatio: videoAspectRatio
+                aspectRatio: videoAspectRatioRef.current
               }, ...prev]);
               saveVideoToFirebase(result.videoUrl, promptRef.current);
             }
@@ -276,6 +288,7 @@ export function SimpleVideoWorkspace() {
       }, 5000);
     }
     return () => cleanupPolling();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [operationName, jobStatus, userData?.geminiApiKey, toast, saveVideoToFirebase]);
 
   const activateExtendMode = (clip: VideoClip) => {
@@ -775,8 +788,11 @@ export function SimpleVideoWorkspace() {
 
             <div className="pt-2">
               <CostEstimationPanel 
-                model={videoModel} 
-                amount={parseInt(videoDuration)} 
+                items={[
+                  { model: videoModel, amount: parseInt(videoDuration) || 0 },
+                  // If prompt is not empty, estimate input+output tokens (approx 3x input for a good AI script extension)
+                  ...(prompt.trim() ? [{ model: promptModel, amount: estimateTokens(prompt) * 4 + 150 }] : [])
+                ]}
                 title="Dự kiến tiêu thụ"
               />
             </div>
