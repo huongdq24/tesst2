@@ -20,11 +20,15 @@ import {
 import { useI18n } from '@/contexts/i18n-context';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { HelpCircle, Info } from 'lucide-react';
+import { PricingModal } from '@/components/modals/pricing-modal';
+import { useState } from 'react';
 
 export function Header() {
   const { user, userData } = useAuth();
   const router = useRouter();
   const { t } = useI18n();
+  const [showPricing, setShowPricing] = useState(false);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -47,15 +51,26 @@ export function Header() {
               {/* Credit Display */}
               {/* Credit Display */}
               {user && (
-                <Link href="/home/feature/cost-analytics" className={cn(
-                  "hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer",
-                  (userData?.credits ?? 0) > 0
-                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
-                    : "bg-red-50 text-red-600 border-red-200 animate-pulse hover:bg-red-100"
-                )} title="Xem chi phí của bạn">
-                  <Wallet className="h-3.5 w-3.5" />
-                  <span>{((userData?.credits ?? 0) > 0) ? `$${(userData?.credits ?? 0).toFixed(2)}` : 'Hết credit'}</span>
-                </Link>
+                <div className="flex items-center gap-1.5">
+                  <Link href="/home/feature/cost-analytics" className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors hover:shadow-md hover:scale-105 active:scale-95 cursor-pointer",
+                    (userData?.credits ?? 0) > 0
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-red-50 text-red-600 border-red-200 animate-pulse hover:bg-red-100"
+                  )} title="Xem chi phí của bạn">
+                    <Wallet className="h-3.5 w-3.5" />
+                    <span>{((userData?.credits ?? 0) > 0) ? `${(userData?.credits ?? 0).toFixed(2)} Credit` : 'Hết credit'}</span>
+                  </Link>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-7 w-7 rounded-full text-muted-foreground hover:text-cyan-600 hover:bg-cyan-50"
+                    onClick={() => setShowPricing(true)}
+                    title="Bảng giá dịch vụ"
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
               {/* Admin Panel Link */}
               {userData?.role === 'Admin' && (
@@ -99,6 +114,7 @@ export function Header() {
           </div>
         </div>
       </header>
+      <PricingModal isOpen={showPricing} onClose={() => setShowPricing(false)} />
     </>
   );
 }

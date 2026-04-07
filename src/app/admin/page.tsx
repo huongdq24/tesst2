@@ -170,7 +170,7 @@ export default function AdminPage() {
       await updateDoc(doc(firestore, 'users', creditUser.uid), {
         credits: increment(amount),
       });
-      toast({ title: '✅ Nạp credit thành công!', description: `Đã nạp $${amount.toFixed(2)} cho ${creditUser.email}` });
+      toast({ title: '✅ Nạp credit thành công!', description: `Đã nạp ${amount.toFixed(2)} Credit cho ${creditUser.email}` });
       setCreditUser(null);
       setCreditAmount('');
       fetchUsersAndMedia();
@@ -263,7 +263,7 @@ export default function AdminPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Đã cài Gemini Key</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Đã cài iGen Key</CardTitle>
             </CardHeader>
             <CardContent>
               <span className="text-2xl font-bold text-green-600">
@@ -329,7 +329,7 @@ export default function AdminPage() {
                             'font-mono text-sm font-semibold',
                             (u.credits ?? 0) > 0 ? 'text-emerald-600' : 'text-red-500'
                           )}>
-                            ${(u.credits ?? 0).toFixed(2)}
+                            {(u.credits ?? 0).toFixed(2)} Credit
                           </span>
                           <Button 
                             variant="ghost" 
@@ -345,7 +345,7 @@ export default function AdminPage() {
                       <TableCell className="text-center">{u.videoCount}</TableCell>
                       <TableCell className="font-mono text-xs">
                         <div>
-                          <span className="font-semibold text-muted-foreground">Gemini: </span>
+                          <span className="font-semibold text-muted-foreground">iGen: </span>
                           {u.geminiApiKey ? <span className="text-green-600 font-bold">Đã cài</span> : <span className="text-red-400">Chưa</span>}
                         </div>
                         <div>
@@ -398,11 +398,11 @@ export default function AdminPage() {
                 'text-lg font-bold font-mono',
                 (creditUser?.credits ?? 0) > 0 ? 'text-emerald-600' : 'text-red-500'
               )}>
-                ${(creditUser?.credits ?? 0).toFixed(2)}
+                {(creditUser?.credits ?? 0).toFixed(2)} Credit
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="credit-amount">Số tiền nạp thêm (USD)</Label>
+              <Label htmlFor="credit-amount">Số lượng nạp thêm (Credit)</Label>
               <Input
                 id="credit-amount"
                 type="text"
@@ -414,7 +414,7 @@ export default function AdminPage() {
               <div className="flex flex-wrap gap-1.5">
                 {[1, 5, 10, 50, 100].map(val => (
                   <Button key={val} variant="outline" size="sm" className="text-xs" onClick={() => setCreditAmount(String(val))}>
-                    ${val}
+                    {val} Credit
                   </Button>
                 ))}
               </div>

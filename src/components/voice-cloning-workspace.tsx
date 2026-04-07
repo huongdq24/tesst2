@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { recordUsage, estimateAudioDuration } from '@/lib/usage-tracker';
+import { CostEstimationPanel } from "./cost-estimation-panel";
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -393,13 +394,12 @@ export function VoiceCloningWorkspace() {
       toast({ title: '💾 Đã lưu', description: 'Audio đã được lưu vào thư viện.' });
       // Track usage for cost analytics (ElevenLabs audio generation)
       if (user) {
-        const estimatedDuration = estimateAudioDuration(text);
         recordUsage({
           userId: user.uid,
           userEmail: user.email || '',
           type: 'audio',
-          model: 'gemini-2.5-flash-preview-tts', // Map ElevenLabs usage to equivalent cost
-          amount: estimatedDuration,
+          model: selectedUIModelId,
+          amount: text.length,
           prompt: text.substring(0, 200),
         });
       }

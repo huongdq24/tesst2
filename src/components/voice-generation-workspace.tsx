@@ -4,6 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { recordUsage, estimateAudioDuration } from '@/lib/usage-tracker';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Progress } from "@/components/ui/progress";
+import { CostEstimationPanel } from "./cost-estimation-panel";
+import { estimateTokens } from "@/lib/usage-tracker";
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -152,7 +155,7 @@ export function VoiceGenerationWorkspace() {
 
   const handlePreviewVoice = async () => {
     if (!userData?.geminiApiKey) {
-       toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm Gemini Key trong Cài đặt để nghe thử.' });
+       toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm iGen Key trong Cài đặt để nghe thử.' });
        return;
     }
 
@@ -278,7 +281,7 @@ export function VoiceGenerationWorkspace() {
       return;
     }
     if (!userData?.geminiApiKey) {
-      toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm Gemini Key trong Cài đặt.' });
+      toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm iGen Key trong Cài đặt.' });
       return;
     }
 
@@ -466,8 +469,8 @@ export function VoiceGenerationWorkspace() {
                       <SelectValue placeholder="Chọn model..." />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gemini-2.5-flash-preview-tts" className="font-medium">2.5 Flash Preview TTS</SelectItem>
-                      <SelectItem value="gemini-2.5-pro-preview-tts" className="font-medium">2.5 Pro Preview TTS</SelectItem>
+                      <SelectItem value="gemini-2.5-flash-preview-tts" className="font-medium">2.5 Flash Preview TTS (iGen)</SelectItem>
+                      <SelectItem value="gemini-2.5-pro-preview-tts" className="font-medium">2.5 Pro Preview TTS (iGen)</SelectItem>
                     </SelectContent>
                  </Select>
                  <Tabs value={mode} onValueChange={(v: any) => setMode(v)} className="w-full">
@@ -622,7 +625,7 @@ export function VoiceGenerationWorkspace() {
                            <Loader2 className="h-10 w-10 animate-spin text-primary relative z-10" />
                         </div>
                         <p className="font-semibold text-lg animate-pulse mb-2 text-foreground">Đang tổng hợp giọng nói</p>
-                        <p className="text-sm text-muted-foreground max-w-[250px] text-center">Mô hình Gemini đang xử lý văn bản và sinh âm thanh chất lượng cao...</p>
+                        <p className="text-sm text-muted-foreground max-w-[250px] text-center">Mô hình iGen đang xử lý văn bản và sinh âm thanh chất lượng cao...</p>
                      </div>
                   </div>
                ) : audioUri ? (

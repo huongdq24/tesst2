@@ -19,7 +19,8 @@ import { cn } from '@/lib/utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Separator } from "@/components/ui/separator";
+import { CostEstimationPanel } from "./cost-estimation-panel";
 
 // Types
 type InputMode = 'standard' | 'before-after';
@@ -770,6 +771,14 @@ export function SimpleVideoWorkspace() {
                   ))}
                 </div>
               </div>
+            </div>
+
+            <div className="pt-2">
+              <CostEstimationPanel 
+                model={videoModel} 
+                amount={parseInt(videoDuration)} 
+                title="Dự kiến tiêu thụ"
+              />
             </div>
 
             {/* ACTION BUTTON */}

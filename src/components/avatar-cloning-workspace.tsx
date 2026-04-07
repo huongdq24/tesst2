@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { CostEstimationPanel } from "./cost-estimation-panel";
 import Image from 'next/image';
 
 // ─── Types ───
@@ -1038,6 +1039,14 @@ export function AvatarCloningWorkspace() {
                     <SelectContent><SelectItem value="MP4">MP4</SelectItem></SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              <div className="space-y-3">
+                <CostEstimationPanel 
+                  model="heygen-avatar-standard" 
+                  amount={scenes.reduce((acc, s) => acc + Math.ceil(s.script.length / 15), 0)} 
+                  title="Dự kiến tiêu thụ (HeyGen)"
+                />
               </div>
 
               {/* Info banner */}

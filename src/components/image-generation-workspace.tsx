@@ -4,6 +4,8 @@ import { recordUsage, estimateCost, estimateTokens, PRICING_TABLE, USD_TO_VND } 
 import { useAuth } from '@/contexts/auth-context';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Progress } from "@/components/ui/progress";
+import { CostEstimationPanel } from "./cost-estimation-panel";
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Loader2, ImageIcon, X, Wand2, UploadCloud, Download, Images, ZoomIn, Building2, Check, PenLine, Sparkles, DollarSign, Coins } from 'lucide-react';
@@ -688,7 +690,7 @@ export function ImageGenerationWorkspace() {
       toast({
         variant: 'destructive',
         title: 'Thiếu API Key',
-        description: 'Vui lòng thêm Gemini API Key của bạn trong phần cài đặt tài khoản trước khi tạo ảnh.',
+        description: 'Vui lòng thêm iGen Key của bạn trong phần cài đặt tài khoản trước khi tạo ảnh.',
       });
       return;
     }
@@ -790,7 +792,7 @@ export function ImageGenerationWorkspace() {
   const handleInpaintingGenerate = async () => {
     if (!selection || !regionImageRef.current || !editingImageUrl || !selectionPrompt.trim()) return;
     if (!userData?.geminiApiKey) {
-      toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm Gemini API Key trong cài đặt tài khoản.' });
+      toast({ variant: 'destructive', title: 'Thiếu API Key', description: 'Vui lòng thêm iGen Key trong cài đặt tài khoản.' });
       return;
     }
     if (!user) {
@@ -946,7 +948,7 @@ export function ImageGenerationWorkspace() {
             {/* API Key Warning */}
             {!userData?.geminiApiKey && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                ⚠️ Bạn chưa thêm Gemini API Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo ảnh.
+                ⚠️ Bạn chưa thêm iGen Key. Vui lòng thêm API key trong menu tài khoản để sử dụng tính năng tạo ảnh.
               </div>
             )}
             {/* Reference Image Upload */}
@@ -1357,87 +1359,23 @@ export function ImageGenerationWorkspace() {
               {selectedTemplate === 'fashion_expert' ? 'Bắt đầu Sáng tạo' : t('workspace.image.generateButton')}
             </Button>
 
-            {/* ═══ COST ESTIMATION PANEL ═══ */}
-            {(() => {
-              // Always show a live preview of estimated cost based on current selections
-              const promptPricing = PRICING_TABLE[promptModel];
-              const imgPricing = PRICING_TABLE[imageModel];
-              const imgUnitCostUSD = estimateCost(imageModel, 1, { resolution }).costUSD;
-              const imgTotalUSD = estimateCost(imageModel, numberOfImages, { resolution }).costUSD;
-
-              // If we have real cost data from a completed generation, show that
-              const hasRealData = costInfo !== null;
-              const displayPromptInput = hasRealData ? costInfo.promptInputTokens : 0;
-              const displayPromptOutput = hasRealData ? costInfo.promptOutputTokens : 0;
-              const displayPromptCost = hasRealData ? costInfo.promptCostUSD : 0;
-              const displayImgCost = hasRealData ? costInfo.imageCostUSD : imgTotalUSD;
-              const displayTotal = hasRealData ? costInfo.totalCostUSD : imgTotalUSD;
-              const displayImgCount = hasRealData ? costInfo.imageCount : numberOfImages;
-
-              const formatUSD = (v: number) => v < 0.001 ? `$${v.toFixed(6)}` : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(3)}`;
-              const formatVND = (v: number) => {
-                const vnd = Math.round(v * USD_TO_VND);
-                return vnd > 0 ? `~${vnd.toLocaleString('vi-VN')} ₫` : '0 ₫';
-              };
-
-              return (
-                <div className="mt-3 rounded-xl border border-cyan-200/60 bg-gradient-to-b from-cyan-50/40 to-white p-3.5 space-y-3">
-                  {/* Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-[13px] font-bold text-cyan-800">
-                      <Coins className="h-3.5 w-3.5" />
-                      Chi phí ước tính
-                    </div>
-                    <span className="text-[10px] font-medium text-cyan-600/70 bg-cyan-100/60 px-1.5 py-0.5 rounded-full">Google API Pricing</span>
-                  </div>
-
-                  {/* Token usage - only shown after prompt generation */}
-                  {hasRealData && (displayPromptInput > 0 || displayPromptOutput > 0) && (
-                    <div className="space-y-1.5">
-                      <p className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wider">Token Usage (Prompt AI)</p>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] pl-1">
-                        <span className="text-slate-500">Input tokens:</span>
-                        <span className="text-right font-mono font-semibold text-slate-700">{displayPromptInput.toLocaleString()}</span>
-                        <span className="text-slate-500">Output tokens:</span>
-                        <span className="text-right font-mono font-semibold text-slate-700">{displayPromptOutput.toLocaleString()}</span>
-                        <span className="text-slate-500">Prompt cost:</span>
-                        <span className="text-right font-mono font-semibold text-cyan-700">{formatUSD(displayPromptCost)}</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Image generation cost */}
-                  <div className="space-y-1.5">
-                    <p className="text-[10.5px] font-semibold text-slate-500 uppercase tracking-wider">Image Generation</p>
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[12px] pl-1">
-                      <span className="text-slate-500">Model:</span>
-                      <span className="text-right font-mono text-[11px] font-medium text-slate-600 truncate">{imgPricing?.label || imageModel}</span>
-                      <span className="text-slate-500">Giá / ảnh:</span>
-                      <span className="text-right font-mono font-semibold text-slate-700">{formatUSD(imgUnitCostUSD)}</span>
-                      <span className="text-slate-500">Số ảnh:</span>
-                      <span className="text-right font-mono font-semibold text-slate-700">×{displayImgCount}</span>
-                      <span className="text-slate-500">Tổng ảnh:</span>
-                      <span className="text-right font-mono font-semibold text-cyan-700">{formatUSD(displayImgCost)}</span>
-                    </div>
-                  </div>
-
-                  {/* Total */}
-                  <div className="border-t border-cyan-200/50 pt-2 space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[12px] font-bold text-slate-700">Tổng chi phí:</span>
-                      <div className="text-right">
-                        <span className="text-[14px] font-bold text-cyan-700">{formatUSD(displayTotal)}</span>
-                        <span className="text-[11px] text-slate-400 ml-1.5">{formatVND(displayTotal)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-[10px] text-slate-400 leading-snug">
-                    * Chi phí ước tính dựa trên <a href="https://ai.google.dev/pricing" target="_blank" rel="noopener noreferrer" className="text-cyan-600 underline hover:text-cyan-800">Google AI pricing</a>. Miễn phí khi không dùng API key.
-                  </p>
-                </div>
-              );
-            })()}
+            {/* ═══ COST ESTIMATION PANELS ═══ */}
+            <div className="mt-3 space-y-3">
+              {(costInfo?.promptOutputTokens ?? 0) > 0 && (
+                <CostEstimationPanel 
+                  model={promptModel} 
+                  amount={(costInfo?.promptInputTokens ?? 0) + (costInfo?.promptOutputTokens ?? 0)} 
+                  title="Chi phí Token (Prompt AI)"
+                  className="bg-zinc-50/50 border-zinc-100"
+                />
+              )}
+              <CostEstimationPanel 
+                model={imageModel} 
+                amount={numberOfImages} 
+                options={{ resolution }}
+                title="Dự kiến tạo ảnh"
+              />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1533,7 +1471,7 @@ export function ImageGenerationWorkspace() {
                   {isInpainting && (
                     <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center z-10 rounded-lg">
                       <Loader2 className="h-10 w-10 text-white animate-spin" />
-                      <p className="text-white text-sm mt-3 font-medium">Đang xử lý chỉnh sửa...</p>
+                      <p className="text-white text-sm mt-3 font-medium">iGen đang xử lý chỉnh sửa...</p>
                     </div>
                   )}
                   {selection && !isInpainting && (

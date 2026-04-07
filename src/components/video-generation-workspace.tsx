@@ -18,6 +18,7 @@ import { storage, firestore } from '@/lib/firebase/config';
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { CostEstimationPanel } from "./cost-estimation-panel";
 import { ImageLibraryModal } from '@/components/modals/image-library-modal';
 import { Card, CardContent } from './ui/card';
 import { Separator } from './ui/separator';
@@ -607,7 +608,7 @@ export function VideoGenerationWorkspace() {
       toast({
         variant: 'destructive',
         title: 'Thiếu API Key',
-        description: 'Vui lòng thêm Gemini API Key của bạn trong phần cài đặt tài khoản trước khi tạo video.',
+        description: 'Vui lòng thêm iGen Key của bạn trong phần cài đặt tài khoản trước khi tạo video.',
       });
       return;
     }

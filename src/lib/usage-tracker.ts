@@ -63,6 +63,13 @@ export const PRICING_TABLE: Record<string, {
     label: 'Veo 2.0 Video',
     category: 'video',
   },
+  'heygen-avatar-standard': {
+    costPerUnitUSD: 0.10, // $0.10/second
+    unit: 'seconds',
+    label: 'HeyGen Avatar Pro',
+    category: 'video',
+    note: 'High-quality AI Avatar',
+  },
 
   // ══════════════════════════════════════════════════════════════════════════
   // ── AUDIO / TTS (token-based pricing) ──
@@ -70,12 +77,12 @@ export const PRICING_TABLE: Record<string, {
   // We estimate: ~50 output tokens per second of generated audio.
   // So we convert to a per-second cost for simplicity.
   //
-  // gemini-2.5-flash-preview-tts:
+  // iGen-2.5-flash-preview-tts:
   //   Input: $0.50/1M tokens, Output: $10.00/1M tokens
   //   → Output per token: $0.000010
   //   → ~50 tokens/sec → $0.0005/sec
   //
-  // gemini-2.5-pro-preview-tts:
+  // iGen-2.5-pro-preview-tts:
   //   Input: $1.00/1M tokens, Output: $20.00/1M tokens
   //   → Output per token: $0.000020
   //   → ~50 tokens/sec → $0.001/sec
@@ -83,45 +90,45 @@ export const PRICING_TABLE: Record<string, {
   'gemini-2.5-flash-preview-tts': {
     costPerUnitUSD: 0.0005, // ~$0.0005/second of audio
     unit: 'seconds',
-    label: 'Gemini 2.5 Flash TTS',
+    label: 'iGen 2.5 Flash TTS',
     category: 'audio',
     note: 'Output: $10/1M tokens, ~50 tokens/sec',
   },
   'gemini-2.5-pro-preview-tts': {
     costPerUnitUSD: 0.001, // ~$0.001/second of audio
     unit: 'seconds',
-    label: 'Gemini 2.5 Pro TTS',
+    label: 'iGen 2.5 Pro TTS',
     category: 'audio',
     note: 'Output: $20/1M tokens, ~50 tokens/sec',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
-  // ── IMAGE (Gemini native image generation) ──
+  // ── IMAGE (iGen native image generation) ──
   // Pricing is per output image based on resolution/token count.
   //
-  // gemini-3.1-flash-image-preview: $60/1M output tokens
+  // iGen-3.1-flash-image-preview: $60/1M output tokens
   //   0.5K→747 tokens=$0.045, 1K→1120=$0.067, 2K→1680=$0.101, 4K→2520=$0.151
   //   Default (1K): $0.067/image
   //
-  // gemini-3-pro-image-preview: $120/1M output tokens
+  // iGen-3-pro-image-preview: $120/1M output tokens
   //   1K→1120 tokens=$0.134, 2K→1120=$0.134, 4K→2000=$0.24
   //   Default (1K): $0.134/image
   //
-  // gemini-2.5-flash-image: $30/1M output tokens
+  // iGen-2.5-flash-image: $30/1M output tokens
   //   1K→1290 tokens=$0.039
   //   Default: $0.039/image
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-flash-image-preview': {
     costPerUnitUSD: 0.067, // $0.067/image at 1K resolution (default)
     unit: 'count',
-    label: 'Gemini 3.1 Flash Image',
+    label: 'iGen 3.1 Flash Image',
     category: 'image',
     note: '$60/1M output tokens. 1K=1120tk=$0.067',
   },
   'gemini-3-pro-image-preview': {
     costPerUnitUSD: 0.134, // $0.134/image at 1K resolution
     unit: 'count',
-    label: 'Gemini 3 Pro Image',
+    label: 'iGen 3 Pro Image',
     category: 'image',
     note: '$120/1M output tokens. 1K=1120tk=$0.134',
   },
@@ -152,28 +159,28 @@ export const PRICING_TABLE: Record<string, {
   // Cost is per OUTPUT token (the main cost driver).
   // Input tokens are much cheaper and are omitted for simplicity.
   //
-  // gemini-3.1-pro-preview:       Output $12.00/1M → $0.000012/token
-  // gemini-3.1-flash-lite-preview: Output $1.50/1M  → $0.0000015/token
-  // gemini-3-flash-preview:       Output $3.00/1M  → $0.000003/token
+  // iGen-3.1-pro-preview:       Output $12.00/1M → $0.000012/token
+  // iGen-3.1-flash-lite-preview: Output $1.50/1M  → $0.0000015/token
+  // iGen-3-flash-preview:       Output $3.00/1M  → $0.000003/token
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-pro-preview': {
     costPerUnitUSD: 0.000012, // $12.00/1M output tokens
     unit: 'tokens',
-    label: 'Gemini 3.1 Pro Text',
+    label: 'iGen 3.1 Pro Text',
     category: 'text',
     note: 'Input: $2/1M, Output: $12/1M',
   },
   'gemini-3.1-flash-lite-preview': {
     costPerUnitUSD: 0.0000015, // $1.50/1M output tokens
     unit: 'tokens',
-    label: 'Gemini 3.1 Flash Lite Text',
+    label: 'iGen 3.1 Flash Lite Text',
     category: 'text',
     note: 'Input: $0.25/1M, Output: $1.50/1M',
   },
   'gemini-3-flash-preview': {
     costPerUnitUSD: 0.000003, // $3.00/1M output tokens
     unit: 'tokens',
-    label: 'Gemini 3 Flash Text',
+    label: 'iGen 3 Flash Text',
     category: 'text',
     note: 'Input: $0.50/1M, Output: $3.00/1M',
   },
