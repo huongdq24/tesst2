@@ -639,7 +639,8 @@ export function ImageGenerationWorkspace() {
       const imageCount = inputImageUrls.length;
       const inputTokens = estimateTokens(activeDescription) + (imageCount * 262);
       const outputTokens = estimateTokens(result.optimized_english_prompt + (result.negative_prompt || ''));
-      const promptCostUSD = estimateCost(promptModel, outputTokens, { inputAmount: inputTokens }).costUSD;
+      // Use amount: 1 for flat pricing (fixed cost per generation)
+      const promptCostUSD = estimateCost(promptModel, 1).costUSD;
       const imgCostUSD = estimateCost(imageModel, numberOfImages, { resolution }).costUSD;
 
       setCostInfo({
@@ -651,14 +652,13 @@ export function ImageGenerationWorkspace() {
         imageCount: numberOfImages,
       });
 
-      // Deduct credits for prompt optimization
+      // Deduct credits for prompt optimization (flat 1 unit)
       if (user) {
         recordUsage({
           userId: user.uid,
           userEmail: user.email || '',
           type: 'text',
-          amount: outputTokens,
-          inputAmount: inputTokens,
+          amount: 1,
           model: promptModel,
           prompt: activeDescription,
         });
@@ -727,6 +727,18 @@ export function ImageGenerationWorkspace() {
         setNegativePrompt(result.negative_prompt);
         
         toast({ title: '✅ Phân tích hoàn tất!', description: 'Đang tiến hành tạo ảnh...' });
+
+        // Deduct credits for auto-prompt optimization (flat 1 unit)
+        if (user) {
+          recordUsage({
+            userId: user.uid,
+            userEmail: user.email || '',
+            type: 'text',
+            amount: 1,
+            model: promptModel,
+            prompt: activeBasis,
+          });
+        }
       } catch (error: any) {
         console.error(error);
         let errorMsg = error.message;
@@ -1169,9 +1181,9 @@ export function ImageGenerationWorkspace() {
                     <SelectValue placeholder="Chọn mô hình" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-3.1-pro-preview">iGen-3.1-pro-preview</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview">iGen-3.1-flash-lite-preview</SelectItem>
-                    <SelectItem value="gemini-3-flash-preview">iGen-3-flash-preview</SelectItem>
+                    <SelectItem value="gemini-3.1-pro-preview">Gemini-3.1-pro</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview">Gemini-3.1-lite</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">Gemini-3-flash</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

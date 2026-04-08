@@ -45,10 +45,10 @@ export function CostEstimationPanel({
 
   if (allItems.length === 0) return null;
 
-  const getUnitLabel = (unit: string) => {
+  const getUnitLabel = (unit: string, category?: string) => {
     switch (unit) {
       case 'seconds': return 'giây';
-      case 'count': return 'ảnh';
+      case 'count': return category === 'image' ? 'ảnh' : 'lần';
       case 'tokens': return 'token';
       case '1k tokens': return '1000 tokens';
       default: return unit;
@@ -104,7 +104,7 @@ export function CostEstimationPanel({
               ) : null}
               {(!pricing.inputCostPerUnitUSD || pricing.category !== 'text') && (
                 <div className="flex justify-between items-baseline">
-                  <span className="text-[12px] text-slate-600 dark:text-slate-300">Giá / {getUnitLabel(pricing.unit)}:</span>
+                  <span className="text-[12px] text-slate-600 dark:text-slate-300">Giá / {getUnitLabel(pricing.unit, pricing.category)}:</span>
                   <span className="text-[12px] font-mono font-bold text-slate-700 dark:text-slate-200">
                     {parseFloat(pricing.costPerUnitUSD.toFixed(6))}
                   </span>

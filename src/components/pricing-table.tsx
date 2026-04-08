@@ -17,10 +17,10 @@ const CATEGORIES = [
   { id: 'text', label: 'Văn bản / Prompt', icon: <TypeIcon className="w-4 h-4" /> },
 ];
 
-const getUnitLabel = (unit: string) => {
+const getUnitLabel = (unit: string, category?: string) => {
   switch (unit) {
     case 'seconds': return 'giây';
-    case 'count': return 'ảnh';
+    case 'count': return category === 'image' ? 'ảnh' : 'lần';
     case 'tokens': return 'token';
     case '1k tokens': return '1000 tokens';
     default: return unit;
@@ -79,7 +79,7 @@ export function PricingTable({ className, showTitle = true }: PricingTableProps)
                       )}
                     </TableCell>
                     <TableCell className="text-right text-zinc-500 dark:text-zinc-400 text-xs">
-                      / {getUnitLabel(data.unit)}
+                      / {getUnitLabel(data.unit, data.category)}
                     </TableCell>
                   </TableRow>
                 ))}

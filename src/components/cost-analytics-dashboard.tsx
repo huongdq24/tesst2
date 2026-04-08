@@ -236,6 +236,7 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
   // ─── Computed data ──────────────────────────────────────────────────────────
 
   const totalCost = useMemo(() => usageLogs.reduce((sum, log) => sum + log.estimatedCostVND, 0), [usageLogs]);
+  const totalCredits = useMemo(() => usageLogs.reduce((sum, log) => sum + (log.estimatedCostUSD || 0), 0), [usageLogs]);
 
   const categoryData = useMemo(() => {
     const groups: Record<string, { cost: number; count: number; amount: number; unit: string }> = {};
@@ -362,37 +363,35 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
         {!isLoading && usageLogs.length > 0 && (
           <>
             {/* ─── Simplified User View (Only Price List + History) ─────── */}
-            {userData?.role !== 'Admin' && !overrideUserId ? (
-              <div className="space-y-12">
-                {/* Section 1: Service Pricing Table */}
-                <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur-sm overflow-hidden">
-                  <CardHeader className="border-b border-zinc-800 bg-zinc-800/20">
-                    <CardTitle className="text-xl flex items-center gap-2">
-                       <Zap className="h-5 w-5 text-cyan-400" />
-                       Bảng giá dịch vụ iGen
-                    </CardTitle>
-                    <CardDescription className="text-zinc-400">
-                      Chi phí được tính dựa trên số lượng Credit tiêu thụ cho mỗi đơn vị sử dụng.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0 sm:p-6">
-                    <PricingTable showTitle={false} />
-                  </CardContent>
-                </Card>
+             {userData?.role !== 'Admin' && !overrideUserId ? (
+              <div className="space-y-8">
+                {/* Section 1: Total Credits Spent Summary */}
+                <div className="grid gap-6 sm:grid-cols-1">
+                   <Card className="relative overflow-hidden border-zinc-800 bg-zinc-900/80 backdrop-blur-sm p-8 flex flex-col items-center text-center">
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent pointer-events-none" />
+                    <CardDescription className="text-zinc-400 text-sm font-bold uppercase tracking-widest mb-2">Tổng Credit đã tiêu</CardDescription>
+                    <div className="text-6xl font-black text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+                      <AnimatedCounter value={totalCredits} suffix="" />
+                    </div>
+                    <p className="text-zinc-500 text-xs mt-4 font-medium italic">
+                       Thống kê trong giai đoạn: {formatDateRangeLabel(dateRange)}
+                    </p>
+                  </Card>
+                </div>
 
                 {/* Section 2: Transaction History in Credits */}
-                <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur-sm">
-                  <CardHeader>
+                <Card className="border-zinc-800 bg-zinc-900/60 backdrop-blur-sm shadow-2xl">
+                  <CardHeader className="border-b border-zinc-800/50">
                     <CardTitle className="text-xl flex items-center gap-2">
                       <Activity className="h-5 w-5 text-emerald-400" />
-                      Lịch sử sử dụng dịch vụ
+                      Lịch sử tạo & Giao dịch
                     </CardTitle>
                     <CardDescription className="text-zinc-400">
-                      Chi tiết các lượt sử dụng model AI và credit đã tiêu thụ
+                      Chi tiết các lượt sử dụng AI và số credit đã tiêu thụ
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="max-h-[800px] overflow-y-auto pr-1 space-y-3 scrollbar-thin">
+                  <CardContent className="p-0">
+                    <div className="max-h-[800px] overflow-y-auto px-4 py-4 space-y-3 scrollbar-thin">
                       {recentLogs.map((log, idx) => {
                         const time = log.createdAt?.toDate?.();
                         const timeStr = time
@@ -402,36 +401,42 @@ export default function CostAnalyticsDashboard({ overrideUserId, overrideUserEma
                         return (
                           <div
                             key={idx}
-                            className="group flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-zinc-800/50 bg-zinc-800/20 px-4 py-4 transition-all hover:bg-zinc-800/40"
+                            className="group flex flex-col sm:flex-row sm:items-center gap-4 rounded-2xl border border-zinc-800/40 bg-zinc-800/10 px-5 py-5 transition-all hover:bg-zinc-800/30 hover:border-zinc-700/50"
                           >
                             <div
-                              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl shadow-lg"
-                              style={{ backgroundColor: (CATEGORY_COLORS[log.type] || '#71717a') + '20' }}
+                              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl shadow-inner border border-white/5"
+                              style={{ backgroundColor: (CATEGORY_COLORS[log.type] || '#71717a') + '15' }}
                             >
                               <span style={{ color: CATEGORY_COLORS[log.type] || '#71717a' }}>{CATEGORY_ICONS[log.type]}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-bold text-zinc-100 truncate">
+                              <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[13px] font-bold text-zinc-100 truncate">
                                   {(log.modelLabel || log.model).replace('Gemini', 'iGen')}
                                 </p>
-                                <span className="text-[10px] text-zinc-500 bg-zinc-800 px-1.5 py-0.5 rounded uppercase">
+                                <span className="text-[9px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-2 py-0.5 rounded-full font-bold uppercase tracking-tighter">
                                   {log.type}
                                 </span>
                               </div>
-                              <p className="text-xs text-zinc-500 truncate mt-1">
-                                {log.prompt || '—'} • {log.amount} {log.unit}
+                              <p className="text-[11px] text-zinc-500 truncate leading-relaxed">
+                                {log.prompt || 'Không có mô tả'} • <span className="text-zinc-400">{log.amount} {log.unit}</span>
                               </p>
                             </div>
-                            <div className="flex items-center justify-between sm:text-right sm:flex-col sm:gap-1">
-                                <p className="text-sm font-black tracking-tight" style={{ color: CATEGORY_COLORS[log.type] || '#a1a1aa' }}>
+                            <div className="flex items-center justify-between sm:text-right sm:flex-col sm:gap-1 border-t border-zinc-800/50 pt-3 sm:pt-0 sm:border-0 mt-2 sm:mt-0">
+                                <p className="text-base font-black tracking-tight" style={{ color: CATEGORY_COLORS[log.type] || '#a1a1aa' }}>
                                     {formatCredit(log.estimatedCostUSD || 0)}
                                 </p>
-                                <p className="text-[10px] text-zinc-600 font-medium">{timeStr}</p>
+                                <p className="text-[10px] text-zinc-600 font-bold bg-zinc-950/30 px-2 py-0.5 rounded">{timeStr}</p>
                             </div>
                           </div>
                         );
                       })}
+
+                      {recentLogs.length === 0 && (
+                        <div className="text-center py-20 text-zinc-500">
+                          <p>Chưa có giao dịch nào trong khoảng thời gian này.</p>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

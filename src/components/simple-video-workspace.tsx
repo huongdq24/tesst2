@@ -349,16 +349,13 @@ export function SimpleVideoWorkspace() {
       setPrompt(result.optimized_english_prompt);
       
       if (user) {
-        const imageCount = referenceImageUris.length;
-        const inputTokens = estimateTokens(prompt) + (imageCount * 262);
-        const outputTokens = estimateTokens(result.optimized_english_prompt);
+        // Use amount: 1 for flat pricing (fixed cost per generation)
         recordUsage({
           userId: user.uid,
           userEmail: user.email || '',
           type: 'text',
           model: promptModel,
-          amount: outputTokens,
-          inputAmount: inputTokens,
+          amount: 1,
           prompt: prompt,
         });
       }
@@ -415,6 +412,18 @@ export function SimpleVideoWorkspace() {
         promptRef.current = finalPrompt; // IMPORTANT for polling to save the right prompt
 
         toast({ title: "🔗 Đang gửi yêu cầu nối tiếp video...", description: "Sử dụng model Veo 3.1 (chỉ model này hỗ trợ nối tiếp)" });
+
+        // Deduct credits for auto-prompt optimization (flat 1 unit)
+        if (user) {
+          recordUsage({
+            userId: user.uid,
+            userEmail: user.email || '',
+            type: 'text',
+            model: 'gemini-3.1-flash-lite-preview',
+            amount: 1,
+            prompt: `Part 1: ${extendVideoPrompt}. Part 2: ${prompt}`,
+          });
+        }
         setGenerationStage('uploading');
 
         // Video extension ONLY works with veo-3.1-generate-preview (per Google API docs)
@@ -473,6 +482,18 @@ export function SimpleVideoWorkspace() {
             apiKey: userData.geminiApiKey,
           });
           finalPrompt = aiResult.optimized_english_prompt;
+
+          // Deduct credits for auto-prompt optimization (flat 1 unit)
+          if (user) {
+            recordUsage({
+              userId: user.uid,
+              userEmail: user.email || '',
+              type: 'text',
+              model: 'gemini-3.1-flash-lite-preview',
+              amount: 1,
+              prompt: prompt || 'Video description',
+            });
+          }
         }
       } else {
         referenceImageUris = [beforeImage!];
@@ -709,8 +730,8 @@ export function SimpleVideoWorkspace() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    <SelectItem value="gemini-3.1-pro-preview" className="text-[10px]">iGen Pro</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview" className="text-[10px]">iGen Lite</SelectItem>
+                    <SelectItem value="gemini-3.1-pro-preview" className="text-[10px]">Gemini 3.1 Pro</SelectItem>
+                    <SelectItem value="gemini-3.1-flash-lite-preview" className="text-[10px]">Gemini 3.1 Lite</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

@@ -102,28 +102,25 @@ export const PRICING_TABLE: Record<string, {
   // ── TEXT (Prompt optimization, Custom Spreadsheet mapping) ──
   // ══════════════════════════════════════════════════════════════════════════
   'gemini-3.1-pro-preview': {
-    costPerUnitUSD: 10, 
-    inputCostPerUnitUSD: 10 / 6,
-    unit: '1k tokens',
-    label: 'iGen-3.1-pro-preview',
+    costPerUnitUSD: 10,
+    unit: 'count',
+    label: 'Gemini 3.1 pro',
     category: 'text',
-    note: '',
+    note: 'Cố định mỗi lần tạo',
   },
   'gemini-3.1-flash-lite-preview': {
     costPerUnitUSD: 1.5,
-    inputCostPerUnitUSD: 1.5 / 6,
-    unit: '1k tokens',
-    label: 'iGen-3.1-flash-lite-preview',
+    unit: 'count',
+    label: 'Gemini 3.1 flash lite',
     category: 'text',
-    note: '',
+    note: 'Cố định mỗi lần tạo',
   },
   'gemini-3-flash-preview': {
     costPerUnitUSD: 2.5,
-    inputCostPerUnitUSD: 2.5 / 6,
-    unit: '1k tokens',
-    label: 'iGen-3-flash-preview',
+    unit: 'count',
+    label: 'Gemini 3 flash',
     category: 'text',
-    note: '',
+    note: 'Cố định mỗi lần tạo',
   }
 };
 
