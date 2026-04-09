@@ -2040,7 +2040,7 @@ export function VideoGenerationWorkspace() {
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-[10px] text-zinc-500 font-semibold">ĐỘ PHÂN GIẢI</Label>
-                        <Select value={outputResolution} onValueChange={setOutputResolution} disabled={videoModel.includes('veo-2')}>
+                        <Select value={outputResolution} onValueChange={setOutputResolution}>
                           <SelectTrigger className="h-9 text-xs bg-zinc-50 dark:bg-black/40 border-zinc-200 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-lg shadow-sm"><SelectValue /></SelectTrigger>
                           <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                             <SelectItem value="720p">720p</SelectItem>
@@ -2065,8 +2065,8 @@ export function VideoGenerationWorkspace() {
                       <Select value={videoModel} onValueChange={setVideoModel}>
                         <SelectTrigger className="h-9 text-xs bg-cyan-50 dark:bg-black/40 border-cyan-200 dark:border-cyan-800/40 text-cyan-700 dark:text-cyan-300 rounded-lg shadow-sm font-medium"><SelectValue /></SelectTrigger>
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
-                          <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
-                          <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
+                          <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast</SelectItem>
+                          <SelectItem value="veo-3.1-lite-generate-preview">iGen Veo 3.1 Lite</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

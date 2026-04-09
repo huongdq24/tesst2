@@ -20,46 +20,19 @@ export const PRICING_TABLE: Record<string, {
   // ══════════════════════════════════════════════════════════════════════════
   // ── VIDEO (per second of generated video) ──
   // ══════════════════════════════════════════════════════════════════════════
-  'veo-3.1-generate-preview': {
-    costPerUnitUSD: 0.40 * REAL_USD_TO_CREDIT, // 102 Credits
-    unit: 'seconds',
-    label: 'iGen Veo 3.1 HQ',
-    category: 'video',
-    note: '0.40 USD base (720p/1080p). 4K is higher.',
-  },
   'veo-3.1-fast-generate-preview': {
-    costPerUnitUSD: 0.15 * REAL_USD_TO_CREDIT, // 38.25 Credits
+    costPerUnitUSD: 40.5, // 324 Credits / 8s
     unit: 'seconds',
-    label: 'iGen Veo 3.1 Nhanh',
+    label: 'iGen Veo 3.1 Fast',
     category: 'video',
-    note: '0.15 USD base (720p/1080p). 4K is higher.',
+    note: '720p: 4s=162.0, 6s=243.0, 8s=324.0 | 1080p: 4s=194.4, 6s=291.6, 8s=388.8',
   },
   'veo-3.1-lite-generate-preview': {
-    costPerUnitUSD: 0.05 * REAL_USD_TO_CREDIT, // 12.75 Credits
+    costPerUnitUSD: 20.25, // 162 Credits / 8s
     unit: 'seconds',
     label: 'iGen Veo 3.1 Lite',
     category: 'video',
-    note: '0.05 USD base (720p). 1080p is higher.',
-  },
-  'veo-3.0-generate-001': {
-    costPerUnitUSD: 0.40 * REAL_USD_TO_CREDIT,
-    unit: 'seconds',
-    label: 'iGen Veo 3.0',
-    category: 'video',
-    note: '0.40 USD base',
-  },
-  'veo-3.0-fast-generate-001': {
-    costPerUnitUSD: 0.10 * REAL_USD_TO_CREDIT,
-    unit: 'seconds',
-    label: 'iGen Veo 3.0 Fast',
-    category: 'video',
-    note: '0.10 USD base (720p).',
-  },
-  'veo-2.0-generate-001': {
-    costPerUnitUSD: 0.35 * REAL_USD_TO_CREDIT,
-    unit: 'seconds',
-    label: 'iGen Veo 2.0',
-    category: 'video',
+    note: '720p: 4s=81.0, 6s=121.5, 8s=162.0 | 1080p: 4s=129.6, 6s=194.4, 8s=259.2',
   },
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -180,23 +153,17 @@ export function estimateCost(model: string, amount: number, options?: { resoluti
     // Pro is always 57 for both 1K and 2K based on spreadsheet, so no change needed
   }
 
-  // 2. Resolution-based pricing for video models (mapped from USD)
+  // 2. Resolution-based pricing for video models (mapped from requested credit values)
   if (options?.resolution && pricing.category === 'video') {
-    const is4K = options.resolution.includes('4K') || options.resolution.includes('UHD');
     const is1080p = options.resolution === '1080p';
     
-    if (model === 'veo-3.1-generate-preview' && is4K) {
-       costUSD = (0.60 * 255) * amount;
-    }
-    if (model === 'veo-3.1-fast-generate-preview' && is4K) {
-       costUSD = (0.35 * 255) * amount;
+    if (model === 'veo-3.1-fast-generate-preview' && is1080p) {
+       // 388.8 / 324 = 1.2
+       costUSD = costUSD * 1.2;
     }
     if (model === 'veo-3.1-lite-generate-preview' && is1080p) {
-       costUSD = (0.08 * 255) * amount;
-    }
-    if (model === 'veo-3.0-fast-generate-001') {
-       if (is1080p) costUSD = (0.12 * 255) * amount;
-       if (is4K) costUSD = (0.30 * 255) * amount;
+       // 259.2 / 162 = 1.6
+       costUSD = costUSD * 1.6;
     }
   }
 

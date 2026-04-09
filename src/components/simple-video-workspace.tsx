@@ -28,11 +28,8 @@ type VideoClip = { url: string; duration: string; geminiFileUri?: string | null;
 
 // Model definitions for display
 const MODEL_OPTIONS = [
-  { value: 'veo-3.1-generate-preview', label: 'iGen Veo 3.1 HQ', desc: 'Chất lượng cao nhất' },
-  { value: 'veo-3.1-fast-generate-preview', label: 'iGen Veo 3.1 Nhanh', desc: 'Tốc độ nhanh, chất lượng tốt' },
+  { value: 'veo-3.1-fast-generate-preview', label: 'iGen Veo 3.1 Fast', desc: 'Tốc độ nhanh, chất lượng tốt' },
   { value: 'veo-3.1-lite-generate-preview', label: 'iGen Veo 3.1 Lite', desc: 'Tiết kiệm chi phí' },
-  { value: 'veo-3.0-generate-001', label: 'iGen Veo 3.0', desc: 'Phiên bản Veo 3 chuẩn' },
-  { value: 'veo-3.0-fast-generate-001', label: 'iGen Veo 3.0 Fast', desc: 'Veo 3 tốc độ cao' },
 ];
 
 const DURATION_OPTIONS_VEO3 = [
@@ -49,7 +46,6 @@ const DURATION_OPTIONS_VEO2 = [
 ];
 
 const QUALITY_OPTIONS = [
-  { value: '4K', label: '4K (UHD)' },
   { value: '1080p', label: '1080p (Full HD)' },
   { value: '720p', label: '720p (HD)' },
 ];

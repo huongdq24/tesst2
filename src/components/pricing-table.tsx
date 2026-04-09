@@ -52,7 +52,7 @@ export function PricingTable({ className, showTitle = true }: PricingTableProps)
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map(([id, data]) => (
+                 {items.map(([id, data]) => (
                   <TableRow key={id} className="group transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/20 border-zinc-200 dark:border-zinc-800/50">
                     <TableCell>
                       <div className="font-semibold text-sm text-zinc-900 dark:text-zinc-300">
@@ -70,6 +70,27 @@ export function PricingTable({ className, showTitle = true }: PricingTableProps)
                           <span className="text-zinc-900 dark:text-zinc-300">In: {parseFloat(data.inputCostPerUnitUSD.toFixed(8))}</span>
                           <span className="text-zinc-500 dark:text-zinc-400 mt-0.5">Out: {parseFloat(data.costPerUnitUSD.toFixed(8))}</span>
                         </div>
+                      ) : data.category === 'video' ? (
+                        <div className="flex flex-col text-[10px] items-end font-mono leading-tight">
+                          <div className="flex gap-2 border-b border-zinc-200 dark:border-zinc-800 pb-0.5 mb-0.5 font-bold text-zinc-400">
+                             <span className="w-10 text-left">Res</span>
+                             <span className="w-10">4s</span>
+                             <span className="w-10">6s</span>
+                             <span className="w-10">8s</span>
+                          </div>
+                          <div className="flex gap-2 text-cyan-600 dark:text-cyan-400">
+                             <span className="w-10 text-left font-bold text-zinc-500">720P</span>
+                             <span className="w-10">{(data.costPerUnitUSD * 4).toFixed(1)}</span>
+                             <span className="w-10">{(data.costPerUnitUSD * 6).toFixed(1)}</span>
+                             <span className="w-10 font-bold underline">{(data.costPerUnitUSD * 8).toFixed(1)}</span>
+                          </div>
+                          <div className="flex gap-2 text-cyan-600 dark:text-cyan-400 mt-0.5">
+                             <span className="w-10 text-left font-bold text-zinc-500">1080P</span>
+                             <span className="w-10">{(data.costPerUnitUSD * 4 * (id.includes('fast') ? 1.2 : 1.6)).toFixed(1)}</span>
+                             <span className="w-10">{(data.costPerUnitUSD * 6 * (id.includes('fast') ? 1.2 : 1.6)).toFixed(1)}</span>
+                             <span className="w-10 font-bold underline">{(data.costPerUnitUSD * 8 * (id.includes('fast') ? 1.2 : 1.6)).toFixed(1)}</span>
+                          </div>
+                        </div>
                       ) : (
                         <span className="font-mono font-bold text-cyan-600 dark:text-cyan-400">
                           {data.costPerUnitUSD < 0.001 
@@ -79,7 +100,7 @@ export function PricingTable({ className, showTitle = true }: PricingTableProps)
                       )}
                     </TableCell>
                     <TableCell className="text-right text-zinc-500 dark:text-zinc-400 text-xs">
-                      / {getUnitLabel(data.unit, data.category)}
+                      / {data.category === 'video' ? 'video (8s)' : getUnitLabel(data.unit, data.category)}
                     </TableCell>
                   </TableRow>
                 ))}
