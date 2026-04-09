@@ -62,7 +62,7 @@ export function VideoGenerationWorkspace() {
   const [isDragging, setIsDragging] = useState(false);
   const [isLibraryOpen, setIsLibraryOpen] = useState(false);
   const [generatedVideoUrls, setGeneratedVideoUrls] = useState<string[]>([]);
-  const [scriptModel, setScriptModel] = useState('gemini-3.1-flash-lite-preview');
+  const [scriptModel, setScriptModel] = useState('gemini-3-flash-preview');
   const [videoModel, setVideoModel] = useState('veo-3.1-fast-generate-preview');
   const [videoDuration, setVideoDuration] = useState('8');
   const [frameRate, setFrameRate] = useState('24');
@@ -2067,9 +2067,6 @@ export function VideoGenerationWorkspace() {
                         <SelectContent className="bg-white dark:bg-zinc-800 border-zinc-100 dark:border-white/10 text-zinc-700 dark:text-zinc-200 rounded-xl">
                           <SelectItem value="veo-3.1-generate-preview">iGen Veo 3.1 Pro (Cao cấp)</SelectItem>
                           <SelectItem value="veo-3.1-fast-generate-preview">iGen Veo 3.1 Fast (Nhanh)</SelectItem>
-                          {inputMode !== 'before-after' && !extendingVideoUrl && (
-                            <SelectItem value="veo-2.0-generate-001">iGen Veo 2.0 Legacy</SelectItem>
-                          )}
                         </SelectContent>
                       </Select>
                     </div>

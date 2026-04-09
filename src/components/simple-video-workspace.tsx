@@ -33,7 +33,6 @@ const MODEL_OPTIONS = [
   { value: 'veo-3.1-lite-generate-preview', label: 'iGen Veo 3.1 Lite', desc: 'Tiết kiệm chi phí' },
   { value: 'veo-3.0-generate-001', label: 'iGen Veo 3.0', desc: 'Phiên bản Veo 3 chuẩn' },
   { value: 'veo-3.0-fast-generate-001', label: 'iGen Veo 3.0 Fast', desc: 'Veo 3 tốc độ cao' },
-  { value: 'veo-2.0-generate-001', label: 'iGen Veo 2.0', desc: 'Phiên bản ổn định cũ (chỉ 720p)' },
 ];
 
 const DURATION_OPTIONS_VEO3 = [
@@ -78,7 +77,7 @@ export function SimpleVideoWorkspace() {
   const [videoQuality, setVideoQuality] = useState('1080p');
 
   // Prompt generation states
-  const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
+  const [promptModel, setPromptModel] = useState('gemini-3-flash-preview');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState('none');
 
@@ -730,8 +729,8 @@ export function SimpleVideoWorkspace() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-lg">
-                    <SelectItem value="gemini-3.1-pro-preview" className="text-[10px]">Gemini 3.1 Pro</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview" className="text-[10px]">Gemini 3.1 Lite</SelectItem>
+                    <SelectItem value="gemini-3.1-pro-preview" className="text-[10px]">iGen 3.1 pro</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview" className="text-[10px]">iGen 3 flash</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

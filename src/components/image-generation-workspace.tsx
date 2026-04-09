@@ -152,7 +152,7 @@ export function ImageGenerationWorkspace() {
   const [simplePrompt, setSimplePrompt] = useState('');
   const [isGeneratingPrompt, setIsGeneratingPrompt] = useState(false);
   const [prompt, setPrompt] = useState('');
-  const [promptModel, setPromptModel] = useState('gemini-3.1-flash-lite-preview');
+  const [promptModel, setPromptModel] = useState('gemini-3-flash-preview');
   const [imageModel, setImageModel] = useState('gemini-3.1-flash-image-preview');
   const [negativePrompt, setNegativePrompt] = useState<string>('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -1181,9 +1181,8 @@ export function ImageGenerationWorkspace() {
                     <SelectValue placeholder="Chọn mô hình" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="gemini-3.1-pro-preview">Gemini-3.1-pro</SelectItem>
-                    <SelectItem value="gemini-3.1-flash-lite-preview">Gemini-3.1-lite</SelectItem>
-                    <SelectItem value="gemini-3-flash-preview">Gemini-3-flash</SelectItem>
+                    <SelectItem value="gemini-3.1-pro-preview">iGen 3.1 pro</SelectItem>
+                    <SelectItem value="gemini-3-flash-preview">iGen 3 flash</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
